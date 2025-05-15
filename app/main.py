@@ -30,6 +30,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Todo: en producción agregar algun limitador de cantidad de requests por IP.
+
 @app.get("/")
 async def root():
     return {
