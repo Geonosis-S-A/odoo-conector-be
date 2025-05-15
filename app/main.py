@@ -1,8 +1,7 @@
 from contextlib import asynccontextmanager
 import os
 from fastapi import FastAPI
-
-app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
 
 ENV = os.getenv("ENV", "local")  # Por defecto, local
 
@@ -15,8 +14,26 @@ async def lifespan(app):
         Base.metadata.create_all(bind=engine)
     yield  # acá arranca la app
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Odoo Connector API",
+    description="API para conectar con Odoo",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# Configuración de CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Todo: En producción, especificar los orígenes permitidos
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def root():
-    return {"message": "Health check"}
+    return {
+        "message": "Health check",
+        "status": "ok",
+        "environment": ENV
+    }
