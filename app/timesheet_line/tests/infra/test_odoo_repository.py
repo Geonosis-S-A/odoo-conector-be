@@ -62,6 +62,8 @@ class TestOdooRepository:
             (line for line in post_lines if line.id == created_id), None
         )
         assert created_line is not None
+        assert created_line.id is not None
+        assert isinstance(created_line.id, int)
         assert created_line.employee_id == 1
         assert created_line.project_id == 1
         assert created_line.hours == 1

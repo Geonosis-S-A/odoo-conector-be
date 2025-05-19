@@ -8,3 +8,4 @@ class CargarHorasRequest(BaseModel):
     project_id: int
     hours: float
     date: date
+    task_id: int | None = None

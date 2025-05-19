@@ -10,6 +10,10 @@ class CargarHorasUseCase:
         self.odoo_repo = odoo_repository
 
     def execute(self, req: CargarHorasRequest):
+        # Validación de horas negativas
+        if req.hours < 0:
+            raise ValueError("Las horas no pueden ser negativas")
+
         # Todo validar existencia de empleado y project_id
         timesheet_line = TimesheetLine.from_request(
             id=None,
@@ -18,5 +22,6 @@ class CargarHorasUseCase:
             project_id=req.project_id,
             hours=req.hours,
             date=req.date,
+            task_id=req.task_id,
         )
-        self.odoo_repo.create(timesheet_line)
+        return self.odoo_repo.create(timesheet_line)
