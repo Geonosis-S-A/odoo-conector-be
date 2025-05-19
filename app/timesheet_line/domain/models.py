@@ -5,11 +5,12 @@ from dataclasses import dataclass
 # Ejemplo. Hay que ver si le damos uso.
 @dataclass
 class TimesheetLine:
-    user_id: int
+    name: str
+    employee_id: int
     project_id: int
     hours: float
     date: str
 
     @classmethod
-    def from_request(cls, user_id: int, project_id: int, hours: float, date: str):
-        return cls(user_id=user_id, project_id=project_id, hours=hours, date=date)
+    def from_request(cls, employee_id: int, project_id: int, hours: float, date: str, name: str):
+        return cls(employee_id=employee_id, project_id=project_id, hours=hours, date=date, name=name)
