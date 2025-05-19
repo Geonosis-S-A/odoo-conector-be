@@ -1,6 +1,7 @@
 import pytest
-from app.users.domain.models import User
+from app.users.domain.models import User as DomainUser
 from app.users.infra.db.repositories import SQLModelUserRepository
+from app.users.infra.db.models import User
 from app.shared.infra.db.session import SessionLocal
 
 
@@ -11,6 +12,7 @@ class TestSQLUserRepository:
         self.db = SessionLocal()
         self.repository = SQLModelUserRepository(self.db)
         # Limpiamos la base de datos antes de cada test
+        User.metadata.create_all(self.db.get_bind())
         self.db.query(User).delete()
         self.db.commit()
 
@@ -23,15 +25,15 @@ class TestSQLUserRepository:
     def test_save_all_users(self):
         # Arrange
         users = [
-            User(
-                id=1,
+            DomainUser(
+                id=None,
                 email="test1@example.com",
                 full_name="Test User 1",
                 is_active=True,
                 is_superuser=False,
             ),
-            User(
-                id=2,
+            DomainUser(
+                id=None,
                 email="test2@example.com",
                 full_name="Test User 2",
                 is_active=True,
@@ -55,8 +57,8 @@ class TestSQLUserRepository:
     def test_save_all_users_data_structure(self):
         # Arrange
         users = [
-            User(
-                id=1,
+            DomainUser(
+                id=None,
                 email="test1@example.com",
                 full_name="Test User 1",
                 is_active=True,
@@ -79,8 +81,8 @@ class TestSQLUserRepository:
     def test_save_all_users_required_fields_not_empty(self):
         # Arrange
         users = [
-            User(
-                id=1,
+            DomainUser(
+                id=None,
                 email="test1@example.com",
                 full_name="Test User 1",
                 is_active=True,
@@ -93,7 +95,7 @@ class TestSQLUserRepository:
 
         # Assert
         saved_user = self.db.query(User).first()
-        assert saved_user is not None, "El usuario no debería ser None"
+        assert saved_user is not None
         assert saved_user.id is not None
         assert saved_user.email != ""
         assert saved_user.full_name != ""
