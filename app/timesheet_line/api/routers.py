@@ -5,7 +5,10 @@ from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.domain.models import TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineRepository
-from app.timesheet_line.infra.external.odoo.get_odoo import get_odoo_connection
+from app.shared.infra.external.odoo.odoo_client import (
+    get_odoo_connection_dependency,
+    OdooConnection,
+)
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_repository import (
     OdooTimesheetLineRepository,
 )
@@ -14,10 +17,11 @@ from app.timesheet_line.infra.external.odoo.odoo_timesheet_repository import (
 router = APIRouter(prefix="/timesheet", tags=["timesheet"])
 
 
-def get_timesheet_repository() -> TimesheetLineRepository:
+def get_timesheet_repository(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> TimesheetLineRepository:
     try:
-        odoo_client = get_odoo_connection()
-        return OdooTimesheetLineRepository(odoo_client)
+        return OdooTimesheetLineRepository(odoo_connection)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail="Error al conectar con el repositorio"

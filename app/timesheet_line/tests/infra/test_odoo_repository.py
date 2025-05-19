@@ -1,5 +1,5 @@
 from app.timesheet_line.domain.models import TimesheetLine
-from app.timesheet_line.infra.external.odoo.get_odoo import get_odoo_connection
+from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_repository import (
     OdooTimesheetLineRepository,
 )

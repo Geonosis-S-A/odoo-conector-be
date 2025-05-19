@@ -2,7 +2,7 @@ from typing import List, Dict, Any, cast
 from datetime import datetime, date
 from app.timesheet_line.domain.models import TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineRepository
-from app.timesheet_line.infra.external.odoo.get_odoo import OdooConnection
+from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
 
 class OdooTimesheetLineRepository(TimesheetLineRepository):
