@@ -7,8 +7,9 @@ from datetime import date
 import pytest
 
 
+@pytest.mark.integration  # type: ignore[attr-defined]
 class TestOdooRepository:
-    @pytest.fixture(autouse=True)
+    @pytest.fixture(autouse=True)  # type: ignore[attr-defined]
     def setup(self):
         self.odoo_client = get_odoo_connection()
         self.repository = OdooTimesheetLineRepository(self.odoo_client)
