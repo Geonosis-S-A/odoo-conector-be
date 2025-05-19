@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
+from typing import List, Dict
 
 from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
@@ -24,7 +24,7 @@ def get_timesheet_repository() -> TimesheetLineRepository:
         )
 
 
-@router.post("/", response_model=int)
+@router.post("/", response_model=Dict[str, int])
 async def create_timesheet_line(
     request: CargarHorasRequest,
     repository: TimesheetLineRepository = Depends(get_timesheet_repository),
@@ -37,12 +37,12 @@ async def create_timesheet_line(
         repository: Repositorio de timesheet (inyectado)
 
     Returns:
-        int: ID de la línea de timesheet creada
+        Dict[str, int]: Diccionario con el ID de la línea de timesheet creada
     """
     try:
         use_case = CargarHorasUseCase(repository)
         timesheet_id = use_case.execute(request)
-        return timesheet_id
+        return {"id": timesheet_id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -86,7 +86,7 @@ async def list_timesheet_lines(
         )
 
 
-@router.delete("/{timesheet_id}")
+@router.delete("/{timesheet_id}", response_model=Dict[str, str])
 async def delete_timesheet_line(
     timesheet_id: int,
     repository: TimesheetLineRepository = Depends(get_timesheet_repository),
@@ -99,7 +99,7 @@ async def delete_timesheet_line(
         repository: Repositorio de timesheet (inyectado)
 
     Returns:
-        dict: Mensaje de éxito
+        Dict[str, str]: Mensaje de éxito
     """
     try:
         success = repository.delete(timesheet_id)

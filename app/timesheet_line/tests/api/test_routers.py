@@ -46,9 +46,9 @@ def test_create_timesheet_line_success():
 
     # Assert
     assert response.status_code == 200
-    created_id = response.json()
-    assert isinstance(created_id, int)
-    assert created_id > 0
+    json_response = response.json()
+    assert isinstance(json_response["id"], int)
+    assert json_response["id"] > 0
 
 
 def test_create_timesheet_line_validation_error():
@@ -99,14 +99,15 @@ def test_delete_timesheet_line_success():
             "date": "2024-03-20",
         },
     )
-    created_id = create_response.json()
+    json_response = create_response.json()
+    created_id = json_response["id"]
 
     # Act
     response = client.delete(f"/timesheet/{created_id}")
 
     # Assert
     assert response.status_code == 200
-    assert response.json() == {"message": "Línea de timesheet eliminada correctamente"}
+    assert response.json()["message"] == "Línea de timesheet eliminada correctamente"
 
 
 def test_delete_timesheet_line_not_found():
