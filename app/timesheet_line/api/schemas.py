@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from datetime import date
 
 
 class CargarHorasRequest(BaseModel):
@@ -6,4 +7,4 @@ class CargarHorasRequest(BaseModel):
     employee_id: int
     project_id: int
     hours: float
-    date: str
+    date: date
