@@ -17,7 +17,7 @@ class UserBaseModel(SQLModel):
 class UserModel(UserBaseModel, table=True):
     """User model for database"""
 
-    __tablename__ = "users"
+    __tablename__ = "users"  # type: ignore
 
     id: Optional[int] = Field(primary_key=True)
     hashed_password: str
