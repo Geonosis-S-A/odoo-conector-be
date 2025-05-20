@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from app.timesheet_line.api.routers import router as timesheet_router
 from app.users.api.routers import router as users_router
 from app.project.api.routers import router as project_router
+from app.task.api.routers import router as task_router
 
 ENV = os.getenv("ENV", "local")  # Por defecto, local
 API_PREFIX = "/api/v1"
@@ -71,6 +72,7 @@ async def pydantic_validation_exception_handler(request, exc):
 app.include_router(timesheet_router, prefix=API_PREFIX)
 app.include_router(users_router, prefix=API_PREFIX)
 app.include_router(project_router, prefix=API_PREFIX)
+app.include_router(task_router, prefix=API_PREFIX)
 
 
 @app.get("/")
