@@ -19,31 +19,22 @@ class SyncUsersUseCase:
         # 3. Crear lista de usuarios a sincronizar
         users_to_sync = []
         for employee in odoo_employees:
-            # Buscar si el empleado ya existe en nuestra base de datos
+            # Buscar si el empleado ya existe en nuestra base de datos por ID
             existing_user = next(
-                (user for user in current_users if user.email == employee.email), None
+                (user for user in current_users if user.id == employee.id), None
             )
 
-            if existing_user:
-                # Si existe, actualizamos sus datos
-                user = User(
-                    id=existing_user.id,
-                    email=employee.email,
-                    full_name=employee.full_name,
-                    is_active=existing_user.is_active,
-                    is_superuser=existing_user.is_superuser,
-                )
-            else:
+            if not existing_user:
                 # Si no existe, creamos uno nuevo inactivo
                 user = User(
-                    id=None,
+                    id=employee.id,
                     email=employee.email,
                     full_name=employee.full_name,
                     is_active=False,
                     is_superuser=False,
                 )
-
-            users_to_sync.append(user)
+                users_to_sync.append(user)
 
         # 4. Guardar todos los usuarios en la base de datos
-        self.repo.save_all(users_to_sync)
+        if users_to_sync:  # Solo guardamos si hay usuarios nuevos
+            self.repo.save_all(users_to_sync)

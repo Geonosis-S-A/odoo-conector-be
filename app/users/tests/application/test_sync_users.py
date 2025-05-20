@@ -41,9 +41,11 @@ class TestSyncUsersUseCase:
         assert all(isinstance(user, User) for user in saved_users)
         assert all(not user.is_active for user in saved_users)
         assert all(not user.is_superuser for user in saved_users)
-        assert all(user.id is None for user in saved_users)
+        # Verificar que los IDs coinciden con los de Odoo
+        assert saved_users[0].id == 1
+        assert saved_users[1].id == 2
 
-    def test_sync_existing_employees(self):
+    def test_sync_does_not_modify_existing_users(self):
         # Arrange
         odoo_employees = [
             Employee(
@@ -58,7 +60,7 @@ class TestSyncUsersUseCase:
                 email="employee1@example.com",
                 full_name="Employee One",
                 is_active=True,
-                is_superuser=False,
+                is_superuser=True,
             ),
         ]
         self.employee_gateway.all.return_value = odoo_employees
@@ -68,14 +70,7 @@ class TestSyncUsersUseCase:
         self.use_case.execute()
 
         # Assert
-        self.user_repository.save_all.assert_called_once()
-        saved_users = self.user_repository.save_all.call_args[0][0]
-        assert len(saved_users) == 1
-        assert saved_users[0].id == 1
-        assert saved_users[0].email == "employee1@example.com"
-        assert saved_users[0].full_name == "Employee One Updated"
-        assert saved_users[0].is_active is True
-        assert saved_users[0].is_superuser is False
+        self.user_repository.save_all.assert_not_called()
 
     def test_sync_mixed_employees(self):
         # Arrange
@@ -83,7 +78,7 @@ class TestSyncUsersUseCase:
             Employee(
                 id=1,
                 email="employee1@example.com",
-                full_name="Employee One Updated",
+                full_name="Employee One",
             ),
             Employee(
                 id=2,
@@ -97,7 +92,7 @@ class TestSyncUsersUseCase:
                 email="employee1@example.com",
                 full_name="Employee One",
                 is_active=True,
-                is_superuser=False,
+                is_superuser=True,
             ),
         ]
         self.employee_gateway.all.return_value = odoo_employees
@@ -109,17 +104,11 @@ class TestSyncUsersUseCase:
         # Assert
         self.user_repository.save_all.assert_called_once()
         saved_users = self.user_repository.save_all.call_args[0][0]
-        assert len(saved_users) == 2
+        assert len(saved_users) == 1  # Solo el nuevo usuario
 
-        # Verificar usuario existente actualizado
-        existing_user = next(u for u in saved_users if u.id == 1)
-        assert existing_user.email == "employee1@example.com"
-        assert existing_user.full_name == "Employee One Updated"
-        assert existing_user.is_active is True
-        assert existing_user.is_superuser is False
-
-        # Verificar nuevo usuario
-        new_user = next(u for u in saved_users if u.id is None)
+        # Verificar que solo se guarda el nuevo usuario
+        new_user = saved_users[0]
+        assert new_user.id == 2
         assert new_user.email == "employee2@example.com"
         assert new_user.full_name == "Employee Two New"
         assert new_user.is_active is False

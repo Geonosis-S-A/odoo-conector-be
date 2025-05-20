@@ -10,9 +10,14 @@ class OdooEmployeeGateway(EmployeeGateway):
 
     def _transform_odoo_to_domain(self, odoo_data: Dict[str, Any]) -> Employee:
         """Transforma los datos de Odoo al modelo de dominio."""
+        work_email = odoo_data.get("work_email")
+        if not work_email or not isinstance(work_email, str) or "@" not in work_email:
+            # Si no hay email válido, usamos un email temporal basado en el ID
+            work_email = f"employee_{odoo_data.get('id')}@temporary.com"
+
         return Employee(
             id=odoo_data.get("id"),
-            email=odoo_data.get("work_email", ""),
+            email=work_email,
             full_name=odoo_data.get("name", ""),
         )
 
