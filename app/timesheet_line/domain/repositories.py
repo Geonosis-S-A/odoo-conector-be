@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from app.timesheet_line.domain.models import TimesheetLine
 
-# Se definen las interfaces de los repositorios
 
 class TimesheetLineRepository(ABC):
     @abstractmethod
-    def save(self, timesheet_line: TimesheetLine) -> None:
-        pass
+    def create(self, timesheet_line: TimesheetLine) -> int: ...
 
     @abstractmethod
-    def all(self) -> list[TimesheetLine]:
-        pass
+    def all(self) -> list[TimesheetLine]: ...
+
+    @abstractmethod
+    def delete(self, timesheet_line_id: int) -> bool: ...
