@@ -25,24 +25,25 @@ def get_project_gateway(
         )
 
 
-@router.get("/user/{user_id}", response_model=List[ProjectResponse])
-async def get_user_projects(
-    user_id: int,
+@router.get("/", response_model=List[ProjectResponse])
+async def get_projects(
+    user: int | None = None,
     gateway: ProjectGateway = Depends(get_project_gateway),
 ):
     """
-    Obtiene los proyectos asociados a un usuario.
+    Obtiene los proyectos. Si se proporciona un user_id, devuelve solo los proyectos
+    asociados a ese usuario.
 
     Args:
-        user_id: ID del usuario del cual obtener los proyectos
+        user: ID del usuario del cual obtener los proyectos (opcional)
         gateway: Gateway de proyectos (inyectado)
 
     Returns:
-        List[ProjectResponse]: Lista de proyectos del usuario
+        List[ProjectResponse]: Lista de proyectos
     """
     try:
         use_case = ObtenerProyectosUseCase(gateway)
-        projects = use_case.execute(user_id)
+        projects = use_case.execute(user)
         return [
             ProjectResponse(
                 id=project.id,
@@ -53,5 +54,5 @@ async def get_user_projects(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail="Error interno del servidor al obtener los proyectos del usuario",
+            detail="Error interno del servidor al obtener los proyectos",
         )
