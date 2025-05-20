@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 
-from app.users.domain.models import User
+from app.users.domain.models import Employee, User
 
 
-class EmployeeRepository(ABC):
+class EmployeeGateway(ABC):
     @abstractmethod
-    def all(self) -> list[User]: ...
+    def all(self) -> list[Employee]: ...
 
 
 class UserRepository(ABC):

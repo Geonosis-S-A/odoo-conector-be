@@ -1,24 +1,22 @@
 from typing import List, Dict, Any, cast
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
-from app.users.domain.repositories import EmployeeRepository
-from app.users.domain.models import User
+from app.users.domain.repositories import EmployeeGateway
+from app.users.domain.models import Employee
 
 
-class OdooEmployeeRepository(EmployeeRepository):
+class OdooEmployeeGateway(EmployeeGateway):
     def __init__(self, odoo_client: OdooConnection) -> None:
         self.odoo_client = odoo_client
 
-    def _transform_odoo_to_domain(self, odoo_data: Dict[str, Any]) -> User:
+    def _transform_odoo_to_domain(self, odoo_data: Dict[str, Any]) -> Employee:
         """Transforma los datos de Odoo al modelo de dominio."""
-        return User(
+        return Employee(
             id=odoo_data.get("id"),
             email=odoo_data.get("work_email", ""),
             full_name=odoo_data.get("name", ""),
-            is_active=True,
-            is_superuser=False,
         )
 
-    def all(self) -> List[User]:
+    def all(self) -> List[Employee]:
         """Obtiene todos los empleados de Odoo.
 
         Returns:

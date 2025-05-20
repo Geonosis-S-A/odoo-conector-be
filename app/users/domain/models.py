@@ -1,5 +1,3 @@
-# Acá van las entidades propias, desacopladas del ORM SQLModel
-
 from dataclasses import dataclass
 from typing import Optional
 
@@ -30,3 +28,10 @@ class User:
             is_active=is_active,
             is_superuser=is_superuser,
         )
+
+
+@dataclass
+class Employee:
+    id: Optional[int]
+    email: str
+    full_name: str

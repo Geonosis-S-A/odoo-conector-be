@@ -4,7 +4,7 @@ from sqlmodel import SQLModel, Field
 from pydantic import EmailStr
 
 
-class UserBase(SQLModel):
+class UserBaseModel(SQLModel):
     """Base model for User with common fields"""
 
     email: EmailStr = Field(unique=True, index=True)
@@ -13,7 +13,7 @@ class UserBase(SQLModel):
     is_superuser: bool = Field(default=False)
 
 
-class User(UserBase, table=True):
+class UserModel(UserBaseModel, table=True):
     """User model for database"""
 
     __tablename__ = "users"

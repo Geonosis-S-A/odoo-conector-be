@@ -1,7 +1,7 @@
 import pytest
 from app.users.domain.models import User as DomainUser
 from app.users.infra.db.repositories import SQLModelUserRepository
-from app.users.infra.db.models import User
+from app.users.infra.db.models import UserModel
 from app.shared.infra.db.session import SessionLocal
 
 
@@ -12,13 +12,13 @@ class TestSQLUserRepository:
         self.db = SessionLocal()
         self.repository = SQLModelUserRepository(self.db)
         # Limpiamos la base de datos antes de cada test
-        User.metadata.create_all(self.db.get_bind())
-        self.db.query(User).delete()
+        UserModel.metadata.create_all(self.db.get_bind())
+        self.db.query(UserModel).delete()
         self.db.commit()
 
     def teardown_method(self):
         # Limpiamos la base de datos después de cada test
-        self.db.query(User).delete()
+        self.db.query(UserModel).delete()
         self.db.commit()
         self.db.close()
 
@@ -45,11 +45,11 @@ class TestSQLUserRepository:
         self.repository.save_all(users)
 
         # Assert
-        saved_users = self.db.query(User).all()
+        saved_users = self.db.query(UserModel).all()
         assert len(saved_users) == 2
         assert saved_users[0].email == "test1@example.com"
         assert saved_users[1].email == "test2@example.com"
-        assert all(isinstance(user, User) for user in saved_users)
+        assert all(isinstance(user, UserModel) for user in saved_users)
         assert all(hasattr(user, "id") for user in saved_users)
         assert all(hasattr(user, "email") for user in saved_users)
         assert all(hasattr(user, "full_name") for user in saved_users)
@@ -70,7 +70,7 @@ class TestSQLUserRepository:
         self.repository.save_all(users)
 
         # Assert
-        saved_user = self.db.query(User).first()
+        saved_user = self.db.query(UserModel).first()
         assert saved_user is not None
         assert isinstance(saved_user.id, int)
         assert isinstance(saved_user.email, str)
@@ -94,7 +94,7 @@ class TestSQLUserRepository:
         self.repository.save_all(users)
 
         # Assert
-        saved_user = self.db.query(User).first()
+        saved_user = self.db.query(UserModel).first()
         assert saved_user is not None
         assert saved_user.id is not None
         assert saved_user.email != ""

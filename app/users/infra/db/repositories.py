@@ -1,15 +1,15 @@
-from app.users.domain.models import User as DomainUser
+from app.users.domain.models import User
 from app.users.domain.repositories import UserRepository
-from app.users.infra.db.models import User
+from app.users.infra.db.models import UserModel
 
 
 class SQLModelUserRepository(UserRepository):
     def __init__(self, db):
         self.db = db
 
-    def save_all(self, users: list[DomainUser]):
+    def save_all(self, users: list[User]):
         for user in users:
-            user_model = User(
+            user_model = UserModel(
                 email=user.email,
                 full_name=user.full_name,
                 is_active=user.is_active,
