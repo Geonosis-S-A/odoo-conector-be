@@ -1,0 +1,57 @@
+from fastapi import APIRouter, Depends, HTTPException
+from typing import List
+
+from app.task.api.schemas import TaskResponse
+from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
+from app.task.domain.gateway import TaskGateway
+from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
+from app.shared.infra.external.odoo.odoo_client import (
+    get_odoo_connection_dependency,
+    OdooConnection,
+)
+
+
+router = APIRouter(tags=["tasks"])
+
+
+def get_task_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> TaskGateway:
+    try:
+        return OdooTaskGateway(odoo_connection)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail="Error al conectar con el gateway de tareas"
+        )
+
+
+@router.get("/projects/{project_id}/tasks", response_model=List[TaskResponse])
+async def get_tasks(
+    project_id: int,
+    gateway: TaskGateway = Depends(get_task_gateway),
+):
+    """
+    Obtiene las tareas asociadas a un proyecto específico.
+
+    Args:
+        project_id: ID del proyecto del cual obtener las tareas
+        gateway: Gateway de tareas (inyectado)
+
+    Returns:
+        List[TaskResponse]: Lista de tareas del proyecto
+    """
+    try:
+        use_case = ObtenerTareasUseCase(gateway)
+        tasks = use_case.execute(project_id)
+        return [
+            TaskResponse(
+                id=task.id,
+                name=task.name,
+            )
+            for task in tasks
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor al obtener las tareas",
+        )
