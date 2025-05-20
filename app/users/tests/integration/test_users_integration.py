@@ -36,7 +36,7 @@ def setup_repositories():
 
 
 def _cleanup_test_data(db):
-    """Limpia los datos de prueba creados durante los tests."""
+    """Limpia los datos de prueba de la base de datos."""
     db.query(UserModel).delete()
     db.commit()
     db.close()
@@ -93,13 +93,14 @@ def test_sync_users_does_not_modify_existing_users():
     assert first_sync.status_code == 200
     first_users = first_sync.json()
 
-    # Activar manualmente algunos usuarios
+    # Activar manualmente algunos usuarios y modificar sus datos
     db = SessionLocal()
-    for user in first_users[:2]:  # Activamos los primeros dos usuarios
+    for user in first_users[:2]:  # Modificamos los primeros dos usuarios
         user_model = db.query(UserModel).filter(UserModel.id == user["id"]).first()
         if user_model:
             user_model.is_active = True
             user_model.is_superuser = True
+            user_model.full_name = f"Modified {user_model.full_name}"
     db.commit()
     db.close()
 
@@ -111,14 +112,18 @@ def test_sync_users_does_not_modify_existing_users():
     # Assert
     assert len(first_users) == len(second_users)
 
-    # Verificar que los usuarios activados manualmente mantienen su estado
+    # Verificar que los usuarios modificados mantienen sus cambios
     for user in second_users:
         if user["id"] in [u["id"] for u in first_users[:2]]:
+            # Los usuarios modificados deben mantener sus cambios
             assert user["is_active"] is True
             assert user["is_superuser"] is True
+            assert user["full_name"].startswith("Modified")
         else:
+            # Los demás usuarios deben estar inactivos
             assert user["is_active"] is False
             assert user["is_superuser"] is False
+            assert not user["full_name"].startswith("Modified")
 
 
 @pytest.mark.integration
