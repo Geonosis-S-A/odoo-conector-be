@@ -1,33 +1,33 @@
 from app.timesheet_line.domain.models import TimesheetLine
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
-from app.timesheet_line.infra.external.odoo.odoo_timesheet_repository import (
-    OdooTimesheetLineRepository,
+from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
+    OdooTimesheetLineGateway,
 )
 from datetime import date
 import pytest
 
 
 @pytest.mark.integration  # type: ignore[attr-defined]
-class TestOdooRepository:
+class TestOdooTimesheetLineGateway:
     @pytest.fixture(autouse=True)  # type: ignore[attr-defined]
     def setup(self):
         self.odoo_client = get_odoo_connection()
-        self.repository = OdooTimesheetLineRepository(self.odoo_client)
+        self.gateway = OdooTimesheetLineGateway(self.odoo_client)
         yield
         # Limpieza después de cada test
         self._cleanup_test_data()
 
     def _cleanup_test_data(self):
         """Limpia los datos de prueba creados durante los tests"""
-        test_lines = self.repository.all()
+        test_lines = self.gateway.all()
         for line in test_lines:
             if line.name == "Test Timesheet Line":
                 if line.id:
-                    self.repository.delete(line.id)
+                    self.gateway.delete(line.id)
 
     def test_returns_all_timesheet_lines_is_more_than_one(self):
         # Act
-        lines = self.repository.all()
+        lines = self.gateway.all()
 
         # Assert
         assert len(lines) > 0
@@ -39,7 +39,7 @@ class TestOdooRepository:
 
     def test_create_timesheet_line(self):
         # Arrange
-        prev_lines = self.repository.all()
+        prev_lines = self.gateway.all()
         test_date = date(2021, 1, 1)
         test_name = "Test Timesheet Line"
 
@@ -53,8 +53,8 @@ class TestOdooRepository:
         )
 
         # Act
-        created_id = self.repository.create(timesheet_line)
-        post_lines = self.repository.all()
+        created_id = self.gateway.create(timesheet_line)
+        post_lines = self.gateway.all()
 
         # Assert
         assert len(post_lines) == len(prev_lines) + 1
@@ -80,12 +80,12 @@ class TestOdooRepository:
             date=date(2021, 1, 1),
             name="Test Timesheet Line",
         )
-        created_id = self.repository.create(timesheet_line)
-        prev_lines = self.repository.all()
+        created_id = self.gateway.create(timesheet_line)
+        prev_lines = self.gateway.all()
 
         # Act
-        delete_result = self.repository.delete(created_id)
-        post_lines = self.repository.all()
+        delete_result = self.gateway.delete(created_id)
+        post_lines = self.gateway.all()
 
         # Assert
         assert delete_result is True
