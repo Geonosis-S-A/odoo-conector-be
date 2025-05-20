@@ -1,21 +1,29 @@
-# src/shared/db/session.py
-
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
-# En staging vamos a tener la url de la base de datos de staging
-# En production vamos a tener la url de la base de datos de production
-# En local  creamos una base de datos en sqlite
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
-
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+from app.shared.infra.db.config import (
+    settings,
 )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Crear el motor de la base de datos
+def create_engine_with_url(database_url: str):
+    connect_args = (
+        {"check_same_thread": False} if database_url.startswith("sqlite") else {}
+    )
+    return create_engine(database_url, connect_args=connect_args)
+
+
+# Crear una sesión de base de datos
+def create_session_local(engine):
+    return sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+# Motor y sesión para la base de datos de desarrollo/producción
+engine = create_engine_with_url(settings.DATABASE_URL)
+SessionLocal = create_session_local(engine)
+
+
+# Dependencia para obtener la sesión de la base de datos
 def get_db():
     db = SessionLocal()
     try:

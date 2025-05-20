@@ -11,6 +11,7 @@ wheels/
 
 # Database local
 app.db
+test.db
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template
