@@ -99,3 +99,81 @@ class TestSQLUserRepository:
         assert saved_user.id is not None
         assert saved_user.email != ""
         assert saved_user.full_name != ""
+
+    def test_all_returns_domain_users(self):
+        # Arrange
+        users = [
+            DomainUser(
+                id=None,
+                email="test1@example.com",
+                full_name="Test User 1",
+                is_active=True,
+                is_superuser=False,
+            ),
+            DomainUser(
+                id=None,
+                email="test2@example.com",
+                full_name="Test User 2",
+                is_active=True,
+                is_superuser=False,
+            ),
+        ]
+        self.repository.save_all(users)
+
+        # Act
+        result = self.repository.all()
+
+        # Assert
+        assert len(result) == 2
+        assert all(isinstance(user, DomainUser) for user in result)
+        assert all(hasattr(user, "id") for user in result)
+        assert all(hasattr(user, "email") for user in result)
+        assert all(hasattr(user, "full_name") for user in result)
+        assert all(hasattr(user, "is_active") for user in result)
+        assert all(hasattr(user, "is_superuser") for user in result)
+
+    def test_all_users_data_structure(self):
+        # Arrange
+        users = [
+            DomainUser(
+                id=None,
+                email="test1@example.com",
+                full_name="Test User 1",
+                is_active=True,
+                is_superuser=False,
+            )
+        ]
+        self.repository.save_all(users)
+
+        # Act
+        result = self.repository.all()
+        first_user = result[0]
+
+        # Assert
+        assert isinstance(first_user.id, int)
+        assert isinstance(first_user.email, str)
+        assert isinstance(first_user.full_name, str)
+        assert isinstance(first_user.is_active, bool)
+        assert isinstance(first_user.is_superuser, bool)
+
+    def test_all_users_required_fields_not_empty(self):
+        # Arrange
+        users = [
+            DomainUser(
+                id=None,
+                email="test1@example.com",
+                full_name="Test User 1",
+                is_active=True,
+                is_superuser=False,
+            )
+        ]
+        self.repository.save_all(users)
+
+        # Act
+        result = self.repository.all()
+
+        # Assert
+        for user in result:
+            assert user.id is not None
+            assert user.email != ""
+            assert user.full_name != ""

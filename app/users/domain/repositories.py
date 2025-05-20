@@ -11,3 +11,6 @@ class EmployeeGateway(ABC):
 class UserRepository(ABC):
     @abstractmethod
     def save_all(self, users: list[User]): ...
+
+    @abstractmethod
+    def all(self) -> list[User]: ...

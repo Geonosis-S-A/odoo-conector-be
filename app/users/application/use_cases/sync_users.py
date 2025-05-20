@@ -1,4 +1,5 @@
 from app.users.domain.repositories import EmployeeGateway, UserRepository
+from app.users.domain.models import User
 
 
 class SyncUsersUseCase:
@@ -9,6 +10,40 @@ class SyncUsersUseCase:
         self.repo = user_repository
 
     def execute(self):
-        # 1. Tomar usuarios del repo y del odoo
-        # 2. Los que no estén en el bbdd hay que cargarlos como not active y sin password o uno random
-        pass
+        # 1. Obtener empleados de Odoo
+        odoo_employees = self.gateway.all()
+
+        # 2. Obtener usuarios actuales de la base de datos
+        current_users = self.repo.all()
+
+        # 3. Crear lista de usuarios a sincronizar
+        users_to_sync = []
+        for employee in odoo_employees:
+            # Buscar si el empleado ya existe en nuestra base de datos
+            existing_user = next(
+                (user for user in current_users if user.email == employee.email), None
+            )
+
+            if existing_user:
+                # Si existe, actualizamos sus datos
+                user = User(
+                    id=existing_user.id,
+                    email=employee.email,
+                    full_name=employee.full_name,
+                    is_active=existing_user.is_active,
+                    is_superuser=existing_user.is_superuser,
+                )
+            else:
+                # Si no existe, creamos uno nuevo inactivo
+                user = User(
+                    id=None,
+                    email=employee.email,
+                    full_name=employee.full_name,
+                    is_active=False,
+                    is_superuser=False,
+                )
+
+            users_to_sync.append(user)
+
+        # 4. Guardar todos los usuarios en la base de datos
+        self.repo.save_all(users_to_sync)
