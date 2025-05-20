@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict
 
+
 from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.domain.models import TimesheetLine
@@ -57,6 +58,7 @@ async def create_timesheet_line(
 @router.get("/", response_model=List[TimesheetLine])
 async def list_timesheet_lines(
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_id: int | None = None,
 ):
     """
     Lista todas las líneas de timesheet.
@@ -68,7 +70,7 @@ async def list_timesheet_lines(
         List[TimesheetLine]: Lista de líneas de timesheet
     """
     try:
-        timesheets = gateway.all()
+        timesheets = gateway.all(employee_id)
         return [
             TimesheetLine(
                 id=ts.id,

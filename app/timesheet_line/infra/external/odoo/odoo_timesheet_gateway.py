@@ -67,12 +67,15 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         )
         return odoo_timesheet
 
-    def all(self) -> List[TimesheetLine]:
+    def all(self, employee_id: int | None = None) -> List[TimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo.
 
         Returns:
             List[TimesheetLine]: Lista de líneas de hoja de tiempo transformadas
         """
+        domain = []
+        if employee_id is not None:
+            domain = [("employee_id", "=", employee_id)]
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
             self.odoo_client["models"].execute_kw(
@@ -81,7 +84,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 self.odoo_client["ODOO_PASSWORD"],
                 "account.analytic.line",  # Modelo de las líneas de hojas de tiempo
                 "search_read",  # Método para buscar y leer registros
-                [[]],  # Sin filtros (obtiene todas las líneas)
+                [domain],  # Sin filtros (obtiene todas las líneas)
                 {
                     "fields": [
                         "name",
