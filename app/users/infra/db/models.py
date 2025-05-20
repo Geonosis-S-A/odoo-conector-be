@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 from sqlmodel import SQLModel, Field
 from pydantic import EmailStr
+from sqlalchemy import event
 
 
 class UserBaseModel(SQLModel):
@@ -20,5 +21,10 @@ class UserModel(UserBaseModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     hashed_password: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+@event.listens_for(UserModel, "before_update")
+def update_timestamp(mapper, connection, target):
+    target.updated_at = datetime.now(UTC)
