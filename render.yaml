@@ -1,6 +1,0 @@
-services:
-  - type: web
-    name: fastapi-uv-app
-    runtime: docker
-    plan: free
-    autoDeploy: true
