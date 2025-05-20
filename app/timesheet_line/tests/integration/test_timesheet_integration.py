@@ -2,8 +2,8 @@ import pytest
 from fastapi.testclient import TestClient
 from app.timesheet_line.api.routers import router
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
-from app.timesheet_line.infra.external.odoo.odoo_timesheet_repository import (
-    OdooTimesheetLineRepository,
+from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
+    OdooTimesheetLineGateway,
 )
 from fastapi import FastAPI
 
@@ -16,7 +16,7 @@ client = TestClient(app)
 def setup_repository():
     """Fixture que configura el repositorio real de Odoo."""
     odoo_client = get_odoo_connection()
-    repository = OdooTimesheetLineRepository(odoo_client)
+    repository = OdooTimesheetLineGateway(odoo_client)
     yield repository
     # Limpieza después de cada test
     _cleanup_test_data(repository)

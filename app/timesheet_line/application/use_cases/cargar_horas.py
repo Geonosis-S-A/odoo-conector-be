@@ -2,12 +2,12 @@
 
 from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.domain.models import TimesheetLine
-from app.timesheet_line.domain.repositories import TimesheetLineRepository
+from app.timesheet_line.domain.repositories import TimesheetLineGateway
 
 
 class CargarHorasUseCase:
-    def __init__(self, odoo_repository: TimesheetLineRepository):
-        self.odoo_repo = odoo_repository
+    def __init__(self, odoo_gateway: TimesheetLineGateway):
+        self.odoo_gateway = odoo_gateway
 
     def execute(self, req: CargarHorasRequest):
         # Validación de horas negativas
@@ -24,4 +24,4 @@ class CargarHorasUseCase:
             date=req.date,
             task_id=req.task_id,
         )
-        return self.odoo_repo.create(timesheet_line)
+        return self.odoo_gateway.create(timesheet_line)

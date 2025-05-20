@@ -1,11 +1,11 @@
 from typing import List, Dict, Any, cast
 from datetime import datetime, date
 from app.timesheet_line.domain.models import TimesheetLine
-from app.timesheet_line.domain.repositories import TimesheetLineRepository
+from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
 
-class OdooTimesheetLineRepository(TimesheetLineRepository):
+class OdooTimesheetLineGateway(TimesheetLineGateway):
     def __init__(self, odoo_client: OdooConnection) -> None:
         self.odoo_client = odoo_client
 
