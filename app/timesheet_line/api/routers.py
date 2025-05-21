@@ -7,6 +7,9 @@ from app.timesheet_line.api.schemas import (
     DetailedTimesheetLineResponse,
 )
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
+from app.timesheet_line.application.use_cases.delete_timesheet import (
+    DeleteTimesheetUseCase,
+)
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
@@ -97,7 +100,8 @@ async def delete_timesheet_line(
         Dict[str, str]: Mensaje de éxito
     """
     try:
-        success = gateway.delete(timesheet_id)
+        use_case = DeleteTimesheetUseCase(gateway)
+        success = use_case.execute(timesheet_id)
         if not success:
             raise HTTPException(
                 status_code=404, detail="Línea de timesheet no encontrada"
