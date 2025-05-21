@@ -143,3 +143,35 @@ class TestSQLUserRepository:
             assert user.id is not None
             assert user.email != ""
             assert user.full_name != ""
+
+    def test_set_password_updates_hashed_password(self):
+        # Crear y guardar un usuario
+        user = DomainUser(
+            id=None,
+            email="setpass@example.com",
+            full_name="Set Pass User",
+            is_active=True,
+            is_superuser=False,
+        )
+        self.repository.save_all([user])
+        saved_user = (
+            self.db.query(UserModel).filter_by(email="setpass@example.com").first()
+        )
+        assert saved_user is not None
+        # Cambiar la contraseña
+        new_password = "new_hashed_password_123"
+        updated_user = self.repository.set_password(saved_user.id, new_password)
+        # Verificar en la base de datos
+        refreshed_user = self.db.query(UserModel).filter_by(id=saved_user.id).first()
+        assert refreshed_user.hashed_password == new_password
+        # Verificar que el método retorna el dominio correcto
+        assert updated_user.id == saved_user.id
+        assert updated_user.email == saved_user.email
+        assert updated_user.full_name == saved_user.full_name
+        assert updated_user.is_active == saved_user.is_active
+        assert updated_user.is_superuser == saved_user.is_superuser
+
+    def test_set_password_user_not_found(self):
+        # Intentar cambiar la contraseña de un usuario inexistente
+        with pytest.raises(ValueError, match="User not found"):
+            self.repository.set_password(99999, "irrelevant")

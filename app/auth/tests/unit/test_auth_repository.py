@@ -14,14 +14,10 @@ async def auth_service():
 
 class TestAuthService:
     @pytest.mark.asyncio
-    async def test_get_access_token_success(self, auth_service: TokenService):
-        # Arrange
+    async def test_create_access_token_success(self, auth_service: TokenService):
+        """Debe crear un access token válido con los datos correctos."""
         token_data = TokenData(user_id=1, roles=["user"])
-
-        # Act
         token = await auth_service.create_access_token(token_data)
-
-        # Assert
         assert token is not None
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
@@ -30,19 +26,15 @@ class TestAuthService:
         assert payload["roles"] == ["user"]
 
     @pytest.mark.asyncio
-    async def test_get_access_token_with_custom_expiration(
+    async def test_create_access_token_with_custom_expiration(
         self, auth_service: TokenService
     ):
-        # Arrange
+        """Debe crear un access token con expiración personalizada."""
         token_data = TokenData(user_id=1, roles=["user"])
         custom_expiration = timedelta(minutes=30)
-
-        # Act
         token = await auth_service.create_access_token(
             token_data, expires_delta=custom_expiration
         )
-
-        # Assert
         assert token is not None
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
@@ -51,14 +43,10 @@ class TestAuthService:
         assert payload["roles"] == ["user"]
 
     @pytest.mark.asyncio
-    async def test_get_refresh_token_success(self, auth_service: TokenService):
-        # Arrange
+    async def test_create_refresh_token_success(self, auth_service: TokenService):
+        """Debe crear un refresh token válido."""
         token_data = TokenData(user_id=1, roles=["user"])
-
-        # Act
         token = await auth_service.create_refresh_token(token_data)
-
-        # Assert
         assert token is not None
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
@@ -68,27 +56,20 @@ class TestAuthService:
 
     @pytest.mark.asyncio
     async def test_verify_token_success(self, auth_service: TokenService):
-        # Arrange
-        token_data = TokenData(user_id=1, roles=["user"])
-        token_data = jwt.encode(
+        """Debe decodificar correctamente un token válido."""
+        token = jwt.encode(
             {"user_id": 1, "roles": ["user"]},
             settings.JWT_SECRET_KEY,
             algorithm=settings.JWT_ALGORITHM,
         )
-
-        # Act
-        result = await auth_service.verify_token(token_data)
-
-        # Assert
+        result = await auth_service.verify_token(token)
         assert result.user_id == 1
         assert result.roles == ["user"]
 
     @pytest.mark.asyncio
     async def test_verify_token_invalid(self, auth_service: TokenService):
-        # Arrange
+        """Debe lanzar HTTPException si el token es inválido."""
         invalid_token = "invalid.token.string"
-
-        # Act & Assert
         with pytest.raises(HTTPException) as excinfo:
             await auth_service.verify_token(invalid_token)
         assert excinfo.value.status_code == 401
