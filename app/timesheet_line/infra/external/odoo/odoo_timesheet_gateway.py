@@ -170,24 +170,27 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             DetailedTimesheetLine: Línea de hoja de tiempo con detalles
         """
 
-        odoo_data = self.odoo_client["models"].execute_kw(
-            self.odoo_client["ODOO_DB"],
-            self.odoo_client["uid"],
-            self.odoo_client["ODOO_PASSWORD"],
-            "account.analytic.line",
-            "read",
-            [timesheet_line_id],
-            {
-                "fields": [
-                    "id",
-                    "name",
-                    "date",
-                    "unit_amount",
-                    "employee_id",
-                    "project_id",
-                    "task_id",
-                ],
-            },
+        odoo_data = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "account.analytic.line",
+                "read",
+                [timesheet_line_id],
+                {
+                    "fields": [
+                        "id",
+                        "name",
+                        "date",
+                        "unit_amount",
+                        "employee_id",
+                        "project_id",
+                        "task_id",
+                    ],
+                },
+            ),
         )
         if not odoo_data or len(odoo_data) == 0:
             raise ValueError("No se encontró la línea de timesheet")
