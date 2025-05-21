@@ -45,7 +45,8 @@ def test_create_and_delete_timesheet_line():
 
     # Act - Crear
     create_response = client.post("/timesheet/", json=request_data)
-
+    if create_response.status_code != 200:
+        print("create response:", create_response.json())
     # Assert - Crear
     assert create_response.status_code == 200
     created_id = create_response.json()["id"]
@@ -54,7 +55,8 @@ def test_create_and_delete_timesheet_line():
 
     # Act - Eliminar
     delete_response = client.delete(f"/timesheet/{created_id}")
-
+    if delete_response.status_code != 200:
+        print("Delete response:", delete_response.json())
     # Assert - Eliminar
     assert delete_response.status_code == 200
     assert (
@@ -79,9 +81,15 @@ def test_list_timesheet_lines():
         assert all(isinstance(item["id"], int) for item in data)
         assert all(isinstance(item["name"], str) for item in data)
         assert all(isinstance(item["employee_id"], int) for item in data)
-        assert all(isinstance(item["project_id"], int) for item in data)
+        # Cambiado: project es un objeto, no un id plano
+        assert all(isinstance(item["project"], dict) for item in data)
+        assert all(isinstance(item["project"]["id"], int) for item in data)
         assert all(isinstance(item["hours"], (int, float)) for item in data)
         assert all(isinstance(item["date"], str) for item in data)
+        # Task puede ser None o un dict
+        assert all(
+            item["task"] is None or isinstance(item["task"], dict) for item in data
+        )
 
 
 @pytest.mark.integration

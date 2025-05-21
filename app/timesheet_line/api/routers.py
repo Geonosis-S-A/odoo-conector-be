@@ -2,9 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict
 
 
-from app.timesheet_line.api.schemas import CargarHorasRequest
+from app.timesheet_line.api.schemas import (
+    CargarHorasRequest,
+    DetailedTimesheetLineResponse,
+)
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
-from app.timesheet_line.domain.models import TimesheetLine
+from app.timesheet_line.application.use_cases.delete_timesheet import (
+    DeleteTimesheetUseCase,
+)
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
@@ -44,8 +49,8 @@ async def create_timesheet_line(
     """
     try:
         use_case = CargarHorasUseCase(gateway)
-        timesheet_id = use_case.execute(request)
-        return {"id": timesheet_id}
+        line = use_case.execute(request)
+        return {"id": line.id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -55,7 +60,7 @@ async def create_timesheet_line(
         )
 
 
-@router.get("/", response_model=List[TimesheetLine])
+@router.get("/", response_model=List[DetailedTimesheetLineResponse])
 async def list_timesheet_lines(
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_id: int | None = None,
@@ -71,18 +76,7 @@ async def list_timesheet_lines(
     """
     try:
         timesheets = gateway.all(employee_id)
-        return [
-            TimesheetLine(
-                id=ts.id,
-                name=ts.name,
-                employee_id=ts.employee_id,
-                project_id=ts.project_id,
-                hours=ts.hours,
-                date=ts.date,
-                task_id=ts.task_id,
-            )
-            for ts in timesheets
-        ]
+        return timesheets
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -106,7 +100,8 @@ async def delete_timesheet_line(
         Dict[str, str]: Mensaje de éxito
     """
     try:
-        success = gateway.delete(timesheet_id)
+        use_case = DeleteTimesheetUseCase(gateway)
+        success = use_case.execute(timesheet_id)
         if not success:
             raise HTTPException(
                 status_code=404, detail="Línea de timesheet no encontrada"

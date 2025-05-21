@@ -1,7 +1,7 @@
 # Es un ejemplo, podría tener otro nombre etc
 
 from app.timesheet_line.api.schemas import CargarHorasRequest
-from app.timesheet_line.domain.models import TimesheetLine
+from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 
 
@@ -9,7 +9,7 @@ class CargarHorasUseCase:
     def __init__(self, odoo_gateway: TimesheetLineGateway):
         self.odoo_gateway = odoo_gateway
 
-    def execute(self, req: CargarHorasRequest):
+    def execute(self, req: CargarHorasRequest) -> DetailedTimesheetLine:
         # Validación de horas negativas
         if req.hours < 0:
             raise ValueError("Las horas no pueden ser negativas")
@@ -24,4 +24,5 @@ class CargarHorasUseCase:
             date=req.date,
             task_id=req.task_id,
         )
-        return self.odoo_gateway.create(timesheet_line)
+        line_id = self.odoo_gateway.create(timesheet_line)
+        return self.odoo_gateway.get_by_id(line_id)

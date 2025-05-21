@@ -3,6 +3,9 @@
 from dataclasses import dataclass
 from datetime import date as date_t
 
+from app.project.domain.models import Project
+from app.task.domain.models import Task
+
 
 # Ejemplo. Hay que ver si le damos uso.
 @dataclass
@@ -35,3 +38,14 @@ class TimesheetLine:
             name=name,
             task_id=task_id,
         )
+
+
+@dataclass
+class DetailedTimesheetLine:
+    id: int
+    name: str
+    employee_id: int
+    project: Project
+    task: Task | None
+    hours: float
+    date: date_t
