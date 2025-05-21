@@ -51,7 +51,6 @@ async def create_timesheet_line(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print("Error:", e)
         raise HTTPException(
             status_code=500,
             detail="Error interno del servidor al crear la línea de timesheet",
