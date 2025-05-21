@@ -7,7 +7,6 @@ from app.timesheet_line.api.schemas import (
     DetailedTimesheetLineResponse,
 )
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
-from app.timesheet_line.domain.models import TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
