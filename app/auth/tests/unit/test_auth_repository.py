@@ -1,9 +1,8 @@
 import pytest
-from unittest.mock import Mock
 from datetime import timedelta
 from app.auth.infra.auth_service import TokenService, settings
 from app.auth.domain.models import TokenData
-from jose import jwt, JWTError
+from jose import jwt
 from fastapi import HTTPException
 import pytest_asyncio
 

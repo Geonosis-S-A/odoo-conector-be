@@ -6,8 +6,11 @@ from typing import Optional
 import os
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
+from passlib.context import CryptContext
 
 load_dotenv()
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class Settings:
@@ -75,3 +78,6 @@ class TokenService:
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+
+    def verify_password(self, hashed_password: str, plain_password: str) -> bool:
+        return pwd_context.verify(plain_password, hashed_password)

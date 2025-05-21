@@ -11,6 +11,7 @@ class User:
     full_name: str
     is_active: bool
     is_superuser: bool
+    password: Optional[str] = None
 
     @classmethod
     def from_request(
