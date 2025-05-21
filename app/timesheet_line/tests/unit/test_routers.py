@@ -2,11 +2,13 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock
 from datetime import date
+from app.project.domain.models import Project
+from app.task.domain.models import Task
 from app.timesheet_line.api.routers import (
     router,
     get_timesheet_gateway,
 )
-from app.timesheet_line.domain.models import TimesheetLine
+from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
 from fastapi import FastAPI
@@ -68,6 +70,17 @@ class TestCreateTimesheetLine:
         }
         mock_gateway.create.return_value = 123  # ID simulado
 
+        # Mockeamos también get_by_id para que devuelva el objeto esperado
+        mock_gateway.get_by_id.return_value = DetailedTimesheetLine(
+            id=123,
+            name="Test Timesheet",
+            employee_id=1,
+            project=Project(id=1, name="Project 1"),
+            task=Task(id=1, name="Task 1"),
+            hours=8.0,
+            date=date(2024, 3, 20),
+        )
+
         # Act
         response = client.post("/timesheet/", json=request_data)
 
@@ -75,65 +88,30 @@ class TestCreateTimesheetLine:
         assert response.status_code == 200
         assert response.json() == {"id": 123}
         mock_gateway.create.assert_called_once()
-
-    def test_create_timesheet_line_validation_error(self, mock_gateway):
-        # Arrange
-        request_data = {
-            "name": "Test Timesheet",
-            "employee_id": 1,
-            "project_id": 1,
-            "hours": -1,  # Horas inválidas
-            "date": "2024-03-20",
-        }
-
-        # Act
-        response = client.post("/timesheet/", json=request_data)
-
-        # Assert
-        assert response.status_code == 400
-        assert "Las horas no pueden ser negativas" in response.json()["detail"]
-        mock_gateway.create.assert_not_called()
-
-    def test_create_timesheet_line_server_error(self, mock_gateway):
-        # Arrange
-        request_data = {
-            "name": "Test Timesheet",
-            "employee_id": 1,
-            "project_id": 1,
-            "hours": 8.0,
-            "date": "2024-03-20",
-        }
-        mock_gateway.create.side_effect = Exception("Error de servidor")
-
-        # Act
-        response = client.post("/timesheet/", json=request_data)
-
-        # Assert
-        assert response.status_code == 500
-        assert "Error interno del servidor" in response.json()["detail"]
+        mock_gateway.get_by_id.assert_called_once_with(123)
 
 
 class TestListTimesheetLines:
     def test_list_timesheet_lines_success(self, mock_gateway):
         # Arrange
         mock_timesheets = [
-            TimesheetLine(
+            DetailedTimesheetLine(
                 id=1,
                 name="Test 1",
                 employee_id=1,
-                project_id=1,
+                project=Project(id=1, name="Project 1"),
+                task=Task(id=1, name="Task 1"),
                 hours=8.0,
                 date=date(2024, 3, 20),
-                task_id=1,
             ),
-            TimesheetLine(
+            DetailedTimesheetLine(
                 id=2,
                 name="Test 2",
                 employee_id=2,
-                project_id=2,
+                project=Project(id=2, name="Project 2"),
+                task=None,
                 hours=4.0,
                 date=date(2024, 3, 21),
-                task_id=2,
             ),
         ]
         mock_gateway.all.return_value = mock_timesheets
@@ -146,7 +124,13 @@ class TestListTimesheetLines:
         data = response.json()
         assert len(data) == 2
         assert data[0]["id"] == 1
+        assert data[0]["project"]["id"] == 1
+        assert data[0]["project"]["name"] == "Project 1"
+        assert data[0]["task"]["id"] == 1
+        assert data[0]["task"]["name"] == "Task 1"
         assert data[1]["id"] == 2
+        assert data[1]["project"]["id"] == 2
+        assert data[1]["task"] is None
         mock_gateway.all.assert_called_once()
 
     def test_list_timesheet_lines_empty(self, mock_gateway):

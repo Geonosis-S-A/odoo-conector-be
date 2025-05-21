@@ -1,6 +1,8 @@
 from typing import List, Dict, Any, cast
 from datetime import datetime, date
-from app.timesheet_line.domain.models import TimesheetLine
+from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
+from app.task.domain.models import Task
+from app.project.domain.models import Project
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
@@ -22,7 +24,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         task_id: int | None = None
         raw_task_id = odoo_data.get("task_id")
         if isinstance(raw_task_id, list) and len(raw_task_id) > 0:
-            task_id = int(raw_task_id[0])
+            task_id = raw_task_id[0]
         elif isinstance(raw_task_id, (int, str)):
             task_id = int(raw_task_id)
 
@@ -34,6 +36,38 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             hours=float(odoo_data.get("unit_amount", 0.0)),
             date=date_obj,
             task_id=task_id,
+        )
+
+    def _transform_odoo_to_detailed_domain(
+        self, odoo_data: Dict[str, Any]
+    ) -> DetailedTimesheetLine:
+        """Transforma los datos de Odoo al modelo de dominio."""
+        # Odoo devuelve la fecha como string, por ejemplo "2024-05-19"
+        date_str = odoo_data.get("date")
+        if not date_str:
+            raise ValueError("La fecha es obligatoria para la línea de hoja de tiempo")
+
+        date_obj: date = datetime.strptime(date_str, "%Y-%m-%d").date()
+
+        # Odoo devuelve los IDs como tuplas [id, nombre]
+        task: Task | None = None
+        raw_task_id = odoo_data.get("task_id")
+        if isinstance(raw_task_id, list) and len(raw_task_id) > 0:
+            task = Task(id=raw_task_id[0], name=raw_task_id[1])
+        elif isinstance(raw_task_id, (int, str)):
+            task = Task(id=int(raw_task_id), name="Tarea sin nombre")
+
+        return DetailedTimesheetLine(
+            id=odoo_data.get("id", None),
+            name=odoo_data.get("name", ""),
+            employee_id=odoo_data.get("employee_id", [0, ""])[0],
+            project=Project(
+                id=odoo_data.get("project_id", [0, ""])[0],
+                name=odoo_data.get("project_id", [0, ""])[1],
+            ),
+            hours=float(odoo_data.get("unit_amount", 0.0)),
+            date=date_obj,
+            task=task,
         )
 
     def create(self, timesheet_line: TimesheetLine) -> int:
@@ -67,7 +101,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         )
         return odoo_timesheet
 
-    def all(self, employee_id: int | None = None) -> List[TimesheetLine]:
+    def all(self, employee_id: int | None = None) -> List[DetailedTimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo.
 
         Returns:
@@ -99,7 +133,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             ),
         )
         parsed_lines = [
-            self._transform_odoo_to_domain(line) for line in odoo_timesheet_lines
+            self._transform_odoo_to_detailed_domain(line)
+            for line in odoo_timesheet_lines
         ]
         return parsed_lines
 
@@ -124,3 +159,36 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             return True
         except Exception:
             return False
+
+    def get_by_id(self, timesheet_line_id: int) -> DetailedTimesheetLine:
+        """Obtiene una línea de hoja de tiempo por su ID.
+
+        Args:
+            timesheet_line_id: ID de la línea de hoja de tiempo a obtener
+
+        Returns:
+            DetailedTimesheetLine: Línea de hoja de tiempo con detalles
+        """
+
+        odoo_data = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "read",
+            [timesheet_line_id],
+            {
+                "fields": [
+                    "id",
+                    "name",
+                    "date",
+                    "unit_amount",
+                    "employee_id",
+                    "project_id",
+                    "task_id",
+                ],
+            },
+        )
+        if not odoo_data or len(odoo_data) == 0:
+            raise ValueError("No se encontró la línea de timesheet")
+        return self._transform_odoo_to_detailed_domain(odoo_data[0])

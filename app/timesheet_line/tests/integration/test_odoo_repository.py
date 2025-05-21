@@ -1,4 +1,4 @@
-from app.timesheet_line.domain.models import TimesheetLine
+from app.timesheet_line.domain.models import TimesheetLine, DetailedTimesheetLine
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
@@ -31,11 +31,14 @@ class TestOdooTimesheetLineGateway:
 
         # Assert
         assert len(lines) > 0
-        assert all(isinstance(line, TimesheetLine) for line in lines)
+        assert all(isinstance(line, DetailedTimesheetLine) for line in lines)
         assert all(hasattr(line, "employee_id") for line in lines)
-        assert all(hasattr(line, "project_id") for line in lines)
+        assert all(hasattr(line, "project") for line in lines)
         assert all(hasattr(line, "hours") for line in lines)
         assert all(hasattr(line, "date") for line in lines)
+        # project es un objeto, aseguramos que tenga id y name
+        assert all(hasattr(line.project, "id") for line in lines)
+        assert all(hasattr(line.project, "name") for line in lines)
 
     def test_create_timesheet_line(self):
         # Arrange
@@ -65,7 +68,7 @@ class TestOdooTimesheetLineGateway:
         assert created_line.id is not None
         assert isinstance(created_line.id, int)
         assert created_line.employee_id == 1
-        assert created_line.project_id == 1
+        assert created_line.project.id == 1
         assert created_line.hours == 1
         assert created_line.date == test_date
         assert created_line.name == test_name

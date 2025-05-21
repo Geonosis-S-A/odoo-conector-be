@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict
 
 
-from app.timesheet_line.api.schemas import CargarHorasRequest
+from app.timesheet_line.api.schemas import (
+    CargarHorasRequest,
+    DetailedTimesheetLineResponse,
+)
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.domain.models import TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
@@ -44,18 +47,19 @@ async def create_timesheet_line(
     """
     try:
         use_case = CargarHorasUseCase(gateway)
-        timesheet_id = use_case.execute(request)
-        return {"id": timesheet_id}
+        line = use_case.execute(request)
+        return {"id": line.id}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        print("Error:", e)
         raise HTTPException(
             status_code=500,
             detail="Error interno del servidor al crear la línea de timesheet",
         )
 
 
-@router.get("/", response_model=List[TimesheetLine])
+@router.get("/", response_model=List[DetailedTimesheetLineResponse])
 async def list_timesheet_lines(
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_id: int | None = None,
@@ -71,18 +75,7 @@ async def list_timesheet_lines(
     """
     try:
         timesheets = gateway.all(employee_id)
-        return [
-            TimesheetLine(
-                id=ts.id,
-                name=ts.name,
-                employee_id=ts.employee_id,
-                project_id=ts.project_id,
-                hours=ts.hours,
-                date=ts.date,
-                task_id=ts.task_id,
-            )
-            for ts in timesheets
-        ]
+        return timesheets
     except Exception as e:
         raise HTTPException(
             status_code=500,
