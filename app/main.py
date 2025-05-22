@@ -12,13 +12,13 @@ from app.project.api.routers import router as project_router
 from app.task.api.routers import router as task_router
 from app.auth.api.routes import router as auth_router
 
-ENV = os.getenv("ENV", "local")  # Por defecto, local
+ENV = os.getenv("ENV", "LOCAL")  # Por defecto, local
 API_PREFIX = "/api/v1"
 
 
 @asynccontextmanager
 async def lifespan(app):
-    if ENV == "local":
+    if ENV == "LOCAL":
         # En local, creamos las tablas automáticamente. En staging y production lo vamos a manejar con alembic.
         from sqlmodel import SQLModel
         from app.shared.infra.db.session import engine
@@ -43,8 +43,8 @@ app = FastAPI(
 # Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"]
-    if ENV == "local"
+    allow_origins=["http://localhost:8080"]  # todo: cambiar a la url del front
+    if ENV == "LOCAL"
     else [],  # En producción, especificar los orígenes permitidos
     allow_credentials=True,
     allow_methods=["*"],
