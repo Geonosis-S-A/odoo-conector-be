@@ -11,7 +11,6 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
         self.db = db
 
     def get_user_credentials(self, email: str) -> UserCredentials:
-        print(f"Buscando usuario con email: {email}")
         user_model = self.db.query(UserModel).filter(UserModel.email == email).first()
 
         print(user_model)

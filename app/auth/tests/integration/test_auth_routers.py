@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 from fastapi import FastAPI
 from app.auth.api.routes import router
 from app.shared.infra.db.session import get_db
-from app.auth.infra.db.models import RefreshTokenModel
 from app.users.infra.db.models import UserModel
 from passlib.context import CryptContext
 
@@ -50,7 +49,6 @@ def test_login_success(client, local_db_session):
         .filter(UserModel.email == "test@example.com")
         .first()
     )
-    print(f"Usuario guardado: {saved_user}")
     assert saved_user is not None, "El usuario no se guardó en la base de datos"
     assert saved_user.email == "test@example.com", "El email no coincide"
     assert saved_user.is_active, "El usuario no está activo"
@@ -69,9 +67,13 @@ def test_login_success(client, local_db_session):
     # Assert
     assert response.status_code == 200
     json_data = response.json()
+    print("RESPUESTA DEL LOGIN: " + str(json_data))
     assert "access_token" in json_data
-    assert json_data["token_type"] == "bearer"
-    assert "refresh_token" in response.cookies
+    assert "user" in json_data
+    assert json_data["user"]["user_id"] == saved_user.id
+    assert json_data["user"]["user_name"] == saved_user.full_name
+    assert json_data["user"]["user_email"] == saved_user.email
+    assert json_data["user"]["roles"] == ["user"]
 
 
 @pytest.mark.integration

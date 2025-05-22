@@ -4,7 +4,6 @@ from typing import Optional
 from sqlalchemy import true
 from app.auth.domain.models import TokenData
 from datetime import datetime, timedelta
-from typing import Optional
 import os
 from dotenv import load_dotenv
 from fastapi import HTTPException, status

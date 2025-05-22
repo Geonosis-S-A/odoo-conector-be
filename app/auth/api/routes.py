@@ -30,11 +30,20 @@ async def login(
     tokens = await login_use_case.execute(login_data.email, login_data.password)
     response.set_cookie(
         key="refresh_token",
-        value=tokens["refresh_token"],
+        value=tokens.refresh_token,
         httponly=True,
         secure=True,
         samesite="lax",
         path="/",  # Todo: Restringir al path refresh_token
     )
 
-    return {"access_token": tokens["access_token"], "token_type": "bearer"}
+    return {
+        "access_token": tokens.access_token,
+        "token_type": "bearer",
+        "user": {
+            "user_id": tokens.user.user_id,
+            "user_email": tokens.user.user_email,
+            "user_name": tokens.user.user_name,
+            "roles": tokens.user.roles,  # Asegúrate de que los roles están correctamente definidos
+        },
+    }
