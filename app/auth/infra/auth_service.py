@@ -94,6 +94,27 @@ class TokenService:
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
+        
+    def refresh_access_token(self, refresh_token: str) -> dict:
+        try:
+            # Verify refresh token
+            payload = self.verify_token(refresh_token)
+            token_data = TokenData(**payload)
+            
+            # Get user
+            user = self.get_user_by_email(token_data.email)
+            if not user:
+                raise HTTPException(status_code=401, detail="User not found")
+
+            # Create new access token
+            access_token = self.create_access_token(token_data.dict())
+            
+            return {
+                "access_token": access_token,
+                "token_type": "bearer"
+            }
+        except Exception as e:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     def verify_password(self, hashed_password: str, plain_password: str) -> bool:
         return pwd_context.verify(plain_password, hashed_password)

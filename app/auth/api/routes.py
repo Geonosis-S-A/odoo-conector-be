@@ -1,5 +1,7 @@
 from atexit import register
 import email
+from http.client import HTTPException
+from http.cookiejar import Cookie
 from fastapi import APIRouter, Depends, Response
 from sqlmodel import Session
 from app.auth.api.schemas import (
@@ -73,3 +75,15 @@ def register_user(
         is_active=registered_user.is_active,
         is_superuser=registered_user.is_superuser,
     )
+
+
+@router.post("/refresh", response_model=TokenResponse)
+async def refresh_token(
+    refresh_token: str = Cookie(None, alias="refresh_token"),
+    session: Session = Depends(get_db)
+):
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Refresh token not found")
+    
+    auth_service = TokenService(session)
+    return auth_service.refresh_access_token(refresh_token)
