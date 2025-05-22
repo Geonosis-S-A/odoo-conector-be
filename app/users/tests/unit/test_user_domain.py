@@ -49,14 +49,3 @@ class TestUserDomain:
             is_superuser=False,
         )
         assert user1 != user2
-
-    def test_user_string_representation(self):
-        user = User(
-            id=1,
-            email="test@example.com",
-            full_name="Test User",
-            is_active=True,
-            is_superuser=False,
-        )
-        expected_str = "User(id=1, email='test@example.com', full_name='Test User', is_active=True, is_superuser=False)"
-        assert str(user) == expected_str

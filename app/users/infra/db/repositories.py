@@ -20,6 +20,21 @@ class SQLModelUserRepository(UserRepository):
             self.db.add(user_model)
         self.db.commit()
 
+    def set_password(self, user_id: int, password: str) -> User:
+        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+        if user_model is None:
+            raise ValueError("User not found")
+        user_model.hashed_password = password
+        self.db.commit()
+        self.db.refresh(user_model)
+        return User(
+            id=user_model.id,
+            email=user_model.email,
+            full_name=user_model.full_name,
+            is_active=user_model.is_active,
+            is_superuser=user_model.is_superuser,
+        )
+
     def all(self) -> list[User]:
         users = self.db.query(UserModel).all()
         return [

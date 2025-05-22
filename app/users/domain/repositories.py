@@ -14,3 +14,6 @@ class UserRepository(ABC):
 
     @abstractmethod
     def all(self) -> list[User]: ...
+
+    @abstractmethod
+    def set_password(self, user_id: int, password: str) -> User: ...
