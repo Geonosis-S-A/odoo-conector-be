@@ -10,6 +10,7 @@ from app.timesheet_line.api.routers import router as timesheet_router
 from app.users.api.routers import router as users_router
 from app.project.api.routers import router as project_router
 from app.task.api.routers import router as task_router
+from app.auth.api.routes import router as auth_router
 
 ENV = os.getenv("ENV", "local")  # Por defecto, local
 API_PREFIX = "/api/v1"
@@ -73,7 +74,7 @@ app.include_router(timesheet_router, prefix=API_PREFIX)
 app.include_router(users_router, prefix=API_PREFIX)
 app.include_router(project_router, prefix=API_PREFIX)
 app.include_router(task_router, prefix=API_PREFIX)
-
+app.include_router(auth_router, prefix=API_PREFIX)
 
 @app.get("/")
 async def root():

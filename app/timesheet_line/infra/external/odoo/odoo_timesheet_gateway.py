@@ -52,10 +52,10 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         # Odoo devuelve los IDs como tuplas [id, nombre]
         task: Task | None = None
         raw_task_id = odoo_data.get("task_id")
-        if isinstance(raw_task_id, list) and len(raw_task_id) > 0:
+        if raw_task_id is None:
+            task = None
+        elif isinstance(raw_task_id, list) and len(raw_task_id) > 0:
             task = Task(id=raw_task_id[0], name=raw_task_id[1])
-        elif isinstance(raw_task_id, (int, str)):
-            task = Task(id=int(raw_task_id), name="Tarea sin nombre")
 
         return DetailedTimesheetLine(
             id=odoo_data.get("id", None),
