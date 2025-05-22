@@ -17,10 +17,7 @@ class LoginUseCase:
         self.token_repository = token_repository
 
     async def execute(self, email: str, password: str):
-        # TODO: Implementar login
-
         # 1. Acceder a bbdd y verificar credenciales
-
         user_credentials = self.user_credentials_repository.get_user_credentials(email)
 
         # 2. Si credenciales son correctas, crear token. Las credenciales estan hasheadas.
@@ -30,12 +27,26 @@ class LoginUseCase:
         if not self.auth_service.verify_password(user_credentials.password, password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
+        if not self.auth_service.is_active(user_credentials.is_active):
+            print("usuario inactivo")
+            raise HTTPException(status_code=401, detail="Inactive user")
+
         access_token = await self.auth_service.create_access_token(
-            TokenData(user_id=user_credentials.id, roles=["user"])
+            TokenData(
+                user_id=user_credentials.id,
+                user_email=user_credentials.email,
+                user_name=user_credentials.name,
+                roles=["user"],
+            )
         )
 
         refresh_token = await self.auth_service.create_refresh_token(
-            TokenData(user_id=user_credentials.id, roles=["user"])
+            TokenData(
+                user_id=user_credentials.id,
+                user_email=user_credentials.email,
+                user_name=user_credentials.name,
+                roles=["user"],
+            )
         )
 
         # 3. Guardar refresh token en bbdd

@@ -5,6 +5,8 @@ import datetime
 @dataclass
 class TokenData:
     user_id: int
+    user_email: str
+    user_name: str
     roles: list[str]
 
 
@@ -20,4 +22,6 @@ class UserCredentials:
     id: int
     email: str
     password: str
+    name: str
     is_superuser: bool
+    is_active: bool

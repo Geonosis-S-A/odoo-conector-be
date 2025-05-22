@@ -11,14 +11,22 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
         self.db = db
 
     def get_user_credentials(self, email: str) -> UserCredentials:
-        user_credentials = (
-            self.db.query(UserModel).filter(UserModel.email == email).first()
-        )
+        print(f"Buscando usuario con email: {email}")
+        user_model = self.db.query(UserModel).filter(UserModel.email == email).first()
 
-        if not user_credentials:
+        print(user_model)
+        if not user_model:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        return user_credentials
+        # Convertir UserModel a UserCredentials
+        return UserCredentials(
+            id=user_model.id,
+            email=user_model.email,
+            name=user_model.full_name,
+            password=user_model.hashed_password,
+            is_superuser=user_model.is_superuser,
+            is_active=user_model.is_active,
+        )
 
 
 class SQLModelTokenRepository(TokenRepository):

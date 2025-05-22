@@ -1,5 +1,7 @@
 from jose import jwt, JWTError
 from typing import Optional
+
+from sqlalchemy import true
 from app.auth.domain.models import TokenData
 from datetime import datetime, timedelta
 from typing import Optional
@@ -42,7 +44,12 @@ class TokenService:
     async def create_access_token(
         self, token_data: TokenData, expires_delta: Optional[timedelta] = None
     ) -> str:
-        to_encode = {"user_id": token_data.user_id, "roles": token_data.roles}
+        to_encode = {
+            "user_id": token_data.user_id,
+            "user_email": token_data.user_email,
+            "user_name": token_data.user_name,
+            "roles": token_data.roles,
+        }
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
@@ -57,7 +64,12 @@ class TokenService:
         return encoded_jwt
 
     async def create_refresh_token(self, token_data: TokenData) -> str:
-        to_encode = {"user_id": token_data.user_id, "roles": token_data.roles}
+        to_encode = {
+            "user_id": token_data.user_id,
+            "user_email": token_data.user_email,
+            "user_name": token_data.user_name,
+            "roles": token_data.roles,
+        }
 
         expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
         to_encode.update({"exp": expire})
@@ -71,7 +83,12 @@ class TokenService:
             payload = jwt.decode(
                 token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
             )
-            return TokenData(user_id=payload["user_id"], roles=payload["roles"])
+            return TokenData(
+                user_id=payload["user_id"],
+                user_email=payload["user_email"],
+                user_name=payload["user_name"],
+                roles=payload["roles"],
+            )
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -81,3 +98,8 @@ class TokenService:
 
     def verify_password(self, hashed_password: str, plain_password: str) -> bool:
         return pwd_context.verify(plain_password, hashed_password)
+
+    def is_active(self, user_state: bool):
+        if user_state:
+            return true
+        return False

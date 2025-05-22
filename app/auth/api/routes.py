@@ -8,6 +8,7 @@ from app.auth.infra.db.repositories import (
     SQLModelUserCredentialsRepository,
 )
 from app.shared.infra.db.session import get_db
+from app.users.infra.db.models import UserModel
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -17,6 +18,8 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def login(
     login_data: LoginRequest, response: Response, db: Session = Depends(get_db)
 ):
+    print(f"Sesión de base de datos: {db}")
+
     user_credentials_repository = SQLModelUserCredentialsRepository(db)
     token_repository = SQLModelTokenRepository(db)
     auth_service = TokenService()
