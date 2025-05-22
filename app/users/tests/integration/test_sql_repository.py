@@ -160,7 +160,7 @@ class TestSQLUserRepository:
         assert saved_user is not None
         # Cambiar la contraseña
         new_password = "new_hashed_password_123"
-        updated_user = self.repository.set_password(saved_user.id, new_password)
+        updated_user = self.repository.set_password(saved_user.email, new_password)
         # Verificar en la base de datos
         refreshed_user = self.db.query(UserModel).filter_by(id=saved_user.id).first()
         assert refreshed_user.hashed_password == new_password
