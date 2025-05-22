@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import date as date_t
+from typing import Optional
 
 from app.project.domain.models import Project
 from app.task.domain.models import Task
@@ -16,7 +17,7 @@ class TimesheetLine:
     project_id: int
     hours: float
     date: date_t
-    task_id: int | None = None
+    task_id: Optional[int] = None
 
     @classmethod
     def from_request(
