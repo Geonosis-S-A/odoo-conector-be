@@ -1,6 +1,5 @@
 from jose import jwt, JWTError
 from typing import Optional
-
 from sqlalchemy import true
 from app.auth.domain.models import TokenData
 from datetime import datetime, timedelta
@@ -8,6 +7,11 @@ import os
 from dotenv import load_dotenv
 from fastapi import HTTPException, status
 from passlib.context import CryptContext
+
+from app.auth.infra.db.repositories import (
+    SQLModelTokenRepository,
+    SQLModelUserCredentialsRepository,
+)
 
 load_dotenv()
 
@@ -90,10 +94,24 @@ class TokenService:
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-    def refresh_access_token(self, refresh_token: str) -> dict:
+    def refresh_access_token(
+        self,
+        refresh_token: str,
+        token_repository: SQLModelTokenRepository,
+        user_repository: SQLModelUserCredentialsRepository,
+    ) -> str:
         try:
-            # Verify refresh token
-            # TODO:
+            # Verificar token de la cookie contra BD
+            refresh_token_db = token_repository.search_refresh_token(refresh_token)
+            # Si la refresh token esta vencida, tira unauthorized
+            if refresh_token_db.is_revoked:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Could not validate credentials",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
+            # Se decodea el el token para ver si es valido
             payload = self.verify_token(refresh_token)
             token_data = TokenData(
                 user_id=payload["user_id"],
@@ -101,17 +119,15 @@ class TokenService:
                 user_name=payload["user_name"],
                 roles=payload["roles"],
             )
-
-            # Get user
-            # TODO: BUSCAR EN BD EL USER DEL TOKEN
-            # user = self.get_user_by_email(token_data.email)
+            # Con el payload, se verifica que el usuario siga existiendo en base de datos
+            user = user_repository.get_user_credentials(token_data.user_email)
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
 
-            # Create new access token
-            access_token = self.create_access_token(token_data.dict())
+            # Se crea el nuevo access token
+            access_token = self.create_access_token(token_data)
 
-            return {"access_token": access_token, "token_type": "bearer"}
+            return access_token
         except Exception as e:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 

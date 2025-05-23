@@ -97,3 +97,41 @@ class TestAuthService:
             auth_service.verify_token(invalid_token)
         assert excinfo.value.status_code == 401
         assert "Could not validate credentials" in excinfo.value.detail
+
+    def test_refresh_access_token_success(self, auth_service: TokenService):
+        """Debe refrescar un access token válido."""
+        # Crear un token de actualización válido
+        token_data = TokenData(
+            user_id=1,
+            user_email="testana@example.com",
+            user_name="Usuario Test",
+            roles=["user"],
+        )
+        refresh_token = auth_service.create_refresh_token(token_data)
+
+        # Mock para token_repository
+        token_repository_mock = Mock()
+        token_repository_mock.search_refresh_token.return_value = Mock(is_revoked=False)
+
+        # Mock para user_repository
+        user_repository_mock = Mock()
+        user_repository_mock.get_user_credentials.return_value = Mock(
+            id=1, email="testana@example.com", name="Usuario Test", roles=["user"]
+        )
+
+        # Llamar a refresh_access_token
+        new_access_token = auth_service.refresh_access_token(
+            refresh_token, token_repository_mock, user_repository_mock
+        )
+
+        # Verificar que se devuelve un nuevo access token
+        assert new_access_token is not None
+        payload = jwt.decode(
+            new_access_token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
+        )
+        assert payload["user_id"] == 1
+        assert payload["user_email"] == "testana@example.com"
+        assert payload["user_name"] == "Usuario Test"
+        assert payload["roles"] == ["user"]
