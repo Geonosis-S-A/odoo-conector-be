@@ -16,7 +16,7 @@ class LoginUseCase:
         self.user_credentials_repository = user_credentials_repository
         self.token_repository = token_repository
 
-    async def execute(self, email: str, password: str) -> LoginResponse:
+    def execute(self, email: str, password: str) -> LoginResponse:
         # 1. Acceder a bbdd y verificar credenciales
         user_credentials = self.user_credentials_repository.get_user_credentials(email)
 
@@ -55,10 +55,6 @@ class LoginUseCase:
                 user_id=user_credentials.id,
             )
         )
-
-        print(user_credentials.id)
-        print(user_credentials.name)
-        print(user_credentials.email)
 
         # 4. Devolver access token y detalles del usuario
         return LoginResponse(

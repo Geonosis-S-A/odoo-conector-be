@@ -42,7 +42,7 @@ async def login(
         auth_service, user_credentials_repository, token_repository
     )
 
-    tokens = await login_use_case.execute(login_data.email, login_data.password)
+    tokens = login_use_case.execute(login_data.email, login_data.password)
     response.set_cookie(
         key="refresh_token",
         value=tokens.refresh_token,
