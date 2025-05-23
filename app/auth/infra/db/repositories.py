@@ -39,3 +39,13 @@ class SQLModelTokenRepository(TokenRepository):
                 user_id=refresh_token.user_id,
             )
         )
+
+    def search_refresh_token(self, token: str) -> RefreshTokenModel:
+        refresh_token_model = (
+            self.db.query(RefreshTokenModel)
+            .filter(RefreshTokenModel.token == token)
+            .first()
+        )
+        if not refresh_token_model:
+            raise HTTPException(status_code=404, detail="Refresh token not found")
+        return refresh_token_model

@@ -1,3 +1,4 @@
+from os import access
 from typing import Optional
 from pydantic import BaseModel
 from app.auth.domain.models import TokenData
@@ -26,3 +27,8 @@ class RegisterResponse(BaseModel):
     is_active: bool
     is_superuser: bool
     password: Optional[str] = None
+
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"

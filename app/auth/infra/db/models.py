@@ -1,6 +1,5 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
-import datetime
 
 
 class RefreshTokenModel(SQLModel, table=True):
