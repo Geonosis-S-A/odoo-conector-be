@@ -1,8 +1,7 @@
 from atexit import register
 import email
-from http.client import HTTPException
-from http.cookiejar import Cookie
-from fastapi import APIRouter, Depends, Response
+from fastapi.exceptions import HTTPException
+from fastapi import APIRouter, Depends, Response, Cookie
 from sqlmodel import Session
 from app.auth.api.schemas import (
     CreateUserRequest,
@@ -29,8 +28,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 async def login(
     login_data: LoginRequest, response: Response, db: Session = Depends(get_db)
 ):
-    print(f"Sesión de base de datos: {db}")
-
     user_credentials_repository = SQLModelUserCredentialsRepository(db)
     token_repository = SQLModelTokenRepository(db)
     auth_service = TokenService()
@@ -65,8 +62,7 @@ def register_user(
     user: CreateUserRequest, db: Session = Depends(get_db)
 ) -> RegisterResponse:
     user_repository = SQLModelUserRepository(db)
-    auth_service = TokenService()
-    register_user_case = RegisterUseCase(user_repository, auth_service)
+    register_user_case = RegisterUseCase(user_repository)
     registered_user = register_user_case.execute(user.email, user.password)
     return RegisterResponse(
         id=registered_user.id,
@@ -79,11 +75,11 @@ def register_user(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(
-    refresh_token: str = Cookie(None, alias="refresh_token"),
-    session: Session = Depends(get_db)
+    refresh_token: str = Cookie("refresh_token"),
+    db: Session = Depends(get_db),
 ):
     if not refresh_token:
         raise HTTPException(status_code=401, detail="Refresh token not found")
-    
-    auth_service = TokenService(session)
+
+    auth_service = TokenService()
     return auth_service.refresh_access_token(refresh_token)

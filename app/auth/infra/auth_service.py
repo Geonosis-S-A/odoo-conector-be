@@ -40,7 +40,7 @@ settings = Settings()
 
 
 class TokenService:
-    async def create_access_token(
+    def create_access_token(
         self, token_data: TokenData, expires_delta: Optional[timedelta] = None
     ) -> str:
         to_encode = {
@@ -62,7 +62,7 @@ class TokenService:
         )
         return encoded_jwt
 
-    async def create_refresh_token(self, token_data: TokenData) -> str:
+    def create_refresh_token(self, token_data: TokenData) -> str:
         to_encode = {
             "user_id": token_data.user_id,
             "user_email": token_data.user_email,
@@ -77,42 +77,41 @@ class TokenService:
         )
         return encoded_jwt
 
-    async def verify_token(self, token: str) -> TokenData:
+    def verify_token(self, token: str) -> dict:
         try:
             payload = jwt.decode(
                 token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
             )
-            return TokenData(
-                user_id=payload["user_id"],
-                user_email=payload["user_email"],
-                user_name=payload["user_name"],
-                roles=payload["roles"],
-            )
+            return payload
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Could not validate credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
     def refresh_access_token(self, refresh_token: str) -> dict:
         try:
             # Verify refresh token
+            # TODO:
             payload = self.verify_token(refresh_token)
-            token_data = TokenData(**payload)
-            
+            token_data = TokenData(
+                user_id=payload["user_id"],
+                user_email=payload["user_email"],
+                user_name=payload["user_name"],
+                roles=payload["roles"],
+            )
+
             # Get user
-            user = self.get_user_by_email(token_data.email)
+            # TODO: BUSCAR EN BD EL USER DEL TOKEN
+            # user = self.get_user_by_email(token_data.email)
             if not user:
                 raise HTTPException(status_code=401, detail="User not found")
 
             # Create new access token
             access_token = self.create_access_token(token_data.dict())
-            
-            return {
-                "access_token": access_token,
-                "token_type": "bearer"
-            }
+
+            return {"access_token": access_token, "token_type": "bearer"}
         except Exception as e:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 

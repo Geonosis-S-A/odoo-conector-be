@@ -30,7 +30,7 @@ class LoginUseCase:
         if not self.auth_service.is_active(user_credentials.is_active):
             raise HTTPException(status_code=401, detail="Inactive user")
 
-        access_token = await self.auth_service.create_access_token(
+        access_token = self.auth_service.create_access_token(
             TokenData(
                 user_id=user_credentials.id,
                 user_email=user_credentials.email,
@@ -39,7 +39,7 @@ class LoginUseCase:
             )
         )
 
-        refresh_token = await self.auth_service.create_refresh_token(
+        refresh_token = self.auth_service.create_refresh_token(
             TokenData(
                 user_id=user_credentials.id,
                 user_email=user_credentials.email,
