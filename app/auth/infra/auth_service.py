@@ -33,7 +33,7 @@ class Settings:
     COOKIE_NAME: str = "refresh_token"
     COOKIE_SECURE: bool = True
     COOKIE_HTTPONLY: bool = True
-    COOKIE_SAMESITE: Literal["lax"]
+    COOKIE_SAMESITE: Literal["lax"] = "lax"
 
     class Config:
         env_file = ".env"
