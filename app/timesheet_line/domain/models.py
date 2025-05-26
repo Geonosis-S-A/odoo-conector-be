@@ -1,7 +1,7 @@
 # Acá van las entidades propias, desacopladas del ORM SQLModel
 
 from dataclasses import dataclass
-from datetime import date as date_t
+from datetime import date as date_t, datetime
 from typing import Optional
 
 from app.project.domain.models import Project
@@ -18,6 +18,7 @@ class TimesheetLine:
     hours: float
     date: date_t
     task_id: Optional[int] = None
+
 
     @classmethod
     def from_request(
@@ -50,3 +51,4 @@ class DetailedTimesheetLine:
     task: Task | None
     hours: float
     date: date_t
+    create_date: Optional[datetime] = None

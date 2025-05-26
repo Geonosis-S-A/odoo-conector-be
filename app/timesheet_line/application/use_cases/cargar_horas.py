@@ -1,5 +1,6 @@
 # Es un ejemplo, podría tener otro nombre etc
 
+from datetime import datetime
 from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway

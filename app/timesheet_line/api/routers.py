@@ -31,7 +31,6 @@ def get_timesheet_gateway(
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error al conectar con el gateway")
 
-import pdb
 @router.post("/", response_model=Dict[str, int])
 async def create_timesheet_line(
     request: CargarHorasRequest,

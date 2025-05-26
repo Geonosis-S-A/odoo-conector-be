@@ -68,6 +68,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             hours=float(odoo_data.get("unit_amount", 0.0)),
             date=date_obj,
             task=task,
+            create_date=odoo_data.get("create_date", None),
         )
 
     def create(self, timesheet_line: TimesheetLine) -> int:
@@ -87,6 +88,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         # Solo agregamos task_id si no es None
         if timesheet_line.task_id is not None:
             odoo_data["task_id"] = timesheet_line.task_id
+
 
         odoo_timesheet: int = cast(
             int,
@@ -127,6 +129,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "employee_id",
                         "project_id",
                         "task_id",
+                        "create_date",
                     ],
                     "limit": 100,
                 },
@@ -136,6 +139,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             self._transform_odoo_to_detailed_domain(line)
             for line in odoo_timesheet_lines
         ]
+        print(parsed_lines)
         return parsed_lines
 
     def delete(self, timesheet_line_id: int) -> bool:
@@ -188,6 +192,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "employee_id",
                         "project_id",
                         "task_id",
+                        "create_date",
                     ],
                 },
             ),
