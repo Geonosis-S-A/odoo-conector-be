@@ -1,15 +1,10 @@
 import pytest
-from fastapi.testclient import TestClient
 from unittest.mock import Mock, patch
 from app.project.api.routers import router, get_project_gateway
 from app.project.domain.models import Project
 from app.project.domain.gateway import ProjectGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
 from fastapi import FastAPI
-
-app = FastAPI()
-app.include_router(router)
-client = TestClient(app)
 
 
 @pytest.fixture
@@ -32,6 +27,7 @@ def mock_odoo_connection():
 @pytest.fixture(autouse=True)
 def setup_dependencies(mock_odoo_connection, mock_gateway):
     """Fixture que configura las dependencias para todos los tests."""
+    from app.main import app
 
     # Mock de la dependencia de conexión Odoo
     async def mock_get_odoo_connection():
@@ -52,7 +48,7 @@ def setup_dependencies(mock_odoo_connection, mock_gateway):
 
 
 class TestGetProjects:
-    def test_get_all_projects_success(self, mock_gateway):
+    def test_get_all_projects_success(self, mock_gateway, test_client):
         # Arrange
         mock_projects = [
             Project(id=1, name="Proyecto 1"),
@@ -61,7 +57,8 @@ class TestGetProjects:
         mock_gateway.all.return_value = mock_projects
 
         # Act
-        response = client.get("/projects/")
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.get("/api/v1/projects/", headers=headers)
 
         # Assert
         assert response.status_code == 200
@@ -73,7 +70,7 @@ class TestGetProjects:
         assert data[1]["name"] == "Proyecto 2"
         mock_gateway.all.assert_called_once_with(None)
 
-    def test_get_user_projects_success(self, mock_gateway):
+    def test_get_user_projects_success(self, mock_gateway, test_client):
         # Arrange
         mock_projects = [
             Project(id=1, name="Proyecto Usuario"),
@@ -81,7 +78,8 @@ class TestGetProjects:
         mock_gateway.all.return_value = mock_projects
 
         # Act
-        response = client.get("/projects/?user=1")
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.get("/api/v1/projects/?user=1", headers=headers)
 
         # Assert
         assert response.status_code == 200
@@ -91,24 +89,26 @@ class TestGetProjects:
         assert data[0]["name"] == "Proyecto Usuario"
         mock_gateway.all.assert_called_once_with(1)
 
-    def test_get_projects_empty(self, mock_gateway):
+    def test_get_projects_empty(self, mock_gateway, test_client):
         # Arrange
         mock_gateway.all.return_value = []
 
         # Act
-        response = client.get("/projects/")
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.get("/api/v1/projects/", headers=headers)
 
         # Assert
         assert response.status_code == 200
         assert response.json() == []
         mock_gateway.all.assert_called_once_with(None)
 
-    def test_get_projects_server_error(self, mock_gateway):
+    def test_get_projects_server_error(self, mock_gateway, test_client):
         # Arrange
         mock_gateway.all.side_effect = Exception("Error de servidor")
 
         # Act
-        response = client.get("/projects/")
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.get("/api/v1/projects/", headers=headers)
 
         # Assert
         assert response.status_code == 500

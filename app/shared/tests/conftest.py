@@ -1,8 +1,10 @@
 import pytest
 from sqlalchemy.orm import sessionmaker
-from app.shared.infra.db.session import create_engine_with_url
+from app.shared.infra.db.session import create_engine_with_url, get_db
 from app.shared.infra.db.config import settings
 from sqlmodel import SQLModel
+from fastapi.testclient import TestClient
+from app.shared.security.dependencies import get_current_user
 
 # Crear el motor de la base de datos de pruebas
 test_engine = create_engine_with_url(settings.TEST_DATABASE_URL)
@@ -34,3 +36,40 @@ def local_db_session():
     finally:
         session.rollback()  # Revertir cambios al final del test
         session.close()
+
+
+@pytest.fixture(scope="function")
+def override_get_db(local_db_session):
+    def _override():
+        yield local_db_session
+
+    return _override
+
+
+@pytest.fixture(scope="session")
+def override_get_current_user():
+    async def _override():
+        return {
+            "user_id": 1,
+            "user_email": "test@example.com",
+            "user_name": "Test User",
+            "roles": ["user"],
+        }
+
+    return _override
+
+
+@pytest.fixture(scope="function")
+def test_client(override_get_current_user, override_get_db):
+    """
+    Fixture que proporciona un TestClient con el override de autenticación centralizado.
+    """
+    from app.main import (
+        app,
+    )  # Ajusta el import según la ubicación real de tu app FastAPI
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()

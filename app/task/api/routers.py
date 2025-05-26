@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List
 
+from app.shared.security.dependencies import get_current_user
 from app.task.api.schemas import TaskResponse
 from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
 from app.task.domain.gateway import TaskGateway
@@ -29,6 +30,7 @@ def get_task_gateway(
 async def get_tasks(
     project_id: int,
     gateway: TaskGateway = Depends(get_task_gateway),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Obtiene las tareas asociadas a un proyecto específico.
