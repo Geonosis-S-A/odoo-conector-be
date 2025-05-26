@@ -131,7 +131,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "task_id",
                         "create_date",
                     ],
-                    "limit": 100,
                 },
             ),
         )
@@ -139,7 +138,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             self._transform_odoo_to_detailed_domain(line)
             for line in odoo_timesheet_lines
         ]
-        print(parsed_lines)
         return parsed_lines
 
     def delete(self, timesheet_line_id: int) -> bool:
@@ -159,6 +157,43 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 "account.analytic.line",
                 "unlink",  # Método de Odoo para eliminar registros
                 [[timesheet_line_id]],
+            )
+            return True
+        except Exception:
+            return False
+        
+    def update(self, timesheet_line: TimesheetLine) -> bool:
+        """Actualiza una línea de hoja de tiempo en Odoo.
+
+        Args:
+            timesheet_line: La línea de hoja de tiempo a actualizar
+
+        Returns:
+            bool: True si la actualización fue exitosa, False en caso contrario
+        """
+        if not timesheet_line.id:
+            raise ValueError("El ID de la línea de hoja de tiempo es requerido para actualizar")
+
+        odoo_data = {
+            "name": timesheet_line.name,
+            "date": timesheet_line.date.isoformat(),
+            "unit_amount": timesheet_line.hours,
+            "employee_id": timesheet_line.employee_id,
+            "project_id": timesheet_line.project_id,
+        }
+
+        # Solo agregamos task_id si no es None
+        if timesheet_line.task_id is not None:
+            odoo_data["task_id"] = timesheet_line.task_id
+
+        try:
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "account.analytic.line",
+                "write",
+                [[timesheet_line.id], odoo_data],
             )
             return True
         except Exception:
@@ -200,3 +235,5 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if not odoo_data or len(odoo_data) == 0:
             raise ValueError("No se encontró la línea de timesheet")
         return self._transform_odoo_to_detailed_domain(odoo_data[0])
+
+   

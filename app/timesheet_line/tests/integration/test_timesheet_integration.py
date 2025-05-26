@@ -110,3 +110,91 @@ def test_create_timesheet_line_validation():
     # Assert
     assert response.status_code == 400
     assert "Las horas no pueden ser negativas" in response.json()["detail"]
+
+
+@pytest.mark.integration
+def test_edit_timesheet_line():
+    """Test de integración que prueba la edición de una línea de timesheet."""
+    # Arrange - Crear una línea inicial
+    create_data = {
+        "name": "Test Timesheet",
+        "employee_id": 1,
+        "project_id": 1,
+        "hours": 8.0,
+        "date": "2024-03-20",
+    }
+    create_response = client.post("/timesheet/", json=create_data)
+    assert create_response.status_code == 200
+    created_id = create_response.json()["id"]
+
+    # Act - Editar la línea
+    edit_data = {
+        "id": created_id,
+        "name": "Test Timesheet Updated",
+        "employee_id": 1,
+        "project_id": 1,
+        "hours": 4.0,
+        "date": "2024-03-20",
+    }
+    edit_response = client.put(f"/timesheet/{created_id}", json=edit_data)
+
+    # Assert
+    assert edit_response.status_code == 200
+    assert edit_response.json()["success"] is True
+
+    # Verificar que los cambios se aplicaron
+    get_response = client.get("/timesheet/")
+    assert get_response.status_code == 200
+    updated_line = next(
+        (line for line in get_response.json() if line["id"] == created_id), None
+    )
+    assert updated_line is not None
+    assert updated_line["name"] == "Test Timesheet Updated"
+    assert updated_line["hours"] == 4.0
+
+    # Limpieza
+    delete_response = client.delete(f"/timesheet/{created_id}")
+    assert delete_response.status_code == 200
+
+
+@pytest.mark.integration
+def test_edit_timesheet_line_validation():
+    """Test de integración que prueba la validación al editar una línea de timesheet."""
+    # Arrange - Crear una línea inicial
+    create_data = {
+        "name": "Test Timesheet",
+        "employee_id": 1,
+        "project_id": 1,
+        "hours": 8.0,
+        "date": "2024-03-20",
+    }
+    create_response = client.post("/timesheet/", json=create_data)
+    assert create_response.status_code == 200
+    created_id = create_response.json()["id"]
+
+    # Act - Intentar editar con horas negativas
+    edit_data = {
+        "id": created_id,
+        "name": "Test Timesheet Updated",
+        "employee_id": 1,
+        "project_id": 1,
+        "hours": -1.0,  # Horas inválidas
+        "date": "2024-03-20",
+    }
+    edit_response = client.put(f"/timesheet/{created_id}", json=edit_data)
+
+    # Assert
+    assert edit_response.status_code == 400
+    assert "Las horas no pueden ser negativas" in edit_response.json()["detail"]
+
+    # Act - Intentar editar con ID incorrecto en la URL
+    edit_data["hours"] = 4.0  # Corregimos las horas
+    edit_response = client.put(f"/timesheet/{created_id + 1}", json=edit_data)
+
+    # Assert
+    assert edit_response.status_code == 400
+    assert "El ID en la URL no coincide con el ID en el body" in edit_response.json()["detail"]
+
+    # Limpieza
+    delete_response = client.delete(f"/timesheet/{created_id}")
+    assert delete_response.status_code == 200
