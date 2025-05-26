@@ -39,6 +39,7 @@ class SQLModelTokenRepository(TokenRepository):
                 user_id=refresh_token.user_id,
             )
         )
+        self.db.commit()
 
     def search_refresh_token(self, token: str) -> RefreshTokenModel:
         refresh_token_model = (
