@@ -27,6 +27,36 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
             is_active=user_model.is_active,
         )
 
+    def get_user_by_id(self, user_id: int) -> UserCredentials:
+        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+
+        if not user_model:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Convertir UserModel a UserCredentials
+        return UserCredentials(
+            id=user_model.id,
+            email=user_model.email,
+            name=user_model.full_name,
+            password=user_model.hashed_password,
+            is_superuser=user_model.is_superuser,
+            is_active=user_model.is_active,
+        )
+
+    def update_password(self, user_id: int, new_hashed_password: str) -> bool:
+        try:
+            user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+            
+            if not user_model:
+                return False
+            
+            user_model.hashed_password = new_hashed_password
+            self.db.commit()
+            return True
+        except Exception:
+            self.db.rollback()
+            return False
+
 
 class SQLModelTokenRepository(TokenRepository):
     def __init__(self, db: Session):
