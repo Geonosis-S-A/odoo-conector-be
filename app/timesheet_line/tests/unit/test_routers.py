@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import Mock
-from datetime import date
+from datetime import date, datetime
 from app.project.domain.models import Project
 from app.task.domain.models import Task
 from app.timesheet_line.api.routers import (
@@ -79,6 +79,7 @@ class TestCreateTimesheetLine:
             task=Task(id=1, name="Task 1"),
             hours=8.0,
             date=date(2024, 3, 20),
+            create_date=datetime(2024, 3, 20, 10, 0, 0),
         )
 
         # Act
@@ -103,6 +104,7 @@ class TestListTimesheetLines:
                 task=Task(id=1, name="Task 1"),
                 hours=8.0,
                 date=date(2024, 3, 20),
+                create_date=datetime(2024, 3, 20, 10, 0, 0),
             ),
             DetailedTimesheetLine(
                 id=2,
@@ -112,6 +114,7 @@ class TestListTimesheetLines:
                 task=None,
                 hours=4.0,
                 date=date(2024, 3, 21),
+                create_date=datetime(2024, 3, 21, 10, 0, 0),
             ),
         ]
         mock_gateway.all.return_value = mock_timesheets

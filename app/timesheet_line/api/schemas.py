@@ -1,6 +1,6 @@
 from typing import Optional
 from pydantic import BaseModel
-from datetime import date
+from datetime import date, datetime
 
 from app.project.api.schemas import ProjectResponse
 from app.task.api.schemas import TaskResponse
@@ -23,3 +23,4 @@ class DetailedTimesheetLineResponse(BaseModel):
     task: Optional[TaskResponse]
     hours: float
     date: date
+    create_date: Optional[datetime] = None
