@@ -3,6 +3,8 @@ from fastapi.exceptions import HTTPException
 from fastapi import APIRouter, Depends, Response, Cookie
 from sqlmodel import Session
 from app.auth.api.schemas import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     CreateUserRequest,
     LoginRequest,
     RefreshResponse,
@@ -13,6 +15,7 @@ from app.auth.application.use_cases.login import LoginUseCase
 from app.auth.application.use_cases.logout import LogoutUseCase
 from app.auth.application.use_cases.refresh import RefreshUseCase
 from app.auth.application.use_cases.register import RegisterUseCase
+from app.auth.application.use_cases.change_password import ChangePasswordUseCase
 from app.auth.infra.auth_service import TokenService
 from app.auth.infra.db.repositories import (
     SQLModelTokenRepository,
@@ -97,6 +100,7 @@ async def refresh_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+
 @router.post("/logout")
 async def logout(
     response: Response,
@@ -109,3 +113,49 @@ async def logout(
     logout_use_case = LogoutUseCase(auth_service, token_repository)
     logout_use_case.execute(response, refresh_token)
     return {"message": "Successfully logged out"}
+
+  
+  
+@router.put("/change-password", response_model=ChangePasswordResponse)
+async def change_password(
+    request: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """Cambia la contraseña de un usuario.
+
+    Args:
+        request: Datos para el cambio de contraseña (sin user_id, se obtiene del token)
+        db: Sesión de base de datos
+        current_user: Usuario actual obtenido del token JWT
+
+    Returns:
+        ChangePasswordResponse: Mensaje de confirmación
+
+    Raises:
+        HTTPException: Si hay un error en el cambio de contraseña
+    """
+    user_credentials_repository = SQLModelUserCredentialsRepository(db)
+    auth_service = TokenService()
+    change_password_use_case = ChangePasswordUseCase(
+        auth_service, user_credentials_repository
+    )
+    
+    try:
+        # Obtener user_id del token en lugar del body
+        user_id = current_user["user_id"]
+        
+        change_password_use_case.execute(
+            user_id, 
+            request.current_password, 
+            request.new_password
+        )
+        return ChangePasswordResponse(message="Contraseña cambiada exitosamente")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al cambiar la contraseña: {str(e)}"
+        )
+

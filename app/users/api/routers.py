@@ -16,7 +16,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("/sync", response_model=List[UserResponse])
 async def sync_users(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    #current_user: dict = Depends(get_current_user),
 ):
     """
     Sincroniza los usuarios desde Odoo a la base de datos local.
