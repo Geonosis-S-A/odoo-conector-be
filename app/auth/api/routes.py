@@ -55,6 +55,7 @@ async def login(
         secure=True,
         samesite="lax",
         path="/",  # Todo: Restringir al path refresh_token
+        max_age=30 * 24 * 60 * 60,  # Todo: corregir hardcodeada
     )
 
     return {
@@ -100,7 +101,6 @@ async def refresh_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-
 @router.post("/logout")
 async def logout(
     response: Response,
@@ -114,8 +114,7 @@ async def logout(
     logout_use_case.execute(response, refresh_token)
     return {"message": "Successfully logged out"}
 
-  
-  
+
 @router.put("/change-password", response_model=ChangePasswordResponse)
 async def change_password(
     request: ChangePasswordRequest,
@@ -140,22 +139,18 @@ async def change_password(
     change_password_use_case = ChangePasswordUseCase(
         auth_service, user_credentials_repository
     )
-    
+
     try:
         # Obtener user_id del token en lugar del body
         user_id = current_user["user_id"]
-        
+
         change_password_use_case.execute(
-            user_id, 
-            request.current_password, 
-            request.new_password
+            user_id, request.current_password, request.new_password
         )
         return ChangePasswordResponse(message="Contraseña cambiada exitosamente")
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Error al cambiar la contraseña: {str(e)}"
+            status_code=500, detail=f"Error al cambiar la contraseña: {str(e)}"
         )
-
