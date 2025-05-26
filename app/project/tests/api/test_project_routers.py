@@ -1,10 +1,9 @@
 import pytest
-from unittest.mock import Mock, patch
-from app.project.api.routers import router, get_project_gateway
+from unittest.mock import Mock
+from app.project.api.routers import get_project_gateway
 from app.project.domain.models import Project
 from app.project.domain.gateway import ProjectGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
-from fastapi import FastAPI
 
 
 @pytest.fixture

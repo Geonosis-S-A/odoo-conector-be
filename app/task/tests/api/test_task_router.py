@@ -1,6 +1,6 @@
 import pytest
-from unittest.mock import Mock, patch
-from app.task.api.routers import router, get_task_gateway
+from unittest.mock import Mock
+from app.task.api.routers import get_task_gateway
 from app.task.domain.models import Task
 from app.task.domain.gateway import TaskGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency

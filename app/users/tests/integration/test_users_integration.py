@@ -1,26 +1,4 @@
 import pytest
-from fastapi.testclient import TestClient
-
-# Importá tu app principal y la dependencia de DB
-from app.main import app  # O donde esté tu instancia de FastAPI
-from app.shared.infra.db.session import get_db
-
-# Importá la fixture de la sesión de test
-
-# --- Fixture para el cliente de test con la DB de test ---
-
-
-@pytest.fixture
-def client(local_db_session):
-    # Sobrescribí la dependencia de la DB para que use la sesión de test
-    def override_get_db():
-        yield local_db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides = {}  # Limpieza después del test
-
 
 # --- Tus tests ---
 

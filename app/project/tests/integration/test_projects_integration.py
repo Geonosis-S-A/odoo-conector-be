@@ -1,27 +1,6 @@
 import pytest
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
-from app.project.api.routers import router
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.project.infra.external.odd_project_gateway import OdooProjectGateway
-from app.shared.security.dependencies import get_current_user
-
-# Mock de autenticación
-
-
-def override_get_current_user():
-    return {
-        "user_id": 1,
-        "user_email": "test@example.com",
-        "user_name": "Test User",
-        "roles": ["user"],
-    }
-
-
-app = FastAPI()
-app.include_router(router, prefix="/api/v1")
-app.dependency_overrides[get_current_user] = override_get_current_user
-client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
