@@ -94,3 +94,41 @@ class TestOdooTimesheetLineGateway:
         assert delete_result is True
         assert len(post_lines) == len(prev_lines) - 1
         assert not any(line.id == created_id for line in post_lines)
+
+    def test_update_timesheet_line(self):
+        # Arrange
+        timesheet_line = TimesheetLine(
+            id=None,
+            employee_id=1,
+            project_id=1,
+            hours=1,
+            date=date(2021, 1, 1),
+            name="Test Timesheet Line",
+        )
+        created_id = self.gateway.create(timesheet_line)
+        
+        # Act - Actualizar
+        updated_timesheet = TimesheetLine(
+            id=created_id,
+            employee_id=1,
+            project_id=1,
+            hours=2,  # Cambiamos las horas
+            date=date(2021, 1, 1),
+            name="Test Timesheet Line Updated",  # Cambiamos el nombre
+        )
+        update_result = self.gateway.update(updated_timesheet)
+        
+        # Assert
+        assert update_result is True
+        
+        # Verificar que los cambios se aplicaron
+        updated_line = self.gateway.get_by_id(created_id)
+        assert updated_line.id == created_id
+        assert updated_line.hours == 2
+        assert updated_line.name == "Test Timesheet Line Updated"
+        assert updated_line.employee_id == 1
+        assert updated_line.project.id == 1
+        assert updated_line.date == date(2021, 1, 1)
+        
+        
+        

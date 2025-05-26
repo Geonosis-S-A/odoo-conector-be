@@ -24,3 +24,13 @@ class DetailedTimesheetLineResponse(BaseModel):
     hours: float
     date: date
     create_date: Optional[datetime] = None
+
+
+class EditTimesheetRequest(BaseModel):
+    id: int
+    name: str
+    employee_id: int
+    project_id: int
+    hours: float
+    date: date
+    task_id: Optional[int] = None
