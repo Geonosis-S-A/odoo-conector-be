@@ -4,6 +4,7 @@ from typing import List
 
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
+from app.shared.security.dependencies import get_current_user
 from app.users.application.use_cases.sync_users import SyncUsersUseCase
 from app.users.infra.db.repositories import SQLModelUserRepository
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
@@ -13,7 +14,10 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 @router.post("/sync", response_model=List[UserResponse])
-async def sync_users(db: Session = Depends(get_db)):
+async def sync_users(
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Sincroniza los usuarios desde Odoo a la base de datos local.
     Los usuarios nuevos se crean como inactivos.

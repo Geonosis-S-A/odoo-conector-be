@@ -38,7 +38,7 @@ def setup_repositories():
 
 
 @pytest.mark.integration
-def test_employee_user_id_match():
+def test_employee_user_id_match(test_client):
     """Test que verifica que el ID del empleado coincida con el ID del usuario correspondiente."""
     # Arrange
     odoo_client = get_odoo_connection()
@@ -49,7 +49,7 @@ def test_employee_user_id_match():
 
     # Act
     # Sincronizar usuarios
-    response = client.post("/api/v1/users/sync")
+    response = test_client.post("/api/v1/users/sync")
     assert response.status_code == 200
 
     # Obtener usuarios sincronizados

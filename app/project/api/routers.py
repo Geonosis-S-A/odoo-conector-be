@@ -9,6 +9,7 @@ from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
 )
+from app.shared.security.dependencies import get_current_user
 
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -16,6 +17,7 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 def get_project_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+    current_user: dict = Depends(get_current_user),
 ) -> ProjectGateway:
     try:
         return OdooProjectGateway(odoo_connection)
@@ -29,6 +31,7 @@ def get_project_gateway(
 async def get_projects(
     user: int | None = None,
     gateway: ProjectGateway = Depends(get_project_gateway),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Obtiene los proyectos. Si se proporciona un user_id, devuelve solo los proyectos

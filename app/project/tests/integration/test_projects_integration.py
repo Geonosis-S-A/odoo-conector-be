@@ -1,14 +1,6 @@
 import pytest
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
-from app.project.api.routers import router
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.project.infra.external.odd_project_gateway import OdooProjectGateway
-
-
-app = FastAPI()
-app.include_router(router, prefix="/api/v1")
-client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
@@ -20,10 +12,10 @@ def setup_gateway():
 
 
 @pytest.mark.integration
-def test_get_all_projects():
+def test_get_all_projects(test_client):
     """Test de integración que prueba obtener todos los proyectos."""
     # Act
-    response = client.get("/api/v1/projects/")
+    response = test_client.get("/api/v1/projects/")
 
     # Assert
     assert response.status_code == 200
@@ -37,13 +29,13 @@ def test_get_all_projects():
 
 
 @pytest.mark.integration
-def test_get_user_projects():
+def test_get_user_projects(test_client):
     """Test de integración que prueba obtener proyectos de un usuario específico."""
     # Arrange
     test_user_id = 1  # ID de usuario de prueba
 
     # Act
-    response = client.get(f"/api/v1/projects/?user={test_user_id}")
+    response = test_client.get(f"/api/v1/projects/?user={test_user_id}")
 
     # Assert
     assert response.status_code == 200

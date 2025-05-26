@@ -1,34 +1,12 @@
 import pytest
-from fastapi.testclient import TestClient
-
-# Importá tu app principal y la dependencia de DB
-from app.main import app  # O donde esté tu instancia de FastAPI
-from app.shared.infra.db.session import get_db
-
-# Importá la fixture de la sesión de test
-
-# --- Fixture para el cliente de test con la DB de test ---
-
-
-@pytest.fixture
-def client(local_db_session):
-    # Sobrescribí la dependencia de la DB para que use la sesión de test
-    def override_get_db():
-        yield local_db_session
-
-    app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as c:
-        yield c
-    app.dependency_overrides = {}  # Limpieza después del test
-
 
 # --- Tus tests ---
 
 
 @pytest.mark.integration
-def test_sync_users(client):
+def test_sync_users(test_client):
     """Test de integración que prueba la sincronización de usuarios desde Odoo."""
-    response = client.post("/api/v1/users/sync")
+    response = test_client.post("/api/v1/users/sync")
     print(response.text)
     assert response.status_code == 200
     data = response.json()
@@ -44,10 +22,10 @@ def test_sync_users(client):
 
 
 @pytest.mark.integration
-def test_sync_users_creates_new_users(client):
+def test_sync_users_creates_new_users(test_client):
     """Test de integración que verifica que los usuarios nuevos se crean como inactivos."""
     # Act
-    response = client.post("/api/v1/users/sync")
+    response = test_client.post("/api/v1/users/sync")
     assert response.status_code == 200
     data = response.json()
 
@@ -58,10 +36,10 @@ def test_sync_users_creates_new_users(client):
 
 
 @pytest.mark.integration
-def test_sync_users_does_not_modify_existing_users(client, local_db_session):
+def test_sync_users_does_not_modify_existing_users(test_client, local_db_session):
     """Test de integración que verifica que los usuarios existentes no se modifican."""
     # Primera sincronización
-    first_sync = client.post("/api/v1/users/sync")
+    first_sync = test_client.post("/api/v1/users/sync")
     assert first_sync.status_code == 200
     first_users = first_sync.json()
 
@@ -79,12 +57,13 @@ def test_sync_users_does_not_modify_existing_users(client, local_db_session):
     local_db_session.commit()
 
     # Segunda sincronización
-    second_sync = client.post("/api/v1/users/sync")
+    second_sync = test_client.post("/api/v1/users/sync")
     assert second_sync.status_code == 200
     second_users = second_sync.json()
 
     # Verificar que los usuarios modificados mantienen sus cambios
     for user in second_users:
+        print(second_users)
         if user["id"] in [u["id"] for u in first_users[:2]]:
             assert user["is_active"] is True
             assert user["is_superuser"] is True

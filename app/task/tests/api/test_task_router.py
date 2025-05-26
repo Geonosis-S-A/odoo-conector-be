@@ -1,15 +1,9 @@
 import pytest
-from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
-from app.task.api.routers import router, get_task_gateway
+from unittest.mock import Mock
+from app.task.api.routers import get_task_gateway
 from app.task.domain.models import Task
 from app.task.domain.gateway import TaskGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
-from fastapi import FastAPI
-
-app = FastAPI()
-app.include_router(router)
-client = TestClient(app)
 
 
 @pytest.fixture
@@ -32,6 +26,7 @@ def mock_odoo_connection():
 @pytest.fixture(autouse=True)
 def setup_dependencies(mock_odoo_connection, mock_gateway):
     """Fixture que configura las dependencias para todos los tests."""
+    from app.main import app
 
     # Mock de la dependencia de conexión Odoo
     async def mock_get_odoo_connection():
@@ -52,7 +47,7 @@ def setup_dependencies(mock_odoo_connection, mock_gateway):
 
 
 class TestGetTasks:
-    def test_get_project_tasks_success(self, mock_gateway):
+    def test_get_project_tasks_success(self, mock_gateway, test_client):
         # Arrange
         mock_tasks = [
             Task(id=1, name="Tarea 1"),
@@ -61,7 +56,7 @@ class TestGetTasks:
         mock_gateway.all.return_value = mock_tasks
 
         # Act
-        response = client.get("/projects/1/tasks")
+        response = test_client.get("/api/v1/projects/1/tasks")
 
         # Assert
         assert response.status_code == 200
@@ -73,24 +68,24 @@ class TestGetTasks:
         assert data[1]["name"] == "Tarea 2"
         mock_gateway.all.assert_called_once_with(1)
 
-    def test_get_tasks_empty(self, mock_gateway):
+    def test_get_tasks_empty(self, mock_gateway, test_client):
         # Arrange
         mock_gateway.all.return_value = []
 
         # Act
-        response = client.get("/projects/1/tasks")
+        response = test_client.get("/api/v1/projects/1/tasks")
 
         # Assert
         assert response.status_code == 200
         assert response.json() == []
         mock_gateway.all.assert_called_once_with(1)
 
-    def test_get_tasks_server_error(self, mock_gateway):
+    def test_get_tasks_server_error(self, mock_gateway, test_client):
         # Arrange
         mock_gateway.all.side_effect = Exception("Error de servidor")
 
         # Act
-        response = client.get("/projects/1/tasks")
+        response = test_client.get("/api/v1/projects/1/tasks")
 
         # Assert
         assert response.status_code == 500
