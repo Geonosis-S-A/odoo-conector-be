@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict
 
 
+from app.shared.security.dependencies import get_current_user
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
     DetailedTimesheetLineResponse,
@@ -33,10 +34,12 @@ def get_timesheet_gateway(
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error al conectar con el gateway")
 
+
 @router.post("/", response_model=Dict[str, int])
 async def create_timesheet_line(
     request: CargarHorasRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Crea una nueva línea de timesheet.
@@ -65,6 +68,7 @@ async def create_timesheet_line(
 async def list_timesheet_lines(
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_id: int | None = None,
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Lista todas las líneas de timesheet.
@@ -89,6 +93,7 @@ async def list_timesheet_lines(
 async def delete_timesheet_line(
     timesheet_id: int,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Elimina una línea de timesheet.
@@ -116,11 +121,13 @@ async def delete_timesheet_line(
             detail="Error interno del servidor al eliminar la línea de timesheet",
         )
 
+
 @router.put("/{timesheet_id}")
 def edit_timesheet(
     timesheet_id: int,
     req: EditTimesheetRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, bool]:
     """Edita una línea de hoja de tiempo existente.
 
@@ -154,7 +161,7 @@ def edit_timesheet(
 
         use_case = EditTimesheetUseCase(gateway)
         success = use_case.execute(req)
-        
+
         if not success:
             raise HTTPException(
                 status_code=404,

@@ -32,7 +32,7 @@ def _cleanup_test_data(repository):
 
 
 @pytest.mark.integration
-def test_create_and_delete_timesheet_line():
+def test_create_and_delete_timesheet_line(test_client):
     """Test de integración que prueba la creación y eliminación de una línea de timesheet."""
     # Arrange
     request_data = {
@@ -44,7 +44,7 @@ def test_create_and_delete_timesheet_line():
     }
 
     # Act - Crear
-    create_response = client.post("/timesheet/", json=request_data)
+    create_response = test_client.post("/api/v1/timesheet/", json=request_data)
     if create_response.status_code != 200:
         print("create response:", create_response.json())
     # Assert - Crear
@@ -54,7 +54,7 @@ def test_create_and_delete_timesheet_line():
     assert created_id > 0
 
     # Act - Eliminar
-    delete_response = client.delete(f"/timesheet/{created_id}")
+    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
     if delete_response.status_code != 200:
         print("Delete response:", delete_response.json())
     # Assert - Eliminar
@@ -66,10 +66,10 @@ def test_create_and_delete_timesheet_line():
 
 
 @pytest.mark.integration
-def test_list_timesheet_lines():
+def test_list_timesheet_lines(test_client):
     """Test de integración que prueba el listado de líneas de timesheet."""
     # Act
-    response = client.get("/timesheet/")
+    response = test_client.get("/api/v1/timesheet/")
 
     # Assert
     assert response.status_code == 200
@@ -93,7 +93,7 @@ def test_list_timesheet_lines():
 
 
 @pytest.mark.integration
-def test_create_timesheet_line_validation():
+def test_create_timesheet_line_validation(test_client):
     """Test de integración que prueba la validación de datos."""
     # Arrange
     request_data = {
@@ -105,7 +105,7 @@ def test_create_timesheet_line_validation():
     }
 
     # Act
-    response = client.post("/timesheet/", json=request_data)
+    response = test_client.post("/api/v1/timesheet/", json=request_data)
 
     # Assert
     assert response.status_code == 400
@@ -113,7 +113,7 @@ def test_create_timesheet_line_validation():
 
 
 @pytest.mark.integration
-def test_edit_timesheet_line():
+def test_edit_timesheet_line(test_client):
     """Test de integración que prueba la edición de una línea de timesheet."""
     # Arrange - Crear una línea inicial
     create_data = {
@@ -123,7 +123,7 @@ def test_edit_timesheet_line():
         "hours": 8.0,
         "date": "2024-03-20",
     }
-    create_response = client.post("/timesheet/", json=create_data)
+    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
     assert create_response.status_code == 200
     created_id = create_response.json()["id"]
 
@@ -136,14 +136,14 @@ def test_edit_timesheet_line():
         "hours": 4.0,
         "date": "2024-03-20",
     }
-    edit_response = client.put(f"/timesheet/{created_id}", json=edit_data)
+    edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
 
     # Assert
     assert edit_response.status_code == 200
     assert edit_response.json()["success"] is True
 
     # Verificar que los cambios se aplicaron
-    get_response = client.get("/timesheet/")
+    get_response = test_client.get("/api/v1/timesheet/")
     assert get_response.status_code == 200
     updated_line = next(
         (line for line in get_response.json() if line["id"] == created_id), None
@@ -153,12 +153,12 @@ def test_edit_timesheet_line():
     assert updated_line["hours"] == 4.0
 
     # Limpieza
-    delete_response = client.delete(f"/timesheet/{created_id}")
+    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
     assert delete_response.status_code == 200
 
 
 @pytest.mark.integration
-def test_edit_timesheet_line_validation():
+def test_edit_timesheet_line_validation(test_client):
     """Test de integración que prueba la validación al editar una línea de timesheet."""
     # Arrange - Crear una línea inicial
     create_data = {
@@ -168,7 +168,7 @@ def test_edit_timesheet_line_validation():
         "hours": 8.0,
         "date": "2024-03-20",
     }
-    create_response = client.post("/timesheet/", json=create_data)
+    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
     assert create_response.status_code == 200
     created_id = create_response.json()["id"]
 
@@ -181,7 +181,7 @@ def test_edit_timesheet_line_validation():
         "hours": -1.0,  # Horas inválidas
         "date": "2024-03-20",
     }
-    edit_response = client.put(f"/timesheet/{created_id}", json=edit_data)
+    edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
 
     # Assert
     assert edit_response.status_code == 400
@@ -189,12 +189,17 @@ def test_edit_timesheet_line_validation():
 
     # Act - Intentar editar con ID incorrecto en la URL
     edit_data["hours"] = 4.0  # Corregimos las horas
-    edit_response = client.put(f"/timesheet/{created_id + 1}", json=edit_data)
+    edit_response = test_client.put(
+        f"/api/v1/timesheet/{created_id + 1}", json=edit_data
+    )
 
     # Assert
     assert edit_response.status_code == 400
-    assert "El ID en la URL no coincide con el ID en el body" in edit_response.json()["detail"]
+    assert (
+        "El ID en la URL no coincide con el ID en el body"
+        in edit_response.json()["detail"]
+    )
 
     # Limpieza
-    delete_response = client.delete(f"/timesheet/{created_id}")
+    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
     assert delete_response.status_code == 200

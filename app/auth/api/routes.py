@@ -12,6 +12,7 @@ from app.auth.api.schemas import (
     TokenResponse,
 )
 from app.auth.application.use_cases.login import LoginUseCase
+from app.auth.application.use_cases.logout import LogoutUseCase
 from app.auth.application.use_cases.refresh import RefreshUseCase
 from app.auth.application.use_cases.register import RegisterUseCase
 from app.auth.application.use_cases.change_password import ChangePasswordUseCase
@@ -98,6 +99,23 @@ async def refresh_token(
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
+
+
+@router.post("/logout")
+async def logout(
+    response: Response,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    refresh_token: Optional[str] = Cookie(default=None),
+):
+    auth_service = TokenService()
+    token_repository = SQLModelTokenRepository(db)
+    logout_use_case = LogoutUseCase(auth_service, token_repository)
+    logout_use_case.execute(response, refresh_token)
+    return {"message": "Successfully logged out"}
+
+  
+  
 @router.put("/change-password", response_model=ChangePasswordResponse)
 async def change_password(
     request: ChangePasswordRequest,
@@ -140,3 +158,4 @@ async def change_password(
             status_code=500,
             detail=f"Error al cambiar la contraseña: {str(e)}"
         )
+
