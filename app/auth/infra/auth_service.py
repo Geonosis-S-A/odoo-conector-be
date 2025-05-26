@@ -1,11 +1,11 @@
 from jose import jwt, JWTError
-from typing import Optional
+from typing import Literal, Optional
 from sqlalchemy import true
 from app.auth.domain.models import TokenData
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, Response
 from passlib.context import CryptContext
 
 from app.auth.infra.db.repositories import (
@@ -33,7 +33,7 @@ class Settings:
     COOKIE_NAME: str = "refresh_token"
     COOKIE_SECURE: bool = True
     COOKIE_HTTPONLY: bool = True
-    COOKIE_SAMESITE: str = "lax"
+    COOKIE_SAMESITE: Literal["lax"]
 
     class Config:
         env_file = ".env"
@@ -136,6 +136,20 @@ class TokenService:
 
     def hash_password(self, password: str) -> str:
         return pwd_context.hash(password)
+
+    def logout(
+        self,
+        response: Response,
+        token_repository: SQLModelTokenRepository,
+        refresh_token: str,
+    ) -> None:
+        token_repository.delete_refresh_token(refresh_token)
+        response.delete_cookie(
+            key=settings.COOKIE_NAME,
+            httponly=settings.COOKIE_HTTPONLY,
+            secure=settings.COOKIE_SECURE,
+            samesite=settings.COOKIE_SAMESITE,
+        )
 
     def is_active(self, user_state: bool):
         if user_state:
