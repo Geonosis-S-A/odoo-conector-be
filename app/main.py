@@ -43,7 +43,10 @@ app = FastAPI(
 # Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080"]  # todo: cambiar a la url del front
+    allow_origins=[
+        "http://localhost:8080",
+        "https://odoo-conector-fe.vercel.app",
+    ]  # todo: cambiar a la url del front
     if ENV == "LOCAL"
     else [],  # En producción, especificar los orígenes permitidos
     allow_credentials=True,
@@ -75,6 +78,7 @@ app.include_router(users_router, prefix=API_PREFIX)
 app.include_router(project_router, prefix=API_PREFIX)
 app.include_router(task_router, prefix=API_PREFIX)
 app.include_router(auth_router, prefix=API_PREFIX)
+
 
 @app.get("/")
 async def root():
