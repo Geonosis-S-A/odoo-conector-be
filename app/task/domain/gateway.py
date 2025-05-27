@@ -8,3 +8,7 @@ class TaskGateway(ABC):
     @abstractmethod
     def all(self, project_id: int) -> list[Task]:
         pass
+
+    @abstractmethod
+    def all_by_user(self, user_id: int) -> list[Task]:
+        pass

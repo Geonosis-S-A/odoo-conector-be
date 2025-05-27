@@ -26,7 +26,7 @@ def get_task_gateway(
         )
 
 
-@router.get("/projects/{project_id}/tasks", response_model=List[TaskResponse])
+@router.get("/projects/{project_id}", response_model=List[TaskResponse])
 async def get_tasks(
     project_id: int,
     gateway: TaskGateway = Depends(get_task_gateway),
@@ -49,6 +49,8 @@ async def get_tasks(
             TaskResponse(
                 id=task.id,
                 name=task.name,
+                project_id=task.project_id,
+                project_name=task.project_name,
             )
             for task in tasks
         ]
@@ -56,4 +58,39 @@ async def get_tasks(
         raise HTTPException(
             status_code=500,
             detail="Error interno del servidor al obtener las tareas",
+        )
+
+
+@router.get("/", response_model=List[TaskResponse])
+async def get_tasks_by_user(
+    user_id: int,
+    gateway: TaskGateway = Depends(get_task_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Obtiene las tareas asignadas al usuario autenticado.
+
+    Args:
+        gateway: Gateway de tareas (inyectado)
+        current_user: Usuario autenticado (inyectado)
+
+    Returns:
+        List[TaskResponse]: Lista de tareas asignadas al usuario
+    """
+    try:
+        use_case = ObtenerTareasUseCase(gateway)
+        tasks = use_case.execute_by_user(user_id)
+        return [
+            TaskResponse(
+                id=task.id,
+                name=task.name,
+                project_id=task.project_id,
+                project_name=task.project_name,
+            )
+            for task in tasks
+        ]
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor al obtener las tareas del usuario",
         )

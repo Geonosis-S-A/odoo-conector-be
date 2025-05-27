@@ -55,7 +55,15 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if raw_task_id is None:
             task = None
         elif isinstance(raw_task_id, list) and len(raw_task_id) > 0:
-            task = Task(id=raw_task_id[0], name=raw_task_id[1])
+            # Obtenemos la información del proyecto desde los datos de la línea de timesheet
+            project_id = odoo_data.get("project_id", [0, ""])[0]
+            project_name = odoo_data.get("project_id", [0, ""])[1]
+            task = Task(
+                id=raw_task_id[0],
+                name=raw_task_id[1],
+                project_id=project_id,
+                project_name=project_name,
+            )
 
         return DetailedTimesheetLine(
             id=odoo_data.get("id", None),
@@ -88,7 +96,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         # Solo agregamos task_id si no es None
         if timesheet_line.task_id is not None:
             odoo_data["task_id"] = timesheet_line.task_id
-
 
         odoo_timesheet: int = cast(
             int,
@@ -161,7 +168,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             return True
         except Exception:
             return False
-        
+
     def update(self, timesheet_line: TimesheetLine) -> bool:
         """Actualiza una línea de hoja de tiempo en Odoo.
 
@@ -172,7 +179,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             bool: True si la actualización fue exitosa, False en caso contrario
         """
         if not timesheet_line.id:
-            raise ValueError("El ID de la línea de hoja de tiempo es requerido para actualizar")
+            raise ValueError(
+                "El ID de la línea de hoja de tiempo es requerido para actualizar"
+            )
 
         odoo_data = {
             "name": timesheet_line.name,
@@ -235,5 +244,3 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if not odoo_data or len(odoo_data) == 0:
             raise ValueError("No se encontró la línea de timesheet")
         return self._transform_odoo_to_detailed_domain(odoo_data[0])
-
-   

@@ -18,3 +18,14 @@ class ObtenerTareasUseCase:
             list[Task]: Lista de tareas.
         """
         return self.task_gateway.all(project_id)
+
+    def execute_by_user(self, user_id: int) -> list[Task]:
+        """Ejecuta el caso de uso para obtener tareas por usuario.
+
+        Args:
+            user_id (int): ID del usuario del cual obtener las tareas.
+
+        Returns:
+            list[Task]: Lista de tareas asignadas al usuario.
+        """
+        return self.task_gateway.all_by_user(user_id)

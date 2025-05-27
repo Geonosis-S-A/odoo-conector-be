@@ -73,8 +73,9 @@ async def pydantic_validation_exception_handler(request, exc):
 app.include_router(timesheet_router, prefix=API_PREFIX)
 app.include_router(users_router, prefix=API_PREFIX)
 app.include_router(project_router, prefix=API_PREFIX)
-app.include_router(task_router, prefix=API_PREFIX)
+app.include_router(task_router, prefix=API_PREFIX + "/tasks")
 app.include_router(auth_router, prefix=API_PREFIX)
+
 
 @app.get("/")
 async def root():
