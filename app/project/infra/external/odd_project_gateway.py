@@ -8,8 +8,6 @@ class OdooProjectGateway(ProjectGateway):
 
     def all(self, user_id: int | None = None) -> list[Project]:
         domain = []
-        if user_id is not None:
-            domain = [("user_id", "=", user_id)]
 
         projects = self.odoo_client["models"].execute_kw(
             self.odoo_client["ODOO_DB"],
