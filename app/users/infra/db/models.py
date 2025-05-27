@@ -1,8 +1,11 @@
 from datetime import datetime, UTC
-from typing import Optional
-from sqlmodel import SQLModel, Field
+from typing import Optional, List
+from sqlmodel import SQLModel, Field, Relationship
 from pydantic import EmailStr
 from sqlalchemy import event
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.auth.domain.models import OTPModel
 
 
 class UserBaseModel(SQLModel):
@@ -23,6 +26,7 @@ class UserModel(UserBaseModel, table=True):
     hashed_password: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    otps: List["OTPModel"] = Relationship(back_populates="user")
 
 
 @event.listens_for(UserModel, "before_update")
