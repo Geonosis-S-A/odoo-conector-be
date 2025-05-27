@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict
+from fastapi import APIRouter, Depends, HTTPException, Query
+from typing import List, Dict, Optional
+from datetime import date
 
 
 from app.shared.security.dependencies import get_current_user
@@ -13,6 +14,9 @@ from app.timesheet_line.application.use_cases.delete_timesheet import (
     DeleteTimesheetUseCase,
 )
 from app.timesheet_line.application.use_cases.edit_timesheet import EditTimesheetUseCase
+from app.timesheet_line.application.use_cases.obtener_horas import (
+    ListTimesheetLinesUseCase,
+)
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
@@ -66,21 +70,34 @@ async def create_timesheet_line(
 
 @router.get("/", response_model=List[DetailedTimesheetLineResponse])
 async def list_timesheet_lines(
-    gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
-    employee_id: int | None = None,
-    current_user: dict = Depends(get_current_user),
+    gateway: OdooTimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_id: Optional[int] = Query(
+        None, description="ID del empleado para filtrar"
+    ),
+    date_from: Optional[date] = Query(
+        None, description="Fecha de inicio del rango (YYYY-MM-DD)"
+    ),
+    date_to: Optional[date] = Query(
+        None, description="Fecha de fin del rango (YYYY-MM-DD)"
+    ),
 ):
     """
-    Lista todas las líneas de timesheet.
+    Lista todas las líneas de timesheet con filtros opcionales.
 
     Args:
         gateway: Gateway de timesheet (inyectado)
+        employee_id: ID del empleado para filtrar (opcional)
+        date_from: Fecha de inicio del rango para filtrar (opcional)
+        date_to: Fecha de fin del rango para filtrar (opcional)
 
     Returns:
-        List[TimesheetLine]: Lista de líneas de timesheet
+        List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
     """
     try:
-        timesheets = gateway.all(employee_id)
+        list_timesheet_lines_use_case = ListTimesheetLinesUseCase(gateway)
+        timesheets = list_timesheet_lines_use_case.execute(
+            employee_id, date_from, date_to
+        )
         return timesheets
     except Exception as e:
         raise HTTPException(
