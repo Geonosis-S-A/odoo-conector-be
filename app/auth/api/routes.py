@@ -11,24 +11,50 @@ from app.auth.api.schemas import (
     RegisterResponse,
     TokenResponse,
 )
+from app.auth.application.dto.password_recovery import (
+    RequestOTPDTO,
+    VerifyOTPDTO,
+    ResetPasswordDTO,
+)
 from app.auth.application.use_cases.login import LoginUseCase
 from app.auth.application.use_cases.logout import LogoutUseCase
 from app.auth.application.use_cases.refresh import RefreshUseCase
 from app.auth.application.use_cases.register import RegisterUseCase
 from app.auth.application.use_cases.change_password import ChangePasswordUseCase
+from app.auth.application.use_cases.password_recovery import PasswordRecoveryUseCase
 from app.auth.infra.auth_service import TokenService
 from app.auth.infra.db.repositories import (
     SQLModelTokenRepository,
     SQLModelUserCredentialsRepository,
 )
+from app.auth.infra.email_service import EmailService
+from app.auth.infra.password_service import PasswordService
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
-from app.users.domain.repositories import UserRepository
 from app.users.infra.db.repositories import SQLModelUserRepository
 from pydantic import BaseModel
 
+# Importar las dependencias correctas
+from app.auth.api.dependencies import (
+    get_user_repository,
+    get_email_service,
+    get_password_service,
+)
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Definir la función de dependencia antes de los endpoints que la usan
+def get_password_recovery_use_case(
+    user_repository = Depends(get_user_repository),
+    email_service = Depends(get_email_service),
+    password_service = Depends(get_password_service),
+) -> PasswordRecoveryUseCase:
+    return PasswordRecoveryUseCase(
+        user_repository=user_repository,
+        email_service=email_service,
+        password_service=password_service,
+    )
 
 
 class AccessTokenResponse(BaseModel):
@@ -154,3 +180,48 @@ async def change_password(
         raise HTTPException(
             status_code=500, detail=f"Error al cambiar la contraseña: {str(e)}"
         )
+
+
+@router.post("/password-recovery/request")
+async def request_otp(
+    dto: RequestOTPDTO,
+    password_recovery_use_case: PasswordRecoveryUseCase = Depends(get_password_recovery_use_case)
+):
+    success = await password_recovery_use_case.request_otp(dto)
+    if not success:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    return {"message": "OTP sent successfully"}
+
+@router.post("/password-recovery/verify")
+async def verify_otp(
+    dto: VerifyOTPDTO,
+    password_recovery_use_case: PasswordRecoveryUseCase = Depends(get_password_recovery_use_case)
+):
+    is_valid = await password_recovery_use_case.verify_otp(dto)
+    if not is_valid:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP"
+        )
+    return {"message": "OTP verified successfully"}
+
+@router.post("/password-recovery/reset")
+async def reset_password(
+    dto: ResetPasswordDTO,
+    password_recovery_use_case: PasswordRecoveryUseCase = Depends(get_password_recovery_use_case)
+):
+    if dto.new_password != dto.confirm_password:
+        raise HTTPException(
+            status_code=400,
+            detail="Passwords do not match"
+        )
+    success = await password_recovery_use_case.reset_password(dto)
+    if not success:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid OTP"
+        )
+    return {"message": "Password reset successfully"}
