@@ -50,13 +50,13 @@ class TestGetTasks:
     def test_get_project_tasks_success(self, mock_gateway, test_client):
         # Arrange
         mock_tasks = [
-            Task(id=1, name="Tarea 1"),
-            Task(id=2, name="Tarea 2"),
+            Task(id=1, name="Tarea 1", project_id=10, project_name="Proyecto A"),
+            Task(id=2, name="Tarea 2", project_id=10, project_name="Proyecto A"),
         ]
         mock_gateway.all.return_value = mock_tasks
 
         # Act
-        response = test_client.get("/api/v1/projects/1/tasks")
+        response = test_client.get("/api/v1/tasks/projects/1")
 
         # Assert
         assert response.status_code == 200
@@ -64,8 +64,12 @@ class TestGetTasks:
         assert len(data) == 2
         assert data[0]["id"] == 1
         assert data[0]["name"] == "Tarea 1"
+        assert data[0]["project_id"] == 10
+        assert data[0]["project_name"] == "Proyecto A"
         assert data[1]["id"] == 2
         assert data[1]["name"] == "Tarea 2"
+        assert data[1]["project_id"] == 10
+        assert data[1]["project_name"] == "Proyecto A"
         mock_gateway.all.assert_called_once_with(1)
 
     def test_get_tasks_empty(self, mock_gateway, test_client):
@@ -73,7 +77,7 @@ class TestGetTasks:
         mock_gateway.all.return_value = []
 
         # Act
-        response = test_client.get("/api/v1/projects/1/tasks")
+        response = test_client.get("/api/v1/tasks/projects/1")
 
         # Assert
         assert response.status_code == 200
@@ -85,8 +89,62 @@ class TestGetTasks:
         mock_gateway.all.side_effect = Exception("Error de servidor")
 
         # Act
-        response = test_client.get("/api/v1/projects/1/tasks")
+        response = test_client.get("/api/v1/tasks/projects/1")
 
         # Assert
         assert response.status_code == 500
         assert "Error interno del servidor" in response.json()["detail"]
+
+
+class TestGetTasksByUser:
+    def test_get_user_tasks_success(self, mock_gateway, test_client):
+        # Arrange
+        mock_tasks = [
+            Task(id=1, name="Mi Tarea 1", project_id=20, project_name="Proyecto B"),
+            Task(id=2, name="Mi Tarea 2", project_id=30, project_name="Proyecto C"),
+        ]
+        mock_gateway.all_by_user.return_value = mock_tasks
+
+        # Act
+        response = test_client.get("/api/v1/tasks/?user_id=1")
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) == 2
+        assert data[0]["id"] == 1
+        assert data[0]["name"] == "Mi Tarea 1"
+        assert data[0]["project_id"] == 20
+        assert data[0]["project_name"] == "Proyecto B"
+        assert data[1]["id"] == 2
+        assert data[1]["name"] == "Mi Tarea 2"
+        assert data[1]["project_id"] == 30
+        assert data[1]["project_name"] == "Proyecto C"
+        # Verificar que se llamó con el user_id del usuario autenticado (mock user_id = 1)
+        mock_gateway.all_by_user.assert_called_once_with(1)
+
+    def test_get_user_tasks_empty(self, mock_gateway, test_client):
+        # Arrange
+        mock_gateway.all_by_user.return_value = []
+
+        # Act
+        response = test_client.get("/api/v1/tasks/?user_id=1")
+
+        # Assert
+        assert response.status_code == 200
+        assert response.json() == []
+        mock_gateway.all_by_user.assert_called_once_with(1)
+
+    def test_get_user_tasks_server_error(self, mock_gateway, test_client):
+        # Arrange
+        mock_gateway.all_by_user.side_effect = Exception("Error de servidor")
+
+        # Act
+        response = test_client.get("/api/v1/tasks/?user_id=1")
+
+        # Assert
+        assert response.status_code == 500
+        assert (
+            "Error interno del servidor al obtener las tareas del usuario"
+            in response.json()["detail"]
+        )
