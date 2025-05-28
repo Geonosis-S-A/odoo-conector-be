@@ -1,12 +1,12 @@
 from app.task.domain.gateway import TaskGateway
 from app.task.domain.models import Task
-
+from app.project.domain.models import Project
 
 class OdooTaskGateway(TaskGateway):
     def __init__(self, odoo_client):
         self.odoo_client = odoo_client
 
-    def all(self, project_id: int) -> list[Task]:
+    def all(self, project_id: int) -> list[Task] | None:
         domain = [("project_id", "=", project_id)]
 
         tasks = self.odoo_client["models"].execute_kw(
@@ -19,6 +19,9 @@ class OdooTaskGateway(TaskGateway):
             {"fields": ["id", "name", "project_id"]},
         )
 
+        if not tasks:
+            return None
+
         return [
             Task(
                 id=task["id"],
@@ -29,7 +32,7 @@ class OdooTaskGateway(TaskGateway):
             for task in tasks
         ]
 
-    def all_by_user(self, user_id: int) -> list[Task]:
+    def all_by_user(self, user_id: int) -> list[Task] | None:
         # En Odoo 16+ user_ids es Many2many, en versiones anteriores era user_id Many2one
         # Usamos user_ids para compatibilidad con versiones recientes
         domain = [("user_ids", "in", [user_id])]
@@ -44,6 +47,9 @@ class OdooTaskGateway(TaskGateway):
             {"fields": ["id", "name", "project_id"]},
         )
 
+        if not tasks:
+            return None
+
         return [
             Task(
                 id=task["id"],
@@ -53,3 +59,19 @@ class OdooTaskGateway(TaskGateway):
             )
             for task in tasks
         ]
+    
+    def get_project_by_id(self, project_id: int) -> Project | None:
+        project = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "project.project",
+            "search_read",
+            [project_id],
+            {"fields": ["id", "name"]},
+        )
+
+        if not project:
+            return None
+
+        return Project(id=project["id"], name=project["name"])

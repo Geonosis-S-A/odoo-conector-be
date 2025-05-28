@@ -4,6 +4,7 @@ from app.task.api.routers import get_task_gateway
 from app.task.domain.models import Task
 from app.task.domain.gateway import TaskGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
+from app.task.application.Exeptions import ProjectNotFound, TasksNotFound_projectId, TasksNotFound_userId
 
 
 @pytest.fixture
@@ -80,9 +81,34 @@ class TestGetTasks:
         response = test_client.get("/api/v1/tasks/projects/1")
 
         # Assert
-        assert response.status_code == 200
-        assert response.json() == []
+        assert response.status_code == 404
         mock_gateway.all.assert_called_once_with(1)
+
+    def test_get_tasks_project_not_found(self, mock_gateway, test_client):
+        # Arrange - Simulamos que el gateway lanza ProjectNotFound
+        from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
+        from unittest.mock import patch
+        
+        with patch.object(ObtenerTareasUseCase, 'execute', side_effect=ProjectNotFound(999)):
+            # Act
+            response = test_client.get("/api/v1/tasks/projects/999")
+
+            # Assert
+            assert response.status_code == 404
+            assert "Proyecto con el id 999 no encontrado" in response.json()["detail"]
+
+    def test_get_tasks_no_tasks_for_project(self, mock_gateway, test_client):
+        # Arrange - Simulamos que el gateway lanza TasksNotFound_projectId
+        from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
+        from unittest.mock import patch
+        
+        with patch.object(ObtenerTareasUseCase, 'execute', side_effect=TasksNotFound_projectId(1)):
+            # Act
+            response = test_client.get("/api/v1/tasks/projects/1")
+
+            # Assert
+            assert response.status_code == 404
+            assert "Tareas del proyecto con el id 1 no encontradas" in response.json()["detail"]
 
     def test_get_tasks_server_error(self, mock_gateway, test_client):
         # Arrange
@@ -93,7 +119,14 @@ class TestGetTasks:
 
         # Assert
         assert response.status_code == 500
-        assert "Error interno del servidor" in response.json()["detail"]
+        assert "Error de servidor" in response.json()["detail"]
+
+    def test_get_tasks_invalid_project_id(self, test_client):
+        # Act
+        response = test_client.get("/api/v1/tasks/projects/invalid")
+
+        # Assert
+        assert response.status_code == 422  # Unprocessable Entity para parámetros inválidos
 
 
 class TestGetTasksByUser:
@@ -124,16 +157,17 @@ class TestGetTasksByUser:
         mock_gateway.all_by_user.assert_called_once_with(1)
 
     def test_get_user_tasks_empty(self, mock_gateway, test_client):
-        # Arrange
-        mock_gateway.all_by_user.return_value = []
+        # Arrange - Simulamos que el use case lanza TasksNotFound_userId
+        from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
+        from unittest.mock import patch
+        
+        with patch.object(ObtenerTareasUseCase, 'execute_by_user', side_effect=TasksNotFound_userId(1)):
+            # Act
+            response = test_client.get("/api/v1/tasks/?user_id=1")
 
-        # Act
-        response = test_client.get("/api/v1/tasks/?user_id=1")
-
-        # Assert
-        assert response.status_code == 200
-        assert response.json() == []
-        mock_gateway.all_by_user.assert_called_once_with(1)
+            # Assert
+            assert response.status_code == 404
+            assert "Tareas del usuario con el id 1 no encontradas" in response.json()["detail"]
 
     def test_get_user_tasks_server_error(self, mock_gateway, test_client):
         # Arrange
@@ -144,7 +178,11 @@ class TestGetTasksByUser:
 
         # Assert
         assert response.status_code == 500
-        assert (
-            "Error interno del servidor al obtener las tareas del usuario"
-            in response.json()["detail"]
-        )
+        assert "Error de servidor" in response.json()["detail"]
+
+    def test_get_user_tasks_invalid_user_id(self, test_client):
+        # Act
+        response = test_client.get("/api/v1/tasks/?user_id=invalid")
+
+        # Assert
+        assert response.status_code == 422  # Unprocessable Entity para parámetros inválidos
