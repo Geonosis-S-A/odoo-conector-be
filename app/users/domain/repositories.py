@@ -7,6 +7,9 @@ class EmployeeGateway(ABC):
     @abstractmethod
     def all(self) -> list[Employee]: ...
 
+    @abstractmethod
+    def exists_by_id(self, id: int) -> bool: ...
+
 
 class UserRepository(ABC):
     @abstractmethod

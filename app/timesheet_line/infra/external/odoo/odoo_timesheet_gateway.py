@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, cast
+from typing import List, Dict, Any, Optional, cast
 from datetime import datetime, date
 from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.task.domain.models import Task
@@ -112,9 +112,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
     def all(
         self,
-        employee_id: int | None = None,
-        date_from: date | None = None,
-        date_to: date | None = None,
+        employee_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
     ) -> List[DetailedTimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo.
 

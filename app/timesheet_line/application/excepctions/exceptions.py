@@ -67,3 +67,37 @@ class TimesheetUpdateError(TimesheetDomainError):
         if details:
             message += f": {details}"
         super().__init__(message)
+
+
+class TimesheetListError(TimesheetDomainError):
+    """Error al listar las líneas de timesheet."""
+
+    def __init__(self, details: str = ""):
+        message = "Error al obtener las líneas de timesheet"
+        if details:
+            message += f": {details}"
+        super().__init__(message)
+
+
+class InvalidDateRangeError(TimesheetDomainError):
+    """Error cuando el rango de fechas es inválido."""
+
+    def __init__(self, date_from: str, date_to: str):
+        message = f"Rango de fechas inválido: fecha_desde ({date_from}) debe ser anterior a fecha_hasta ({date_to})"
+        super().__init__(message)
+
+
+class InvalidEmployeeIdError(TimesheetDomainError):
+    """Error cuando el ID del empleado es inválido."""
+
+    def __init__(self, employee_id: int):
+        message = f"ID de empleado inválido: {employee_id}"
+        super().__init__(message)
+
+
+class EmployeeNotExistsError(TimesheetDomainError):
+    """Error cuando el empleado no existe en el sistema."""
+
+    def __init__(self, employee_id: int):
+        message = f"El empleado con ID {employee_id} no existe en el sistema"
+        super().__init__(message)

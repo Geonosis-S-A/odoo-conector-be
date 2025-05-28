@@ -68,8 +68,10 @@ def test_create_and_delete_timesheet_line(test_client):
 @pytest.mark.integration
 def test_list_timesheet_lines(test_client):
     """Test de integración que prueba el listado de líneas de timesheet."""
-    # Act
-    response = test_client.get("/api/v1/timesheet/")
+    # Act - Ahora necesitamos pasar los parámetros obligatorios
+    response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
+    )
 
     # Assert
     assert response.status_code == 200
@@ -143,7 +145,9 @@ def test_edit_timesheet_line(test_client):
     assert edit_response.json()["success"] is True
 
     # Verificar que los cambios se aplicaron
-    get_response = test_client.get("/api/v1/timesheet/")
+    get_response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
+    )
     assert get_response.status_code == 200
     updated_line = next(
         (line for line in get_response.json() if line["id"] == created_id), None
@@ -220,20 +224,25 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
     assert create_response.status_code == 200
     created_id = create_response.json()["id"]
 
-    # Act - Filtrar por empleado
-    response_with_filter = test_client.get("/api/v1/timesheet/?employee_id=1")
-    response_without_filter = test_client.get("/api/v1/timesheet/?employee_id=999")
+    # Act - Filtrar por empleado existente
+    response_with_filter = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
+    )
+
+    # Act - Filtrar por empleado que no existe (debería devolver 404)
+    response_without_filter = test_client.get(
+        "/api/v1/timesheet/?employee_id=999&date_from=2024-01-01&date_to=2024-12-31"
+    )
 
     # Assert
     assert response_with_filter.status_code == 200
-    assert response_without_filter.status_code == 200
+    assert response_without_filter.status_code == 404  # Empleado no existe
+    assert "no existe en el sistema" in response_without_filter.json()["detail"]
 
     data_with_filter = response_with_filter.json()
-    data_without_filter = response_without_filter.json()
 
     # Verificar que el timesheet creado aparece en el filtro correcto
     assert any(item["id"] == created_id for item in data_with_filter)
-    assert not any(item["id"] == created_id for item in data_without_filter)
 
     # Verificar que todos los resultados filtrados son del empleado correcto
     assert all(item["employee_id"] == 1 for item in data_with_filter)
@@ -283,7 +292,7 @@ def test_list_timesheet_lines_with_date_filter(test_client):
 
     # Act - Filtrar por rango de fechas que incluye solo las dos primeras
     response = test_client.get(
-        "/api/v1/timesheet/?date_from=2024-01-14&date_to=2024-01-22"
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-14&date_to=2024-01-22"
     )
 
     # Assert
@@ -334,8 +343,10 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
     created_id_old = create_response_old.json()["id"]
     created_id_new = create_response_new.json()["id"]
 
-    # Act
-    response = test_client.get("/api/v1/timesheet/?date_from=2024-01-15")
+    # Act - Ahora necesitamos pasar employee_id y date_to también
+    response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-15&date_to=2024-12-31"
+    )
 
     # Assert
     assert response.status_code == 200
@@ -380,8 +391,10 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
     created_id_old = create_response_old.json()["id"]
     created_id_new = create_response_new.json()["id"]
 
-    # Act
-    response = test_client.get("/api/v1/timesheet/?date_to=2024-01-15")
+    # Act - Ahora necesitamos pasar employee_id y date_from también
+    response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-01-15"
+    )
 
     # Assert
     assert response.status_code == 200

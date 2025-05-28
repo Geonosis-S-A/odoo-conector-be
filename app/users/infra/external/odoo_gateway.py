@@ -46,3 +46,22 @@ class OdooEmployeeGateway(EmployeeGateway):
             self._transform_odoo_to_domain(employee) for employee in odoo_employees
         ]
         return parsed_employees
+
+    def exists_by_id(self, id: int) -> bool:
+        """Verifica si un empleado existe en Odoo por su ID."""
+        try:
+            employee_data = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "hr.employee",  # Modelo de empleados en Odoo
+                    "search_read",
+                    [[("id", "=", id)]],  # Buscar por ID específico
+                    {"fields": ["id"], "limit": 1},
+                ),
+            )
+            return len(employee_data) > 0
+        except Exception:
+            return False

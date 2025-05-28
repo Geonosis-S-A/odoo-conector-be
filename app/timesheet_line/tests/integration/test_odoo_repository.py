@@ -87,6 +87,7 @@ class TestOdooTimesheetLineGateway:
         prev_lines = self.gateway.all()
 
         # Act
+        assert created_id is not None
         delete_result = self.gateway.delete(created_id)
         post_lines = self.gateway.all()
 
@@ -122,6 +123,7 @@ class TestOdooTimesheetLineGateway:
         assert update_result is True
 
         # Verificar que los cambios se aplicaron
+        assert created_id is not None
         updated_line = self.gateway.get_by_id(created_id)
         assert updated_line.id == created_id
         assert updated_line.hours == 2
