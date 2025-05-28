@@ -19,6 +19,7 @@ from app.auth.application.dto.password_recovery import (
 from app.auth.application.use_cases.exceptions.exceptions import (
     EmployeeNotFound,
     OTPNotFound,
+    PasswordNotMatch,
     UserAlreadyExists,
     UserNotFound,
 )
@@ -249,9 +250,12 @@ async def reset_password(
         get_password_recovery_use_case
     ),
 ):
-    if dto.new_password != dto.confirm_password:
-        raise HTTPException(status_code=400, detail="Passwords do not match")
-    success = await password_recovery_use_case.reset_password(dto)
-    if not success:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+    try:
+        await password_recovery_use_case.reset_password(dto)
+    except PasswordNotMatch as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except OTPNotFound as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except UserNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
     return {"message": "Password reset successfully"}
