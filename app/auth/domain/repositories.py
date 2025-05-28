@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from app.auth.domain.models import (
     NewOTPCode,
+    OTPCode,
     RefreshToken,
     UserCredentials,
 )
@@ -53,5 +54,5 @@ class OTPRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_valid_otp(self, user_id: int, code: str) -> Optional[OTPModel]:
+    async def get_valid_otp(self, user_id: int, code: str) -> Optional[OTPCode]:
         pass

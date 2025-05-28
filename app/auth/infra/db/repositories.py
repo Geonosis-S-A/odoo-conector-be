@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 from app.auth.domain.models import (
     NewOTPCode,
+    OTPCode,
     RefreshToken,
     UserCredentials,
 )
@@ -183,8 +184,8 @@ class SQLModelOTPRepository(OTPRepository):
         self.db.commit()
         self.db.refresh(otp_model)
 
-    async def get_valid_otp(self, user_id: int, code: str) -> OTPModel | None:
-        return self.db.exec(
+    async def get_valid_otp(self, user_id: int, code: str) -> OTPCode | None:
+        otp_model = self.db.exec(
             select(OTPModel).where(
                 OTPModel.user_id == user_id,
                 OTPModel.code == code,
@@ -192,3 +193,12 @@ class SQLModelOTPRepository(OTPRepository):
                 OTPModel.expires_at > datetime.utcnow(),
             )
         ).first()
+        if not otp_model or otp_model.id is None:
+            return None
+        return OTPCode(
+            id=otp_model.id,
+            user_id=otp_model.user_id,
+            code=otp_model.code,
+            created_at=otp_model.created_at,
+            expires_at=otp_model.expires_at,
+        )

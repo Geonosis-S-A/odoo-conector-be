@@ -45,10 +45,10 @@ class PasswordRecoveryUseCase:
         return True
 
     async def verify_otp(self, dto: VerifyOTPDTO) -> bool:
-        user = await self.user_repository.get_by_email(dto.email)
+        user = self.user_repository.get_by_email(dto.email)
         if not user or user.id is None:
             return False
-        otp = await self.user_repository.get_valid_otp(int(user.id), dto.code)
+        otp = self.otp_repository.get_valid_otp(int(user.id), dto.code)
         if not otp:
             return False
         return True
