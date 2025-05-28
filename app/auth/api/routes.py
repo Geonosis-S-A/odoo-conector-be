@@ -16,6 +16,10 @@ from app.auth.application.dto.password_recovery import (
     VerifyOTPDTO,
     ResetPasswordDTO,
 )
+from app.auth.application.use_cases.exceptions.exceptions import (
+    EmployeeNotFound,
+    UserAlreadyExists,
+)
 from app.auth.application.use_cases.login import LoginUseCase
 from app.auth.application.use_cases.logout import LogoutUseCase
 from app.auth.application.use_cases.refresh import RefreshUseCase
@@ -27,6 +31,7 @@ from app.auth.application.use_cases.request_otp_for_register import (
 )
 from app.auth.infra.auth_service import TokenService
 from app.auth.infra.db.repositories import (
+    SQLModelOTPRepository,
     SQLModelTokenRepository,
     SQLModelUserCredentialsRepository,
 )
@@ -66,13 +71,12 @@ def get_password_recovery_use_case(
 def get_request_otp_for_register_use_case(
     db: Session = Depends(get_db),
     email_service=Depends(get_email_service),
-    otp_repository=Depends(get_user_repository),
     odoo_client=Depends(get_odoo_connection),
 ) -> RequestOTPForRegisterUseCase:
     return RequestOTPForRegisterUseCase(
         user_repository=SQLModelUserRepository(db),
         email_service=email_service,
-        otp_repository=otp_repository,
+        otp_repository=SQLModelOTPRepository(db),
         employee_gateway=OdooEmployeeGateway(odoo_client),
     )
 
@@ -167,19 +171,7 @@ async def change_password(
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Cambia la contraseña de un usuario.
-
-    Args:
-        request: Datos para el cambio de contraseña (sin user_id, se obtiene del token)
-        db: Sesión de base de datos
-        current_user: Usuario actual obtenido del token JWT
-
-    Returns:
-        ChangePasswordResponse: Mensaje de confirmación
-
-    Raises:
-        HTTPException: Si hay un error en el cambio de contraseña
-    """
+    """Cambia la contraseña de un usuario."""
     user_credentials_repository = SQLModelUserCredentialsRepository(db)
     auth_service = TokenService()
     change_password_use_case = ChangePasswordUseCase(
@@ -222,10 +214,13 @@ async def request_otp_for_register(
         get_request_otp_for_register_use_case
     ),
 ):
-    success = await request_otp_for_register_use_case.execute(dto.email)
-    if not success:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "OTP sent successfully"}
+    try:
+        await request_otp_for_register_use_case.execute(dto.email)
+        return {"message": "OTP sent successfully"}
+    except EmployeeNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except UserAlreadyExists as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/password-recovery/verify")

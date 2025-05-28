@@ -1,6 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Optional
-from app.auth.domain.models import RefreshToken, UserCredentials, UserModel, OTPModel
+from app.auth.domain.models import (
+    NewOTPCode,
+    RefreshToken,
+    UserCredentials,
+)
+from app.auth.infra.db.models import OTPModel
+from app.users.infra.db.models import UserModel
 
 
 class UserCredentialsRepository(ABC):
@@ -38,4 +44,14 @@ class UserRepository(ABC):
 
     @abstractmethod
     async def mark_otp_as_used(self, otp_id: int) -> None:
+        pass
+
+
+class OTPRepository(ABC):
+    @abstractmethod
+    async def save(self, otp: NewOTPCode) -> None:
+        pass
+
+    @abstractmethod
+    async def get_valid_otp(self, user_id: int, code: str) -> Optional[OTPModel]:
         pass

@@ -1,12 +1,17 @@
 from fastapi import HTTPException
 from sqlmodel import Session, select
-from app.auth.domain.models import RefreshToken, UserCredentials, UserModel, OTPModel
+from app.auth.domain.models import (
+    NewOTPCode,
+    RefreshToken,
+    UserCredentials,
+)
 from app.auth.domain.repositories import (
+    OTPRepository,
     TokenRepository,
     UserCredentialsRepository,
     UserRepository,
 )
-from app.auth.infra.db.models import RefreshTokenModel
+from app.auth.infra.db.models import OTPModel, RefreshTokenModel
 from app.users.infra.db.models import UserModel as UserModelDB
 from datetime import datetime
 
@@ -103,7 +108,7 @@ class SQLModelUserRepository(UserRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_by_email(self, email: str) -> UserModel | None:
+    async def get_by_email(self, email: str) -> UserModelDB | None:
         from app.users.infra.db.models import UserModel as UserModelDB
 
         statement = select(UserModelDB).where(UserModelDB.email == email)
@@ -161,3 +166,29 @@ class SQLModelUserRepository(UserRepository):
             self.db.add(otp)
             self.db.commit()
             self.db.refresh(otp)
+
+
+class SQLModelOTPRepository(OTPRepository):
+    def __init__(self, db: Session):
+        self.db = db
+
+    async def save(self, otp: NewOTPCode) -> None:
+        otp_model = OTPModel(
+            user_id=otp.user_id,
+            code=otp.code,
+            expires_at=otp.expires_at,
+            is_used=False,
+        )
+        self.db.add(otp_model)
+        self.db.commit()
+        self.db.refresh(otp_model)
+
+    async def get_valid_otp(self, user_id: int, code: str) -> OTPModel | None:
+        return self.db.exec(
+            select(OTPModel).where(
+                OTPModel.user_id == user_id,
+                OTPModel.code == code,
+                OTPModel.is_used == False,
+                OTPModel.expires_at > datetime.utcnow(),
+            )
+        ).first()
