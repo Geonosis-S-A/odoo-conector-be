@@ -10,7 +10,6 @@ from app.auth.domain.repositories import (
     OTPRepository,
     TokenRepository,
     UserCredentialsRepository,
-    UserRepository,
 )
 from app.auth.infra.db.models import OTPModel, RefreshTokenModel
 from app.users.infra.db.models import UserModel as UserModelDB
@@ -22,12 +21,11 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
         self.db = db
 
     def get_user_credentials(self, email: str) -> UserCredentials:
-        user_model = (
-            self.db.query(UserModelDB).filter(UserModelDB.email == email).first()
-        )
+        statement = select(UserModelDB).where(UserModelDB.email == email)
+        user_model = self.db.exec(statement).first()
 
         print(user_model)
-        if not user_model:
+        if not user_model or user_model.id is None:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         # Convertir UserModel a UserCredentials
@@ -41,11 +39,10 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
         )
 
     def get_user_by_id(self, user_id: int) -> UserCredentials:
-        user_model = (
-            self.db.query(UserModelDB).filter(UserModelDB.id == user_id).first()
-        )
+        statement = select(UserModelDB).where(UserModelDB.id == user_id)
+        user_model = self.db.exec(statement).first()
 
-        if not user_model:
+        if not user_model or user_model.id is None:
             raise HTTPException(status_code=404, detail="User not found")
 
         # Convertir UserModel a UserCredentials
@@ -60,14 +57,14 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
 
     def update_password(self, user_id: int, new_hashed_password: str) -> bool:
         try:
-            user_model = (
-                self.db.query(UserModelDB).filter(UserModelDB.id == user_id).first()
-            )
+            statement = select(UserModelDB).where(UserModelDB.id == user_id)
+            user_model = self.db.exec(statement).first()
 
             if not user_model:
                 return False
 
             user_model.hashed_password = new_hashed_password
+            self.db.add(user_model)
             self.db.commit()
             return True
         except Exception:
@@ -89,20 +86,20 @@ class SQLModelTokenRepository(TokenRepository):
         self.db.commit()
 
     def search_refresh_token(self, token: str) -> RefreshTokenModel:
-        refresh_token_model = (
-            self.db.query(RefreshTokenModel)
-            .filter(RefreshTokenModel.token == token)
-            .first()
-        )
+        statement = select(RefreshTokenModel).where(RefreshTokenModel.token == token)
+        refresh_token_model = self.db.exec(statement).first()
+
         if not refresh_token_model:
             raise HTTPException(status_code=404, detail="Refresh token not found")
         return refresh_token_model
 
     def delete_refresh_token(self, token: str) -> None:
-        self.db.query(RefreshTokenModel).filter(
-            RefreshTokenModel.token == token
-        ).delete()
-        self.db.commit()
+        statement = select(RefreshTokenModel).where(RefreshTokenModel.token == token)
+        refresh_token_model = self.db.exec(statement).first()
+
+        if refresh_token_model:
+            self.db.delete(refresh_token_model)
+            self.db.commit()
 
 
 class SQLModelOTPRepository(OTPRepository):
