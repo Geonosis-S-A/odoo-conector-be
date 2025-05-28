@@ -19,6 +19,7 @@ from app.auth.application.dto.password_recovery import (
 from app.auth.application.use_cases.exceptions.exceptions import (
     EmployeeNotFound,
     UserAlreadyExists,
+    UserNotFound,
 )
 from app.auth.application.use_cases.login import LoginUseCase
 from app.auth.application.use_cases.logout import LogoutUseCase
@@ -201,10 +202,11 @@ async def request_otp(
         get_password_recovery_use_case
     ),
 ):
-    success = await password_recovery_use_case.request_otp(dto)
-    if not success:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"message": "OTP sent successfully"}
+    try:
+        await password_recovery_use_case.request_otp(dto)
+        return {"message": "OTP sent successfully"}
+    except UserNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/register/request-otp")
