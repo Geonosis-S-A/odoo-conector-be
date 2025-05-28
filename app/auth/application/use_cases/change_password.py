@@ -39,13 +39,13 @@ class ChangePasswordUseCase:
 
         # 3. Verificar que la contraseña actual sea correcta
         if not self.password_service.verify_password(
-            user_credentials.password, current_password
+            current_password, user_credentials.password
         ):
             raise HTTPException(status_code=401, detail="Contraseña actual incorrecta")
 
         # 4. Validar que la nueva contraseña no sea igual a la actual
         if self.password_service.verify_password(
-            user_credentials.password, new_password
+            new_password, user_credentials.password
         ):
             raise HTTPException(
                 status_code=400,

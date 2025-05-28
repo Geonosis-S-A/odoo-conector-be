@@ -28,7 +28,7 @@ class LoginUseCase:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if not self.password_service.verify_password(
-            user_credentials.password, password
+            password, user_credentials.password
         ):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
