@@ -1,7 +1,11 @@
 from fastapi import HTTPException
 from sqlmodel import Session, select
 from app.auth.domain.models import RefreshToken, UserCredentials, UserModel, OTPModel
-from app.auth.domain.repositories import TokenRepository, UserCredentialsRepository, UserRepository
+from app.auth.domain.repositories import (
+    TokenRepository,
+    UserCredentialsRepository,
+    UserRepository,
+)
 from app.auth.infra.db.models import RefreshTokenModel
 from app.users.infra.db.models import UserModel as UserModelDB
 from datetime import datetime
@@ -12,7 +16,9 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
         self.db = db
 
     def get_user_credentials(self, email: str) -> UserCredentials:
-        user_model = self.db.query(UserModelDB).filter(UserModelDB.email == email).first()
+        user_model = (
+            self.db.query(UserModelDB).filter(UserModelDB.email == email).first()
+        )
 
         print(user_model)
         if not user_model:
@@ -29,7 +35,9 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
         )
 
     def get_user_by_id(self, user_id: int) -> UserCredentials:
-        user_model = self.db.query(UserModelDB).filter(UserModelDB.id == user_id).first()
+        user_model = (
+            self.db.query(UserModelDB).filter(UserModelDB.id == user_id).first()
+        )
 
         if not user_model:
             raise HTTPException(status_code=404, detail="User not found")
@@ -46,11 +54,13 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
 
     def update_password(self, user_id: int, new_hashed_password: str) -> bool:
         try:
-            user_model = self.db.query(UserModelDB).filter(UserModelDB.id == user_id).first()
-            
+            user_model = (
+                self.db.query(UserModelDB).filter(UserModelDB.id == user_id).first()
+            )
+
             if not user_model:
                 return False
-            
+
             user_model.hashed_password = new_hashed_password
             self.db.commit()
             return True
@@ -95,8 +105,9 @@ class SQLModelUserRepository(UserRepository):
 
     async def get_by_email(self, email: str) -> UserModel | None:
         from app.users.infra.db.models import UserModel as UserModelDB
+
         statement = select(UserModelDB).where(UserModelDB.email == email)
-        if hasattr(self.db, 'exec'):
+        if hasattr(self.db, "exec"):
             return self.db.exec(statement).first()
         else:
             # Fallback para sesiones de SQLAlchemy regulares
@@ -112,9 +123,9 @@ class SQLModelUserRepository(UserRepository):
             OTPModel.user_id == user_id,
             OTPModel.code == code,
             OTPModel.is_used.is_(False),
-            OTPModel.expires_at > datetime.utcnow()
+            OTPModel.expires_at > datetime.utcnow(),
         )
-        if hasattr(self.db, 'exec'):
+        if hasattr(self.db, "exec"):
             return self.db.exec(statement).first()
         else:
             # Fallback para sesiones de SQLAlchemy regulares
@@ -122,27 +133,29 @@ class SQLModelUserRepository(UserRepository):
 
     async def update_password(self, user_id: int, hashed_password: str) -> None:
         from app.users.infra.db.models import UserModel as UserModelDB
+
         statement = select(UserModelDB).where(UserModelDB.id == user_id)
-        if hasattr(self.db, 'exec'):
+        if hasattr(self.db, "exec"):
             user = self.db.exec(statement).first()
         else:
             # Fallback para sesiones de SQLAlchemy regulares
             user = self.db.execute(statement).scalar_one_or_none()
-        
+
         if user:
             user.hashed_password = hashed_password
+            user.is_active = True  # ! Eliminar esto y menjarlo desde otro endpoint.
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)
 
     async def mark_otp_as_used(self, otp_id: int) -> None:
         statement = select(OTPModel).where(OTPModel.id == otp_id)
-        if hasattr(self.db, 'exec'):
+        if hasattr(self.db, "exec"):
             otp = self.db.exec(statement).first()
         else:
             # Fallback para sesiones de SQLAlchemy regulares
             otp = self.db.execute(statement).scalar_one_or_none()
-        
+
         if otp:
             otp.is_used = True
             self.db.add(otp)

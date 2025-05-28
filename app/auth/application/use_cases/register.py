@@ -9,6 +9,5 @@ class RegisterUseCase:
         self.auth_service = TokenService()
 
     def execute(self, user_email: str, password: str) -> User:
-        # TODO: MANDAR MAIL PARA RECONFIGURAR LA CONTRASEÑA
         hashed_password = self.auth_service.hash_password(password)
         return self.user_repository.set_password(user_email, hashed_password)
