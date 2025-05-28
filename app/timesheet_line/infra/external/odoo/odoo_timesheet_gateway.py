@@ -79,7 +79,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             create_date=odoo_data.get("create_date", None),
         )
 
-    def create(self, timesheet_line: TimesheetLine) -> int:
+    def create(self, timesheet_line: TimesheetLine) -> int | None:
         """Crea una nueva línea de hoja de tiempo en Odoo.
 
         Args:

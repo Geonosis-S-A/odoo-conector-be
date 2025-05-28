@@ -25,6 +25,12 @@ from app.shared.infra.external.odoo.odoo_client import (
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
+from app.timesheet_line.application.excepctions.exceptions import (
+    InvalidHoursError,
+    TimesheetNotFoundError,
+    TimesheetCreationError,
+    TimesheetDomainError,
+)
 
 
 router = APIRouter(prefix="/timesheet", tags=["timesheet"])
@@ -59,8 +65,15 @@ async def create_timesheet_line(
         use_case = CargarHorasUseCase(gateway)
         line = use_case.execute(request)
         return {"id": line.id}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except InvalidHoursError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except TimesheetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetCreationError as e:
+        raise HTTPException(status_code=422, detail=e.message)
+    except TimesheetDomainError as e:
+        # Captura cualquier otra excepción del dominio
+        raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         raise HTTPException(
             status_code=500,

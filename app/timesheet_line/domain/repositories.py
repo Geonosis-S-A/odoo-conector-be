@@ -4,7 +4,7 @@ from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLin
 
 class TimesheetLineGateway(ABC):
     @abstractmethod
-    def create(self, timesheet_line: TimesheetLine) -> int: ...
+    def create(self, timesheet_line: TimesheetLine) -> int | None: ...
 
     @abstractmethod
     def all(self, employee_id: int | None = None) -> list[DetailedTimesheetLine]: ...
@@ -14,6 +14,6 @@ class TimesheetLineGateway(ABC):
 
     @abstractmethod
     def update(self, timesheet_line: TimesheetLine) -> bool: ...
-    
+
     @abstractmethod
     def get_by_id(self, timesheet_line_id: int) -> DetailedTimesheetLine: ...
