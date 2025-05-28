@@ -9,6 +9,7 @@ from app.auth.application.dto.password_recovery import (
     ResetPasswordDTO,
 )
 from app.auth.application.services.otp_service import OTPService
+from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
 from app.auth.domain.repositories import OTPRepository
 from app.auth.infra.db.models import OTPModel
 from app.auth.infra.email_service import EmailService
@@ -33,7 +34,7 @@ class PasswordRecoveryUseCase:
     async def request_otp(self, dto: RequestOTPDTO) -> bool:
         user = self.user_repository.get_by_email(dto.email)
         if not user or user.id is None:
-            return False
+            raise UserNotFound("El usuario no existe")
 
         # Generar código OTP
         new_otp = self.otp_service.create_otp(int(user.id))
