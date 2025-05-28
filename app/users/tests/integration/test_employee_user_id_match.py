@@ -4,8 +4,6 @@ from fastapi import FastAPI
 from app.users.api.routers import router
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
-from app.users.infra.db.repositories import SQLModelUserRepository
-from app.users.infra.db.models import UserModel
 
 
 app = FastAPI()
