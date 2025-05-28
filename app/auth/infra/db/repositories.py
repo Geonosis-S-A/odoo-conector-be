@@ -184,7 +184,7 @@ class SQLModelOTPRepository(OTPRepository):
         self.db.commit()
         self.db.refresh(otp_model)
 
-    async def get_valid_otp(self, user_id: int, code: str) -> OTPCode | None:
+    def get_valid_otp(self, user_id: int, code: str) -> OTPCode | None:
         otp_model = self.db.exec(
             select(OTPModel).where(
                 OTPModel.user_id == user_id,
@@ -202,3 +202,11 @@ class SQLModelOTPRepository(OTPRepository):
             created_at=otp_model.created_at,
             expires_at=otp_model.expires_at,
         )
+
+    def mark_otp_as_used(self, otp_id: int) -> None:
+        otp_model = self.db.exec(select(OTPModel).where(OTPModel.id == otp_id)).first()
+        if otp_model:
+            otp_model.is_used = True
+            self.db.add(otp_model)
+            self.db.commit()
+            self.db.refresh(otp_model)

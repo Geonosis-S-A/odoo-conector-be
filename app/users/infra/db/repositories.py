@@ -8,6 +8,7 @@ class SQLModelUserRepository(UserRepository):
         self.db = db
 
     def save_all(self, users: list[User]):
+        """Deprecated: Use save_all instead"""
         # TODO: Si modifia el mail, debe actualizarse tambien en base de datos.
         # TODO: Verificar que ninguno de estos exista en base de datos
         for user in users:
@@ -77,3 +78,13 @@ class SQLModelUserRepository(UserRepository):
             is_active=user_model.is_active,
             is_superuser=user_model.is_superuser,
         )
+
+    def update_password(self, user_id: int, new_hashed_password: str) -> bool:
+        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+        if user_model is None:
+            return False
+        user_model.hashed_password = new_hashed_password
+        user_model.is_active = True
+        self.db.commit()
+        self.db.refresh(user_model)
+        return True

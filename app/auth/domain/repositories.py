@@ -54,5 +54,9 @@ class OTPRepository(ABC):
         pass
 
     @abstractmethod
-    async def get_valid_otp(self, user_id: int, code: str) -> Optional[OTPCode]:
+    def get_valid_otp(self, user_id: int, code: str) -> OTPCode | None:
+        pass
+
+    @abstractmethod
+    def mark_otp_as_used(self, otp_id: int) -> None:
         pass

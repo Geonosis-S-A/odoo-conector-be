@@ -11,6 +11,7 @@ from app.auth.application.dto.password_recovery import (
 from app.auth.application.services.otp_service import OTPService
 from app.auth.application.use_cases.exceptions.exceptions import (
     OTPNotFound,
+    PasswordNotMatch,
     UserNotFound,
 )
 from app.auth.domain.repositories import OTPRepository
@@ -28,9 +29,9 @@ class PasswordRecoveryUseCase:
         otp_repository: OTPRepository,
     ):
         self.user_repository = user_repository
+        self.otp_repository = otp_repository
         self.email_service = email_service
         self.password_service = password_service
-        self.otp_repository = otp_repository
         self.otp_service = OTPService()
 
     async def request_otp(self, dto: RequestOTPDTO) -> bool:
@@ -57,17 +58,17 @@ class PasswordRecoveryUseCase:
 
     async def reset_password(self, dto: ResetPasswordDTO) -> bool:
         if dto.new_password != dto.confirm_password:
-            return False
-        user = await self.user_repository.get_by_email(dto.email)
+            raise PasswordNotMatch("Las contraseñas no coinciden")
+        user = self.user_repository.get_by_email(dto.email)
         if not user or user.id is None:
-            return False
-        otp = await self.user_repository.get_valid_otp(int(user.id), dto.code)
+            raise UserNotFound("El usuario no existe")
+        otp = self.otp_repository.get_valid_otp(int(user.id), dto.code)
         if not otp:
-            return False
+            raise OTPNotFound("El código OTP no es válido")
         # Hashear nueva contraseña
         hashed_password = self.password_service.hash_password(dto.new_password)
         # Actualizar contraseña y marcar OTP como usado
-        await self.user_repository.update_password(int(user.id), hashed_password)
+        self.user_repository.update_password(int(user.id), hashed_password)
         if otp.id is not None:  # Verificar que el ID existe
-            await self.user_repository.mark_otp_as_used(otp.id)
+            self.otp_repository.mark_otp_as_used(otp.id)
         return True

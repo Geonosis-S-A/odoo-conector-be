@@ -12,3 +12,7 @@ class UserNotFound(Exception):
 
 class OTPNotFound(Exception):
     pass
+
+
+class PasswordNotMatch(Exception):
+    pass
