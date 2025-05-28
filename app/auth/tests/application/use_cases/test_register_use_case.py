@@ -1,9 +1,7 @@
-import pytest
 from unittest.mock import Mock
 from app.auth.application.services.crypt_service import BcryptPasswordService
 from app.auth.application.use_cases.register import RegisterUseCase
 
-from app.auth.infra.auth_service import TokenService
 from app.users.domain.models import User
 from app.users.domain.repositories import UserRepository
 
