@@ -50,6 +50,7 @@ from app.auth.api.dependencies import (
     get_password_service,
 )
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
+from app.auth.application.services.crypt_service import BcryptPasswordService
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -174,9 +175,9 @@ async def change_password(
 ):
     """Cambia la contraseña de un usuario."""
     user_credentials_repository = SQLModelUserCredentialsRepository(db)
-    auth_service = TokenService()
+    password_service = BcryptPasswordService()
     change_password_use_case = ChangePasswordUseCase(
-        auth_service, user_credentials_repository
+        password_service, user_credentials_repository
     )
 
     try:
@@ -206,7 +207,7 @@ async def request_otp(
         await password_recovery_use_case.request_otp(dto)
         return {"message": "OTP sent successfully"}
     except UserNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail="User not found")
     except OTPNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -234,10 +235,13 @@ async def verify_otp(
         get_password_recovery_use_case
     ),
 ):
-    is_valid = await password_recovery_use_case.verify_otp(dto)
-    if not is_valid:
+    try:
+        await password_recovery_use_case.verify_otp(dto)
+        return {"message": "OTP verified successfully"}
+    except UserNotFound as e:
+        raise HTTPException(status_code=404, detail="User not found")
+    except OTPNotFound as e:
         raise HTTPException(status_code=400, detail="Invalid OTP")
-    return {"message": "OTP verified successfully"}
 
 
 @router.post("/password-recovery/reset")
@@ -249,10 +253,10 @@ async def reset_password(
 ):
     try:
         await password_recovery_use_case.reset_password(dto)
+        return {"message": "Password reset successfully"}
     except PasswordNotMatch as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Passwords do not match")
     except OTPNotFound as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Invalid OTP")
     except UserNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    return {"message": "Password reset successfully"}
+        raise HTTPException(status_code=404, detail="User not found")

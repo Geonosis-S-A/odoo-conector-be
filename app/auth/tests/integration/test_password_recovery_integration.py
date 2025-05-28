@@ -12,6 +12,7 @@ from app.shared.infra.db.session import get_db
 import datetime
 
 from app.users.infra.db.repositories import SQLModelUserRepository
+from app.auth.infra.db.repositories import SQLModelOTPRepository
 
 
 # Configuración de la base de datos de prueba
@@ -43,6 +44,11 @@ def user_repository_fixture(session: Session):
     return SQLModelUserRepository(session)
 
 
+@pytest.fixture(name="otp_repository")
+def otp_repository_fixture(session: Session):
+    return SQLModelOTPRepository(session)
+
+
 @pytest.fixture(name="email_service")
 def email_service_fixture():
     return SMTPEmailService()
@@ -55,9 +61,11 @@ def password_service_fixture():
 
 @pytest.fixture(name="password_recovery_use_case")
 def password_recovery_use_case_fixture(
-    user_repository, email_service, password_service
+    user_repository, otp_repository, email_service, password_service
 ):
-    return PasswordRecoveryUseCase(user_repository, email_service, password_service)
+    return PasswordRecoveryUseCase(
+        user_repository, email_service, password_service, otp_repository
+    )
 
 
 @pytest.fixture(name="test_user")
