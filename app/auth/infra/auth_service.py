@@ -144,8 +144,3 @@ class TokenService:
             secure=settings.COOKIE_SECURE,
             samesite=settings.COOKIE_SAMESITE,
         )
-
-    def is_active(self, user_state: bool):
-        if user_state:
-            return true
-        return False

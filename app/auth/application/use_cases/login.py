@@ -32,7 +32,7 @@ class LoginUseCase:
         ):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        if not self.token_service.is_active(user_credentials.is_active):
+        if not user_credentials.is_active:
             raise HTTPException(status_code=401, detail="Inactive user")
 
         access_token = self.token_service.create_access_token(
