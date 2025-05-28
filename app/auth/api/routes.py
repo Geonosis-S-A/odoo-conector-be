@@ -18,6 +18,7 @@ from app.auth.application.dto.password_recovery import (
 )
 from app.auth.application.use_cases.exceptions.exceptions import (
     EmployeeNotFound,
+    OTPNotFound,
     UserAlreadyExists,
     UserNotFound,
 )
@@ -208,6 +209,8 @@ async def request_otp(
         return {"message": "OTP sent successfully"}
     except UserNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except OTPNotFound as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/register/request-otp")
