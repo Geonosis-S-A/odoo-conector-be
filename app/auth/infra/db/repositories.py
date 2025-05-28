@@ -121,7 +121,7 @@ class SQLModelOTPRepository(OTPRepository):
         statement = select(OTPModel).where(
             OTPModel.user_id == user_id,
             OTPModel.code == code,
-            OTPModel.is_used == False,
+            OTPModel.is_used == False,  # noqa: E712 es necesario si no no filtra bien
             OTPModel.expires_at > datetime.utcnow(),
         )
 
