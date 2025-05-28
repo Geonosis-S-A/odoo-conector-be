@@ -39,7 +39,7 @@ class ListTimesheetLinesUseCase:
         if date_from > date_to:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
 
-        try:
-            return self.timesheet_line_gateway.all(employee_id, date_from, date_to)
-        except Exception as e:
-            raise TimesheetListError(str(e))
+        timesheets = self.timesheet_line_gateway.all(employee_id, date_from, date_to)
+        if not timesheets:
+            raise TimesheetListError()
+        return timesheets

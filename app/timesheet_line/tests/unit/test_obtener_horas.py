@@ -75,25 +75,24 @@ class TestListTimesheetLinesUseCase:
         mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
         assert result == sample_timesheet_lines
 
-    def test_execute_returns_empty_list(
+    def test_execute_returns_empty_list_raises_error(
         self, use_case, mock_gateway, mock_employee_gateway
     ):
-        """Test que verifica que se retorna una lista vacía cuando no hay resultados."""
+        """Test que verifica que se lanza TimesheetListError cuando no hay resultados."""
         # Arrange
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
 
         mock_employee_gateway.exists_by_id.return_value = True
-        mock_gateway.all.return_value = []
+        mock_gateway.all.return_value = []  # Sin resultados
 
-        # Act
-        result = use_case.execute(employee_id, date_from, date_to)
+        # Act & Assert
+        with pytest.raises(TimesheetListError):
+            use_case.execute(employee_id, date_from, date_to)
 
-        # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
-        assert result == []
 
     def test_execute_with_specific_employee_and_date_range(
         self, use_case, mock_gateway, mock_employee_gateway, sample_timesheet_lines
@@ -189,10 +188,10 @@ class TestListTimesheetLinesUseCase:
         mock_gateway.all.side_effect = Exception("Error de conexión")
 
         # Act & Assert
-        with pytest.raises(TimesheetListError) as exc_info:
+        with pytest.raises(Exception) as exc_info:
             use_case.execute(employee_id, date_from, date_to)
 
-        assert "Error de conexión" in str(exc_info.value.message)
+        assert "Error de conexión" in str(exc_info.value)
 
     def test_execute_with_different_employee_ids(
         self, use_case, mock_gateway, mock_employee_gateway, sample_timesheet_lines
