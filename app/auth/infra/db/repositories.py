@@ -156,17 +156,18 @@ class SQLModelUserRepository(UserRepository):
 
     async def mark_otp_as_used(self, otp_id: int) -> None:
         statement = select(OTPModel).where(OTPModel.id == otp_id)
+
         if hasattr(self.db, "exec"):
-            otp = self.db.exec(statement).first()
+            otp_model = self.db.exec(statement).first()
         else:
             # Fallback para sesiones de SQLAlchemy regulares
-            otp = self.db.execute(statement).scalar_one_or_none()
+            otp_model = self.db.execute(statement).scalar_one_or_none()
 
-        if otp:
-            otp.is_used = True
-            self.db.add(otp)
+        if otp_model:
+            otp_model.is_used = True
+            self.db.add(otp_model)
             self.db.commit()
-            self.db.refresh(otp)
+            self.db.refresh(otp_model)
 
 
 class SQLModelOTPRepository(OTPRepository):
@@ -185,14 +186,19 @@ class SQLModelOTPRepository(OTPRepository):
         self.db.refresh(otp_model)
 
     def get_valid_otp(self, user_id: int, code: str) -> OTPCode | None:
-        otp_model = self.db.exec(
-            select(OTPModel).where(
-                OTPModel.user_id == user_id,
-                OTPModel.code == code,
-                OTPModel.is_used == False,
-                OTPModel.expires_at > datetime.utcnow(),
-            )
-        ).first()
+        statement = select(OTPModel).where(
+            OTPModel.user_id == user_id,
+            OTPModel.code == code,
+            OTPModel.is_used == False,
+            OTPModel.expires_at > datetime.utcnow(),
+        )
+
+        if hasattr(self.db, "exec"):
+            otp_model = self.db.exec(statement).first()
+        else:
+            # Fallback para sesiones de SQLAlchemy regulares
+            otp_model = self.db.execute(statement).scalar_one_or_none()
+
         if not otp_model or otp_model.id is None:
             return None
         return OTPCode(
@@ -204,7 +210,14 @@ class SQLModelOTPRepository(OTPRepository):
         )
 
     def mark_otp_as_used(self, otp_id: int) -> None:
-        otp_model = self.db.exec(select(OTPModel).where(OTPModel.id == otp_id)).first()
+        statement = select(OTPModel).where(OTPModel.id == otp_id)
+
+        if hasattr(self.db, "exec"):
+            otp_model = self.db.exec(statement).first()
+        else:
+            # Fallback para sesiones de SQLAlchemy regulares
+            otp_model = self.db.execute(statement).scalar_one_or_none()
+
         if otp_model:
             otp_model.is_used = True
             self.db.add(otp_model)
