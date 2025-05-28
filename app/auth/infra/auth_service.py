@@ -131,12 +131,6 @@ class TokenService:
         except Exception as e:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
-    def verify_password(self, hashed_password: str, plain_password: str) -> bool:
-        return pwd_context.verify(plain_password, hashed_password)
-
-    def hash_password(self, password: str) -> str:
-        return pwd_context.hash(password)
-
     def logout(
         self,
         response: Response,
