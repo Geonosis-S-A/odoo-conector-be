@@ -58,13 +58,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Definir la función de dependencia antes de los endpoints que la usan
 def get_password_recovery_use_case(
-    user_repository=Depends(get_user_repository),
     email_service=Depends(get_email_service),
     password_service=Depends(get_password_service),
     db: Session = Depends(get_db),
 ) -> PasswordRecoveryUseCase:
     return PasswordRecoveryUseCase(
-        user_repository=user_repository,
+        user_repository=SQLModelUserRepository(db),
         email_service=email_service,
         password_service=password_service,
         otp_repository=SQLModelOTPRepository(db),
