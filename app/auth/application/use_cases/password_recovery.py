@@ -1,8 +1,3 @@
-from datetime import datetime, timedelta
-import random
-import string
-from typing import Optional
-
 from app.auth.application.dto.password_recovery import (
     RequestOTPDTO,
     VerifyOTPDTO,
