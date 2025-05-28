@@ -9,9 +9,11 @@ from app.auth.application.dto.password_recovery import (
     ResetPasswordDTO,
 )
 from app.auth.application.services.otp_service import OTPService
-from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
+from app.auth.application.use_cases.exceptions.exceptions import (
+    OTPNotFound,
+    UserNotFound,
+)
 from app.auth.domain.repositories import OTPRepository
-from app.auth.infra.db.models import OTPModel
 from app.auth.infra.email_service import EmailService
 from app.auth.infra.password_service import PasswordService
 from app.users.domain.repositories import UserRepository
@@ -47,10 +49,10 @@ class PasswordRecoveryUseCase:
     async def verify_otp(self, dto: VerifyOTPDTO) -> bool:
         user = self.user_repository.get_by_email(dto.email)
         if not user or user.id is None:
-            return False
+            raise UserNotFound("El usuario no existe")
         otp = self.otp_repository.get_valid_otp(int(user.id), dto.code)
         if not otp:
-            return False
+            raise OTPNotFound("El código OTP no es válido")
         return True
 
     async def reset_password(self, dto: ResetPasswordDTO) -> bool:

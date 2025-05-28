@@ -8,3 +8,7 @@ class UserAlreadyExists(Exception):
 
 class UserNotFound(Exception):
     pass
+
+
+class OTPNotFound(Exception):
+    pass
