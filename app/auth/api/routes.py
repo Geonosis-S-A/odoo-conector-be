@@ -61,11 +61,13 @@ def get_password_recovery_use_case(
     user_repository=Depends(get_user_repository),
     email_service=Depends(get_email_service),
     password_service=Depends(get_password_service),
+    db: Session = Depends(get_db),
 ) -> PasswordRecoveryUseCase:
     return PasswordRecoveryUseCase(
         user_repository=user_repository,
         email_service=email_service,
         password_service=password_service,
+        otp_repository=SQLModelOTPRepository(db),
     )
 
 
