@@ -34,7 +34,7 @@ class TestCargarHorasUseCase:
         mock_gateway.get_by_id.return_value = Mock()
 
         # Act
-        result = use_case.execute(request)
+        use_case.execute(request)
 
         # Assert
         mock_gateway.create.assert_called_once()
@@ -62,7 +62,7 @@ class TestCargarHorasUseCase:
         mock_gateway.get_by_id.return_value = Mock()
 
         # Act
-        result = use_case.execute(request)
+        use_case.execute(request)
 
         # Assert
         mock_gateway.create.assert_called_once()

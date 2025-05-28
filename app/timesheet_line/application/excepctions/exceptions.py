@@ -53,7 +53,7 @@ class TimesheetCreationError(TimesheetDomainError):
     """Error al crear una línea de timesheet."""
 
     def __init__(self, details: str = ""):
-        message = f"Error al crear la línea de timesheet"
+        message = "Error al crear la línea de timesheet"
         if details:
             message += f": {details}"
         super().__init__(message)
