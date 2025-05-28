@@ -1,6 +1,4 @@
-import pytest
 from app.auth.application.services.otp_service import OTPService
-from unittest.mock import AsyncMock
 
 
 def test_generate_otp():

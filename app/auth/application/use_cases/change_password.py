@@ -1,7 +1,6 @@
 from fastapi import HTTPException
 from app.auth.application.services.crypt_service import BcryptPasswordService
 from app.auth.domain.repositories import UserCredentialsRepository
-from app.auth.infra.auth_service import TokenService
 
 
 class ChangePasswordUseCase:
