@@ -38,8 +38,6 @@ from app.auth.infra.db.repositories import (
     SQLModelTokenRepository,
     SQLModelUserCredentialsRepository,
 )
-from app.auth.infra.email_service import EmailService
-from app.auth.infra.password_service import PasswordService
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
@@ -48,7 +46,6 @@ from pydantic import BaseModel
 
 # Importar las dependencias correctas
 from app.auth.api.dependencies import (
-    get_user_repository,
     get_email_service,
     get_password_service,
 )

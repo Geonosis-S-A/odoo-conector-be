@@ -1,11 +1,6 @@
-from fastapi import Depends
-from sqlmodel import Session
 from app.auth.application.services.crypt_service import BcryptPasswordService
 from app.auth.infra.email_service import EmailService
 from app.auth.infra.password_service import PasswordService
-from app.auth.domain.repositories import UserRepository
-from app.auth.infra.db.repositories import SQLModelUserRepository
-from app.shared.infra.db.session import get_db
 from app.core.config import settings
 import smtplib
 from email.mime.multipart import MIMEMultipart
@@ -42,7 +37,3 @@ def get_email_service() -> EmailService:
 
 def get_password_service() -> PasswordService:
     return BcryptPasswordService()
-
-
-def get_user_repository(db: Session = Depends(get_db)) -> UserRepository:
-    return SQLModelUserRepository(db)

@@ -6,11 +6,12 @@ from app.auth.application.services.crypt_service import BcryptPasswordService
 from app.main import app
 from app.users.infra.db.models import UserModel
 from app.auth.infra.db.models import OTPModel
-from app.auth.infra.db.repositories import SQLModelUserRepository
 from app.auth.api.dependencies import SMTPEmailService
 from app.auth.application.use_cases.password_recovery import PasswordRecoveryUseCase
 from app.shared.infra.db.session import get_db
 import datetime
+
+from app.users.infra.db.repositories import SQLModelUserRepository
 
 
 # Configuración de la base de datos de prueba
