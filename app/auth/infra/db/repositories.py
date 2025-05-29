@@ -13,7 +13,7 @@ from app.auth.domain.repositories import (
 )
 from app.auth.infra.db.models import OTPModel, RefreshTokenModel
 from app.users.infra.db.models import UserModel as UserModelDB
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class SQLModelUserCredentialsRepository(UserCredentialsRepository):
@@ -126,14 +126,10 @@ class SQLModelOTPRepository(OTPRepository):
             OTPModel.user_id == user_id,
             OTPModel.code == code,
             OTPModel.is_used == False,  # noqa: E712 es necesario si no no filtra bien
-            OTPModel.expires_at > datetime.utcnow(),
+            OTPModel.expires_at > datetime.now(timezone.utc),
         )
 
-        if hasattr(self.db, "exec"):
-            otp_model = self.db.exec(statement).first()
-        else:
-            # Fallback para sesiones de SQLAlchemy regulares
-            otp_model = self.db.execute(statement).scalar_one_or_none()
+        otp_model = self.db.exec(statement).first()
 
         if not otp_model or otp_model.id is None:
             return None
@@ -148,11 +144,7 @@ class SQLModelOTPRepository(OTPRepository):
     def mark_otp_as_used(self, otp_id: int) -> None:
         statement = select(OTPModel).where(OTPModel.id == otp_id)
 
-        if hasattr(self.db, "exec"):
-            otp_model = self.db.exec(statement).first()
-        else:
-            # Fallback para sesiones de SQLAlchemy regulares
-            otp_model = self.db.execute(statement).scalar_one_or_none()
+        otp_model = self.db.exec(statement).first()
 
         if otp_model:
             otp_model.is_used = True
