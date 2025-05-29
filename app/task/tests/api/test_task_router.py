@@ -1,8 +1,9 @@
 import pytest
 from unittest.mock import Mock
-from app.task.api.routers import get_task_gateway
+from app.task.api.routers import get_task_gateway, get_employee_gateway
 from app.task.domain.models import Task
 from app.task.domain.gateway import TaskGateway
+from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
 from app.task.application.Exeptions import ProjectNotFound, TasksNotFound_projectId, TasksNotFound_userId
 
@@ -11,6 +12,12 @@ from app.task.application.Exeptions import ProjectNotFound, TasksNotFound_projec
 def mock_gateway():
     """Fixture que proporciona un gateway mockeado."""
     return Mock(spec=TaskGateway)
+
+
+@pytest.fixture
+def mock_employee_gateway():
+    """Fixture que proporciona un employee gateway mockeado."""
+    return Mock(spec=OdooEmployeeGateway)
 
 
 @pytest.fixture
@@ -25,7 +32,7 @@ def mock_odoo_connection():
 
 
 @pytest.fixture(autouse=True)
-def setup_dependencies(mock_odoo_connection, mock_gateway):
+def setup_dependencies(mock_odoo_connection, mock_gateway, mock_employee_gateway):
     """Fixture que configura las dependencias para todos los tests."""
     from app.main import app
 
@@ -37,9 +44,14 @@ def setup_dependencies(mock_odoo_connection, mock_gateway):
     def mock_get_gateway():
         return mock_gateway
 
+    # Mock de la dependencia del employee gateway
+    def mock_get_employee_gateway():
+        return mock_employee_gateway
+
     # Aplicar los mocks a las dependencias
     app.dependency_overrides[get_odoo_connection_dependency] = mock_get_odoo_connection
     app.dependency_overrides[get_task_gateway] = mock_get_gateway
+    app.dependency_overrides[get_employee_gateway] = mock_get_employee_gateway
 
     yield
 
@@ -130,13 +142,14 @@ class TestGetTasks:
 
 
 class TestGetTasksByUser:
-    def test_get_user_tasks_success(self, mock_gateway, test_client):
+    def test_get_user_tasks_success(self, mock_gateway, mock_employee_gateway, test_client):
         # Arrange
         mock_tasks = [
             Task(id=1, name="Mi Tarea 1", project_id=20, project_name="Proyecto B"),
             Task(id=2, name="Mi Tarea 2", project_id=30, project_name="Proyecto C"),
         ]
         mock_gateway.all_by_user.return_value = mock_tasks
+        mock_employee_gateway.exists_by_id.return_value = True
 
         # Act
         response = test_client.get("/api/v1/tasks/?user_id=1")
@@ -155,11 +168,14 @@ class TestGetTasksByUser:
         assert data[1]["project_name"] == "Proyecto C"
         # Verificar que se llamó con el user_id del usuario autenticado (mock user_id = 1)
         mock_gateway.all_by_user.assert_called_once_with(1)
+        mock_employee_gateway.exists_by_id.assert_called_once_with(1)
 
-    def test_get_user_tasks_empty(self, mock_gateway, test_client):
+    def test_get_user_tasks_empty(self, mock_gateway, mock_employee_gateway, test_client):
         # Arrange - Simulamos que el use case lanza TasksNotFound_userId
         from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
         from unittest.mock import patch
+        
+        mock_employee_gateway.exists_by_id.return_value = True
         
         with patch.object(ObtenerTareasUseCase, 'execute_by_user', side_effect=TasksNotFound_userId(1)):
             # Act
@@ -169,9 +185,10 @@ class TestGetTasksByUser:
             assert response.status_code == 404
             assert "Tareas del usuario con el id 1 no encontradas" in response.json()["detail"]
 
-    def test_get_user_tasks_server_error(self, mock_gateway, test_client):
+    def test_get_user_tasks_server_error(self, mock_gateway, mock_employee_gateway, test_client):
         # Arrange
         mock_gateway.all_by_user.side_effect = Exception("Error de servidor")
+        mock_employee_gateway.exists_by_id.return_value = True
 
         # Act
         response = test_client.get("/api/v1/tasks/?user_id=1")
@@ -179,6 +196,18 @@ class TestGetTasksByUser:
         # Assert
         assert response.status_code == 500
         assert "Error de servidor" in response.json()["detail"]
+
+    def test_get_user_tasks_user_not_found(self, mock_gateway, mock_employee_gateway, test_client):
+        # Arrange
+        mock_employee_gateway.exists_by_id.return_value = False
+
+        # Act
+        response = test_client.get("/api/v1/tasks/?user_id=999")
+
+        # Assert
+        assert response.status_code == 404
+        assert "El usuario 999 no existe en Odoo" in response.json()["detail"]
+        mock_employee_gateway.exists_by_id.assert_called_once_with(999)
 
     def test_get_user_tasks_invalid_user_id(self, test_client):
         # Act

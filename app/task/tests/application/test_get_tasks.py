@@ -14,10 +14,13 @@ class TestObtenerTareasUseCase:
     @pytest.fixture
     def mock_odoo_task_gateway(self):
         return Mock()
-
+    
     @pytest.fixture
-    def use_case(self, mock_gateway, mock_odoo_task_gateway):
-        return ObtenerTareasUseCase(mock_gateway, mock_odoo_task_gateway)
+    def mock_odoo_employee_gateway(self):
+        return Mock()
+    @pytest.fixture
+    def use_case(self, mock_gateway, mock_odoo_task_gateway, mock_odoo_employee_gateway):
+        return ObtenerTareasUseCase(mock_gateway, mock_odoo_task_gateway, mock_odoo_employee_gateway)
 
     def test_execute_returns_project_tasks(self, use_case, mock_gateway, mock_odoo_task_gateway):
         # Arrange
