@@ -25,6 +25,12 @@ class TokenRepository(ABC):
     @abstractmethod
     def save_refresh_token(self, refresh_token: RefreshToken) -> None: ...
 
+    @abstractmethod
+    def search_refresh_token(self, token: str) -> RefreshToken | None: ...
+
+    @abstractmethod
+    def delete_refresh_token(self, token: str) -> bool: ...
+
 
 class UserRepository(ABC):
     @abstractmethod

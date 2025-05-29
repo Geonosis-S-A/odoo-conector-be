@@ -24,3 +24,11 @@ class UserInactive(Exception):
 
 class PasswordUpdateError(Exception):
     pass
+
+
+class TokenNotFound(Exception):
+    pass
+
+
+class TokenRevoked(Exception):
+    pass

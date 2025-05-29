@@ -84,21 +84,26 @@ class SQLModelTokenRepository(TokenRepository):
         )
         self.db.commit()
 
-    def search_refresh_token(self, token: str) -> RefreshTokenModel:
+    def search_refresh_token(self, token: str) -> RefreshToken | None:
         statement = select(RefreshTokenModel).where(RefreshTokenModel.token == token)
         refresh_token_model = self.db.exec(statement).first()
 
         if not refresh_token_model:
-            raise HTTPException(status_code=404, detail="Refresh token not found")
-        return refresh_token_model
+            return None
+        return RefreshToken(
+            token=refresh_token_model.token,
+            user_id=refresh_token_model.user_id,
+            is_revoked=refresh_token_model.is_revoked,
+        )
 
-    def delete_refresh_token(self, token: str) -> None:
+    def delete_refresh_token(self, token: str) -> bool:
         statement = select(RefreshTokenModel).where(RefreshTokenModel.token == token)
         refresh_token_model = self.db.exec(statement).first()
-
-        if refresh_token_model:
-            self.db.delete(refresh_token_model)
-            self.db.commit()
+        if not refresh_token_model:
+            return False
+        self.db.delete(refresh_token_model)
+        self.db.commit()
+        return True
 
 
 class SQLModelOTPRepository(OTPRepository):
