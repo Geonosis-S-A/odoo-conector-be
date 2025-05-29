@@ -18,5 +18,5 @@ class OdooProjectGateway(ProjectGateway):
             [domain],
             {"fields": ["id", "name"]},
         )
-        print(projects)
+        
         return [Project(id=project["id"], name=project["name"]) for project in projects]
