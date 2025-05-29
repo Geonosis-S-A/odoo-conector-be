@@ -101,3 +101,23 @@ class EmployeeNotExistsError(TimesheetDomainError):
     def __init__(self, employee_id: int):
         message = f"El empleado con ID {employee_id} no existe en el sistema"
         super().__init__(message)
+
+
+class TimesheetIdMismatchError(TimesheetDomainError):
+    """Error cuando el ID en la URL no coincide con el ID en el body."""
+
+    def __init__(self, url_id: int, body_id: int):
+        message = (
+            f"El ID en la URL ({url_id}) no coincide con el ID en el body ({body_id})"
+        )
+        super().__init__(message)
+
+
+class TimesheetEditError(TimesheetDomainError):
+    """Error al editar una línea de timesheet."""
+
+    def __init__(self, timesheet_id: int, details: str = ""):
+        message = f"Error al editar la línea de timesheet con ID {timesheet_id}"
+        if details:
+            message += f": {details}"
+        super().__init__(message)

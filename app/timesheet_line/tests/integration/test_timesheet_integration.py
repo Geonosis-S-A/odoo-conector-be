@@ -193,7 +193,7 @@ def test_edit_timesheet_line_validation(test_client):
     }
     edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
 
-    # Assert
+    # Assert - Verificar error de horas negativas
     assert edit_response.status_code == 400
     assert "Las horas no pueden ser negativas" in edit_response.json()["detail"]
 
@@ -203,12 +203,11 @@ def test_edit_timesheet_line_validation(test_client):
         f"/api/v1/timesheet/{created_id + 1}", json=edit_data
     )
 
-    # Assert
+    # Assert - Verificar error de ID mismatch
     assert edit_response.status_code == 400
-    assert (
-        "El ID en la URL no coincide con el ID en el body"
-        in edit_response.json()["detail"]
-    )
+    error_detail = edit_response.json()["detail"]
+    assert "El ID en la URL" in error_detail
+    assert "no coincide con el ID en el body" in error_detail
 
     # Limpieza
     delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")

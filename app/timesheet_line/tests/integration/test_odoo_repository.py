@@ -125,6 +125,7 @@ class TestOdooTimesheetLineGateway:
         # Verificar que los cambios se aplicaron
         assert created_id is not None
         updated_line = self.gateway.get_by_id(created_id)
+        assert updated_line is not None  # Nueva validación
         assert updated_line.id == created_id
         assert updated_line.hours == 2
         assert updated_line.name == "Test Timesheet Line Updated"
@@ -328,3 +329,11 @@ class TestOdooTimesheetLineGateway:
         for line in lines_filtered:
             assert line.employee_id == 1
             assert date(2024, 1, 14) <= line.date <= date(2024, 1, 16)
+
+    def test_get_by_id_not_found(self):
+        """Test que verifica que get_by_id devuelve None cuando no encuentra el timesheet."""
+        # Act
+        result = self.gateway.get_by_id(99999)  # ID que no existe
+
+        # Assert
+        assert result is None

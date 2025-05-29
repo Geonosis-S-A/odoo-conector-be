@@ -212,20 +212,21 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if timesheet_line.task_id is not None:
             odoo_data["task_id"] = timesheet_line.task_id
 
-        try:
-            self.odoo_client["models"].execute_kw(
-                self.odoo_client["ODOO_DB"],
-                self.odoo_client["uid"],
-                self.odoo_client["ODOO_PASSWORD"],
-                "account.analytic.line",
-                "write",
-                [[timesheet_line.id], odoo_data],
-            )
+        response = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "write",
+            [[timesheet_line.id], odoo_data],
+        )
+
+        if response:
             return True
-        except Exception:
+        else:
             return False
 
-    def get_by_id(self, timesheet_line_id: int) -> DetailedTimesheetLine:
+    def get_by_id(self, timesheet_line_id: int) -> DetailedTimesheetLine | None:
         """Obtiene una línea de hoja de tiempo por su ID.
 
         Args:
@@ -259,5 +260,5 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             ),
         )
         if not odoo_data or len(odoo_data) == 0:
-            raise ValueError("No se encontró la línea de timesheet")
+            return None
         return self._transform_odoo_to_detailed_domain(odoo_data[0])

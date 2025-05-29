@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Dict, Optional
+from typing import List, Dict
 from datetime import date
 
 
@@ -36,6 +36,8 @@ from app.timesheet_line.application.excepctions.exceptions import (
     InvalidDateRangeError,
     InvalidEmployeeIdError,
     EmployeeNotExistsError,
+    TimesheetIdMismatchError,
+    TimesheetEditError,
 )
 
 
@@ -198,36 +200,24 @@ def edit_timesheet(
     try:
         # Asegurar que el ID en la URL coincide con el ID en el body
         if timesheet_id != req.id:
-            raise HTTPException(
-                status_code=400,
-                detail="El ID en la URL no coincide con el ID en el body",
-            )
-
-        # Verificar que la línea existe antes de intentar editarla
-        try:
-            gateway.get_by_id(timesheet_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=400,
-                detail="No se encontró la línea de timesheet",
-            )
+            raise TimesheetIdMismatchError(timesheet_id, req.id)
 
         use_case = EditTimesheetUseCase(gateway)
         success = use_case.execute(req)
-
-        if not success:
-            raise HTTPException(
-                status_code=404,
-                detail="No se pudo actualizar la línea de timesheet",
-            )
-
-        return {"success": True}
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return {"success": success}
+    except TimesheetIdMismatchError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except InvalidHoursError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except TimesheetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetEditError as e:
+        raise HTTPException(status_code=422, detail=e.message)
+    except TimesheetDomainError as e:
+        # Captura cualquier otra excepción del dominio
+        raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error al editar la línea de hoja de tiempo: {str(e)}",
+            detail="Error interno del servidor al editar la línea de timesheet",
         )

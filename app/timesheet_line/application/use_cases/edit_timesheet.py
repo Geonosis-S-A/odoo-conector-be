@@ -1,6 +1,11 @@
 from app.timesheet_line.api.schemas import EditTimesheetRequest
 from app.timesheet_line.domain.models import TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.timesheet_line.application.excepctions.exceptions import (
+    InvalidHoursError,
+    TimesheetNotFoundError,
+    TimesheetEditError,
+)
 
 
 class EditTimesheetUseCase:
@@ -14,20 +19,21 @@ class EditTimesheetUseCase:
             req: Datos de la línea de hoja de tiempo a editar
 
         Returns:
-            bool: True si la edición fue exitosa, False en caso contrario
+            bool: True si la edición fue exitosa
 
         Raises:
-            ValueError: Si las horas son negativas o si no se encuentra la línea
+            InvalidHoursError: Si las horas son negativas
+            TimesheetNotFoundError: Si no se encuentra la línea
+            TimesheetEditError: Si hay un error al actualizar
         """
         # Validación de horas negativas
         if req.hours < 0:
-            raise ValueError("Las horas no pueden ser negativas")
+            raise InvalidHoursError(req.hours)
 
         # Verificar que la línea existe
-        try:
-            self.odoo_gateway.get_by_id(req.id)
-        except ValueError:
-            raise ValueError("No se encontró la línea de timesheet")
+        existing_timesheet = self.odoo_gateway.get_by_id(req.id)
+        if existing_timesheet is None:
+            raise TimesheetNotFoundError(req.id)
 
         # Crear el objeto de dominio
         timesheet_line = TimesheetLine(
@@ -41,4 +47,10 @@ class EditTimesheetUseCase:
         )
 
         # Actualizar en Odoo
-        return self.odoo_gateway.update(timesheet_line)
+        try:
+            success = self.odoo_gateway.update(timesheet_line)
+            if success is None or not success:
+                raise TimesheetEditError(req.id, "La actualización falló")
+            return success
+        except Exception as e:
+            raise TimesheetEditError(req.id, str(e))
