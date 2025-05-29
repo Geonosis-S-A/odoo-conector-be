@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -11,9 +11,22 @@ from app.users.api.routers import router as users_router
 from app.project.api.routers import router as project_router
 from app.task.api.routers import router as task_router
 from app.auth.api.routes import router as auth_router
+import logging
 
 ENV = os.getenv("ENV", "LOCAL")  # Por defecto, local
 API_PREFIX = "/api/v1"
+
+
+# Configuración básica: loguea a consola y a archivo
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(),  # Consola
+    ],
+)
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -39,6 +52,16 @@ app = FastAPI(
     if ENV != "production"
     else None,  # Deshabilitamos ReDoc en producción
 )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Error inesperado: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Ocurrió un error inesperado. Intenta más tarde."},
+    )
+
 
 # Configuración de CORS
 app.add_middleware(
