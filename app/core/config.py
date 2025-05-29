@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 # Cargar variables de entorno desde .env
 load_dotenv()
 
+
 class Settings(BaseSettings):
     EMAIL_USER: str = os.getenv("EMAIL_USER", "")
     EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
@@ -17,8 +18,10 @@ class Settings(BaseSettings):
         case_sensitive = True
         extra = "ignore"  # Ignorar variables extra del .env
 
+
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
 
-settings = get_settings() 
+
+settings = get_settings()

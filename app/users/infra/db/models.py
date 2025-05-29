@@ -1,11 +1,12 @@
 from datetime import datetime, UTC
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import EmailStr
 from sqlalchemy import event
-from typing import TYPE_CHECKING
+
+# Importación condicional para evitar circular imports
 if TYPE_CHECKING:
-    from app.auth.domain.models import OTPModel
+    from app.auth.infra.db.models import OTPModel
 
 
 class UserBaseModel(SQLModel):
@@ -20,12 +21,11 @@ class UserBaseModel(SQLModel):
 class UserModel(UserBaseModel, table=True):
     """User model for database"""
 
-    __tablename__ = "users"  # type: ignore
-
     id: Optional[int] = Field(primary_key=True)
     hashed_password: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # Usamos string para la referencia hacia adelante
     otps: List["OTPModel"] = Relationship(back_populates="user")
 
 

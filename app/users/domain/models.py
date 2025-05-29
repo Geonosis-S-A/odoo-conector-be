@@ -33,6 +33,6 @@ class User:
 
 @dataclass
 class Employee:
-    id: Optional[int]
+    id: int
     email: str
     full_name: str

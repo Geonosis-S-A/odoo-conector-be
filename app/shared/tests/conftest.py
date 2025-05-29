@@ -1,16 +1,12 @@
 import pytest
-from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel, Session
 from app.shared.infra.db.session import create_engine_with_url, get_db
 from app.shared.infra.db.config import settings
-from sqlmodel import SQLModel
 from fastapi.testclient import TestClient
 from app.shared.security.dependencies import get_current_user
 
 # Crear el motor de la base de datos de pruebas
 test_engine = create_engine_with_url(settings.TEST_DATABASE_URL)
-
-# Crear la sesión de base de datos para los tests
-TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -27,15 +23,14 @@ def setup_test_database():
 @pytest.fixture(scope="function")
 def local_db_session():
     """
-    Fixture que proporciona una sesión limpia de la base de datos local (de pruebas)
-    para cada test. Los cambios se revierten al final del test.
+    Fixture que proporciona una sesión limpia de SQLModel para cada test.
+    Los cambios se revierten al final del test.
     """
-    session = TestSessionLocal()
-    try:
-        yield session
-    finally:
-        session.rollback()  # Revertir cambios al final del test
-        session.close()
+    with Session(test_engine) as session:
+        try:
+            yield session
+        finally:
+            session.rollback()  # Revertir cambios al final del test
 
 
 @pytest.fixture(scope="function")

@@ -46,3 +46,41 @@ class OdooEmployeeGateway(EmployeeGateway):
             self._transform_odoo_to_domain(employee) for employee in odoo_employees
         ]
         return parsed_employees
+
+    def get_by_email(self, email: str) -> Employee | None:
+        # Primero buscar los IDs de empleados con el email dado
+        employee_ids = cast(
+            List[int],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",
+                "search",
+                [[["work_email", "=", email]]],
+            ),
+        )
+
+        if not employee_ids:
+            return None
+
+        # Luego leer los datos completos del primer empleado encontrado
+        employee_data = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",
+                "read",
+                [employee_ids[0:1]],  # Solo el primer ID encontrado
+                {
+                    "fields": ["id", "name", "work_email"],
+                },
+            ),
+        )
+
+        if not employee_data:
+            return None
+
+        return self._transform_odoo_to_domain(employee_data[0])

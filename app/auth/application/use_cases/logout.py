@@ -1,8 +1,6 @@
-from app.auth.domain.repositories import TokenRepository, UserCredentialsRepository
 from app.auth.infra.auth_service import TokenService
 from app.auth.infra.db.repositories import (
     SQLModelTokenRepository,
-    SQLModelUserCredentialsRepository,
 )
 
 
