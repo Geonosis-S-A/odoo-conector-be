@@ -33,7 +33,7 @@ class EditTimesheetUseCase:
         # Verificar que la línea existe
         existing_timesheet = self.odoo_gateway.get_by_id(req.id)
         if existing_timesheet is None:
-            raise TimesheetNotFoundError(req.id)
+            raise TimesheetNotFoundError([req.id])
 
         # Crear el objeto de dominio
         timesheet_line = TimesheetLine(

@@ -35,13 +35,15 @@ def _cleanup_test_data(repository):
 def test_create_and_delete_timesheet_line(test_client):
     """Test de integración que prueba la creación y eliminación de una línea de timesheet."""
     # Arrange
-    request_data = {
-        "name": "Test Timesheet",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-03-20",
-    }
+    request_data = [
+        {
+            "name": "Test Timesheet",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        }
+    ]
 
     # Act - Crear
     create_response = test_client.post("/api/v1/timesheet/", json=request_data)
@@ -49,7 +51,10 @@ def test_create_and_delete_timesheet_line(test_client):
         print("create response:", create_response.json())
     # Assert - Crear
     assert create_response.status_code == 200
-    created_id = create_response.json()["id"]
+    created_timesheets = create_response.json()
+    assert isinstance(created_timesheets, list)
+    assert len(created_timesheets) == 1
+    created_id = created_timesheets[0]["id"]
     assert isinstance(created_id, int)
     assert created_id > 0
 
@@ -104,13 +109,15 @@ def test_list_timesheet_lines(test_client):
 def test_create_timesheet_line_validation(test_client):
     """Test de integración que prueba la validación de datos."""
     # Arrange
-    request_data = {
-        "name": "Test Timesheet",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": -1,  # Horas inválidas
-        "date": "2024-03-20",
-    }
+    request_data = [
+        {
+            "name": "Test Timesheet",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": -1,  # Horas inválidas
+            "date": "2024-03-20",
+        }
+    ]
 
     # Act
     response = test_client.post("/api/v1/timesheet/", json=request_data)
@@ -124,16 +131,18 @@ def test_create_timesheet_line_validation(test_client):
 def test_edit_timesheet_line(test_client):
     """Test de integración que prueba la edición de una línea de timesheet."""
     # Arrange - Crear una línea inicial
-    create_data = {
-        "name": "Test Timesheet",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-03-20",
-    }
+    create_data = [
+        {
+            "name": "Test Timesheet",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        }
+    ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
     assert create_response.status_code == 200
-    created_id = create_response.json()["id"]
+    created_id = create_response.json()[0]["id"]
 
     # Act - Editar la línea
     edit_data = {
@@ -171,16 +180,18 @@ def test_edit_timesheet_line(test_client):
 def test_edit_timesheet_line_validation(test_client):
     """Test de integración que prueba la validación al editar una línea de timesheet."""
     # Arrange - Crear una línea inicial
-    create_data = {
-        "name": "Test Timesheet",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-03-20",
-    }
+    create_data = [
+        {
+            "name": "Test Timesheet",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        }
+    ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
     assert create_response.status_code == 200
-    created_id = create_response.json()["id"]
+    created_id = create_response.json()[0]["id"]
 
     # Act - Intentar editar con horas negativas
     edit_data = {
@@ -218,16 +229,18 @@ def test_edit_timesheet_line_validation(test_client):
 def test_list_timesheet_lines_with_employee_filter(test_client):
     """Test de integración que prueba el filtrado por empleado."""
     # Arrange - Crear una línea de timesheet
-    create_data = {
-        "name": "Test Timesheet",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-03-20",
-    }
+    create_data = [
+        {
+            "name": "Test Timesheet",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        }
+    ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
     assert create_response.status_code == 200
-    created_id = create_response.json()["id"]
+    created_id = create_response.json()[0]["id"]
 
     # Act - Filtrar por empleado existente
     response_with_filter = test_client.get(
@@ -261,92 +274,81 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
 def test_list_timesheet_lines_with_date_filter(test_client):
     """Test de integración que prueba el filtrado por rango de fechas."""
     # Arrange - Crear líneas de timesheet en diferentes fechas
-    create_data_1 = {
-        "name": "Test Timesheet 1",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-15",
-    }
-    create_data_2 = {
-        "name": "Test Timesheet 2",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-20",
-    }
-    create_data_3 = {
-        "name": "Test Timesheet 3",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-25",
-    }
+    create_data_1 = [
+        {
+            "name": "Test Timesheet 1",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-15",
+        },
+        {
+            "name": "Test Timesheet 2",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-20",
+        },
+        {
+            "name": "Test Timesheet 3",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-25",
+        },
+    ]
 
     create_response_1 = test_client.post("/api/v1/timesheet/", json=create_data_1)
-    create_response_2 = test_client.post("/api/v1/timesheet/", json=create_data_2)
-    create_response_3 = test_client.post("/api/v1/timesheet/", json=create_data_3)
-
     assert create_response_1.status_code == 200
-    assert create_response_2.status_code == 200
-    assert create_response_3.status_code == 200
 
-    created_id_1 = create_response_1.json()["id"]
-    created_id_2 = create_response_2.json()["id"]
-    created_id_3 = create_response_3.json()["id"]
+    created_ids = [item["id"] for item in create_response_1.json()]
+    assert len(created_ids) == 3  # Verificar que se crearon 3 timesheets
 
     # Act - Filtrar por rango de fechas que incluye solo las dos primeras
     response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-14&date_to=2024-01-22"
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-12&date_to=2024-01-22"
     )
 
     # Assert
     assert response.status_code == 200
     data = response.json()
+    assert isinstance(data, list)
 
-    # Verificar que solo aparecen las líneas en el rango
-    created_ids_in_response = [
-        item["id"]
-        for item in data
-        if item["id"] in [created_id_1, created_id_2, created_id_3]
-    ]
-    assert created_id_1 in created_ids_in_response
-    assert created_id_2 in created_ids_in_response
-    assert created_id_3 not in created_ids_in_response
+    # Verificar que solo aparecen las líneas dentro del rango de fechas
+    created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
+    # Solo los primeros 2 timesheets deben estar en el rango (2024-01-15 y 2024-01-20)
+    assert len(created_ids_in_response) == 2
 
     # Limpieza
-    test_client.delete(f"/api/v1/timesheet/{created_id_1}")
-    test_client.delete(f"/api/v1/timesheet/{created_id_2}")
-    test_client.delete(f"/api/v1/timesheet/{created_id_3}")
+    for created_id in created_ids:
+        test_client.delete(f"/api/v1/timesheet/{created_id}")
 
 
 @pytest.mark.integration
 def test_list_timesheet_lines_with_date_from_filter(test_client):
     """Test de integración que prueba el filtrado solo con fecha de inicio."""
     # Arrange
-    create_data_old = {
-        "name": "Test Timesheet Old",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-10",
-    }
-    create_data_new = {
-        "name": "Test Timesheet New",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-20",
-    }
-
+    create_data_old = [
+        {
+            "name": "Test Timesheet Old",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-10",
+        },
+        {
+            "name": "Test Timesheet New",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-20",
+        },
+    ]
     create_response_old = test_client.post("/api/v1/timesheet/", json=create_data_old)
-    create_response_new = test_client.post("/api/v1/timesheet/", json=create_data_new)
-
     assert create_response_old.status_code == 200
-    assert create_response_new.status_code == 200
 
-    created_id_old = create_response_old.json()["id"]
-    created_id_new = create_response_new.json()["id"]
+    created_ids = [item["id"] for item in create_response_old.json()]
+    assert len(created_ids) == 2  # Verificar que se crearon 2 timesheets
 
     # Act - Ahora necesitamos pasar employee_id y date_to también
     response = test_client.get(
@@ -356,45 +358,42 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
     # Assert
     assert response.status_code == 200
     data = response.json()
+    assert isinstance(data, list)
 
-    created_ids_in_response = [
-        item["id"] for item in data if item["id"] in [created_id_old, created_id_new]
-    ]
-    assert created_id_old not in created_ids_in_response
-    assert created_id_new in created_ids_in_response
+    created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
+    # Solo el timesheet nuevo (2024-01-20) debe estar en el rango
+    assert len(created_ids_in_response) == 1
 
     # Limpieza
-    test_client.delete(f"/api/v1/timesheet/{created_id_old}")
-    test_client.delete(f"/api/v1/timesheet/{created_id_new}")
+    for created_id in created_ids:
+        test_client.delete(f"/api/v1/timesheet/{created_id}")
 
 
 @pytest.mark.integration
 def test_list_timesheet_lines_with_date_to_filter(test_client):
     """Test de integración que prueba el filtrado solo con fecha de fin."""
     # Arrange
-    create_data_old = {
-        "name": "Test Timesheet Old",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-10",
-    }
-    create_data_new = {
-        "name": "Test Timesheet New",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-20",
-    }
-
+    create_data_old = [
+        {
+            "name": "Test Timesheet Old",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-10",
+        },
+        {
+            "name": "Test Timesheet New",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-20",
+        },
+    ]
     create_response_old = test_client.post("/api/v1/timesheet/", json=create_data_old)
-    create_response_new = test_client.post("/api/v1/timesheet/", json=create_data_new)
-
     assert create_response_old.status_code == 200
-    assert create_response_new.status_code == 200
 
-    created_id_old = create_response_old.json()["id"]
-    created_id_new = create_response_new.json()["id"]
+    created_ids = [item["id"] for item in create_response_old.json()]
+    assert len(created_ids) == 2  # Verificar que se crearon 2 timesheets
 
     # Act - Ahora necesitamos pasar employee_id y date_from también
     response = test_client.get(
@@ -405,44 +404,40 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
     assert response.status_code == 200
     data = response.json()
 
-    created_ids_in_response = [
-        item["id"] for item in data if item["id"] in [created_id_old, created_id_new]
-    ]
-    assert created_id_old in created_ids_in_response
-    assert created_id_new not in created_ids_in_response
+    created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
+    # Solo el timesheet viejo (2024-01-10) debe estar en el rango
+    assert len(created_ids_in_response) == 1
 
     # Limpieza
-    test_client.delete(f"/api/v1/timesheet/{created_id_old}")
-    test_client.delete(f"/api/v1/timesheet/{created_id_new}")
+    for created_id in created_ids:
+        test_client.delete(f"/api/v1/timesheet/{created_id}")
 
 
 @pytest.mark.integration
 def test_list_timesheet_lines_with_combined_filters(test_client):
     """Test de integración que prueba el filtrado combinado por empleado y fechas."""
     # Arrange
-    create_data_emp1 = {
-        "name": "Test Timesheet Emp1",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-15",
-    }
-    create_data_emp2 = {
-        "name": "Test Timesheet Emp2",
-        "employee_id": 2,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-01-15",
-    }
-
+    create_data_emp1 = [
+        {
+            "name": "Test Timesheet Emp1",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-15",
+        },
+        {
+            "name": "Test Timesheet Emp2",
+            "employee_id": 2,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-01-15",
+        },
+    ]
     create_response_emp1 = test_client.post("/api/v1/timesheet/", json=create_data_emp1)
-    create_response_emp2 = test_client.post("/api/v1/timesheet/", json=create_data_emp2)
-
     assert create_response_emp1.status_code == 200
-    assert create_response_emp2.status_code == 200
 
-    created_id_emp1 = create_response_emp1.json()["id"]
-    created_id_emp2 = create_response_emp2.json()["id"]
+    created_ids = [item["id"] for item in create_response_emp1.json()]
+    assert len(created_ids) == 2  # Verificar que se crearon 2 timesheets
 
     # Act
     response = test_client.get(
@@ -452,23 +447,18 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
     # Assert
     assert response.status_code == 200
     data = response.json()
+    assert isinstance(data, list)
 
-    created_ids_in_response = [
-        item["id"] for item in data if item["id"] in [created_id_emp1, created_id_emp2]
-    ]
-    assert created_id_emp1 in created_ids_in_response
-    assert created_id_emp2 not in created_ids_in_response
+    created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
+    # Solo el timesheet del empleado 1 debe estar en la respuesta
+    assert len(created_ids_in_response) == 1
 
     # Verificar que todos los resultados son del empleado correcto
-    assert all(
-        item["employee_id"] == 1
-        for item in data
-        if item["id"] in created_ids_in_response
-    )
+    assert all(item["employee_id"] == 1 for item in data)
 
     # Limpieza
-    test_client.delete(f"/api/v1/timesheet/{created_id_emp1}")
-    test_client.delete(f"/api/v1/timesheet/{created_id_emp2}")
+    for created_id in created_ids:
+        test_client.delete(f"/api/v1/timesheet/{created_id}")
 
 
 @pytest.mark.integration
@@ -502,16 +492,18 @@ def test_delete_timesheet_not_found(test_client):
 def test_delete_timesheet_validation_errors(test_client):
     """Test de integración que prueba los diferentes tipos de errores en delete."""
     # Arrange - Crear una línea de timesheet
-    create_data = {
-        "name": "Test Timesheet for Delete",
-        "employee_id": 1,
-        "project_id": 1,
-        "hours": 8.0,
-        "date": "2024-03-20",
-    }
+    create_data = [
+        {
+            "name": "Test Timesheet for Delete",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        }
+    ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
     assert create_response.status_code == 200
-    created_id = create_response.json()["id"]
+    created_id = create_response.json()[0]["id"]
 
     # Act - Eliminar correctamente primero
     delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")

@@ -6,7 +6,7 @@ from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLin
 
 class TimesheetLineGateway(ABC):
     @abstractmethod
-    def create(self, timesheet_line: TimesheetLine) -> int | None: ...
+    def create(self, timesheet_lines: list[TimesheetLine]) -> list[int] | None: ...
 
     @abstractmethod
     def all(
@@ -24,3 +24,8 @@ class TimesheetLineGateway(ABC):
 
     @abstractmethod
     def get_by_id(self, timesheet_line_id: int) -> DetailedTimesheetLine | None: ...
+
+    @abstractmethod
+    def get_by_ids(
+        self, timesheet_line_ids: list[int]
+    ) -> list[DetailedTimesheetLine]: ...

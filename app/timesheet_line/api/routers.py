@@ -65,26 +65,26 @@ def get_employee_gateway(
         )
 
 
-@router.post("/", response_model=Dict[str, int])
+@router.post("/", response_model=list[DetailedTimesheetLineResponse])
 async def create_timesheet_line(
-    request: CargarHorasRequest,
+    request: list[CargarHorasRequest],
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Crea una nueva línea de timesheet.
+    Crea nuevas líneas de timesheet.
 
     Args:
-        request: Datos de la línea de timesheet a crear
+        request: Lista de datos de las líneas de timesheet a crear
         gateway: Gateway de timesheet (inyectado)
 
     Returns:
-        Dict[str, int]: Diccionario con el ID de la línea de timesheet creada
+        list[DetailedTimesheetLineResponse]: Lista de líneas de timesheet creadas con detalles
     """
     try:
         use_case = CargarHorasUseCase(gateway)
-        line = use_case.execute(request)
-        return {"id": line.id}
+        lines = use_case.execute(request)
+        return lines
     except InvalidHoursError as e:
         raise HTTPException(status_code=400, detail=e.message)
     except TimesheetNotFoundError as e:

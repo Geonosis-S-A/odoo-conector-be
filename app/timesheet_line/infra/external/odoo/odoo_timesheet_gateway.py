@@ -79,36 +79,46 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             create_date=odoo_data.get("create_date", None),
         )
 
-    def create(self, timesheet_line: TimesheetLine) -> int | None:
-        """Crea una nueva línea de hoja de tiempo en Odoo.
+    def create(self, timesheet_lines: list[TimesheetLine]) -> list[int] | None:
+        """Crea múltiples líneas de hoja de tiempo en Odoo usando batch create.
 
         Args:
-            timesheet_line: La línea de hoja de tiempo a crear
+            timesheet_lines: Lista de líneas de hoja de tiempo a crear
+
+        Returns:
+            list[int]: Lista de IDs de las líneas creadas
         """
-        odoo_data = {
-            "name": timesheet_line.name,
-            "date": timesheet_line.date.isoformat(),
-            "unit_amount": timesheet_line.hours,
-            "employee_id": timesheet_line.employee_id,
-            "project_id": timesheet_line.project_id,
-        }
+        # Preparar todos los datos para el batch create
+        timesheet_entries = []
 
-        # Solo agregamos task_id si no es None
-        if timesheet_line.task_id is not None:
-            odoo_data["task_id"] = timesheet_line.task_id
+        for timesheet_line in timesheet_lines:
+            odoo_data = {
+                "name": timesheet_line.name,
+                "date": timesheet_line.date.isoformat(),
+                "unit_amount": timesheet_line.hours,
+                "employee_id": timesheet_line.employee_id,
+                "project_id": timesheet_line.project_id,
+            }
 
-        odoo_timesheet: int = cast(
-            int,
+            # Solo agregamos task_id si no es None
+            if timesheet_line.task_id is not None:
+                odoo_data["task_id"] = timesheet_line.task_id
+
+            timesheet_entries.append(odoo_data)
+
+        # Batch create: todo en una sola llamada
+        odoo_timesheet_ids: list[int] = cast(
+            list[int],
             self.odoo_client["models"].execute_kw(
                 self.odoo_client["ODOO_DB"],
                 self.odoo_client["uid"],
                 self.odoo_client["ODOO_PASSWORD"],
                 "account.analytic.line",  # Modelo de las líneas de hojas de tiempo
-                "create",  # Método para crear un nuevo registro
-                [odoo_data],
+                "create",  # Método para crear registros
+                [timesheet_entries],  # Lista de datos para crear en batch
             ),
         )
-        return odoo_timesheet
+        return odoo_timesheet_ids
 
     def all(
         self,
@@ -263,3 +273,48 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if not odoo_data or len(odoo_data) == 0:
             return None
         return self._transform_odoo_to_detailed_domain(odoo_data[0])
+
+    def get_by_ids(self, timesheet_line_ids: list[int]) -> list[DetailedTimesheetLine]:
+        """Obtiene múltiples líneas de hoja de tiempo por sus IDs.
+
+        Args:
+            timesheet_line_ids: Lista de IDs de las líneas de hoja de tiempo a obtener
+
+        Returns:
+            list[DetailedTimesheetLine]: Lista de líneas de hoja de tiempo con detalles
+        """
+        if not timesheet_line_ids:
+            return []
+
+        odoo_data = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "account.analytic.line",
+                "read",
+                [timesheet_line_ids],  # Lista de IDs para buscar
+                {
+                    "fields": [
+                        "id",
+                        "name",
+                        "date",
+                        "unit_amount",
+                        "employee_id",
+                        "project_id",
+                        "task_id",
+                        "create_date",
+                    ],
+                },
+            ),
+        )
+
+        if not odoo_data:
+            return []
+
+        # Transformar todos los datos de Odoo al modelo de dominio
+        return [
+            self._transform_odoo_to_detailed_domain(line_data)
+            for line_data in odoo_data
+        ]
