@@ -101,8 +101,14 @@ async def login(
     login_use_case = LoginUseCase(
         auth_service, user_credentials_repository, token_repository
     )
-
-    tokens = login_use_case.execute(login_data.email, login_data.password)
+    try:
+        tokens = login_use_case.execute(login_data.email, login_data.password)
+    except UserNotFound as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except PasswordNotMatch as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except UserInactive as e:
+        raise HTTPException(status_code=401, detail=str(e))
     response.set_cookie(
         key="refresh_token",
         value=tokens.refresh_token,
@@ -129,6 +135,7 @@ async def login(
 def register_user(user: CreateUserRequest, db: Session = Depends(get_db)):
     user_repository = SQLModelUserRepository(db)
     register_user_case = RegisterUseCase(user_repository)
+    # Todo manejar excepciones acá. El endpoint eesta en desuso por ahora
     registered_user = register_user_case.execute(user.email, user.password)
     return RegisterResponse(
         id=registered_user.id,
