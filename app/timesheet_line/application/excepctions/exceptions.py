@@ -20,8 +20,8 @@ class InvalidHoursError(TimesheetDomainError):
 class TimesheetNotFoundError(TimesheetDomainError):
     """Error cuando no se encuentra una línea de timesheet."""
 
-    def __init__(self, timesheet_id: int):
-        message = f"No se encontró la línea de timesheet con ID: {timesheet_id}"
+    def __init__(self, timesheet_ids: list[int]):
+        message = f"No se encontraron las líneas de timesheet con IDs: {timesheet_ids}"
         super().__init__(message)
 
 

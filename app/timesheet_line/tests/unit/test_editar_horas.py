@@ -98,7 +98,7 @@ class TestEditTimesheetUseCase:
         # Act & Assert
         with pytest.raises(
             TimesheetNotFoundError,
-            match="No se encontró la línea de timesheet con ID: 999",
+            match="No se encontraron las líneas de timesheet con IDs: \\[999\\]",
         ):
             use_case.execute(request)
 
