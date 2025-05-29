@@ -1,3 +1,4 @@
+from sqlmodel import select
 from app.users.domain.models import User
 from app.users.domain.repositories import UserRepository
 from app.users.infra.db.models import UserModel
@@ -24,9 +25,8 @@ class SQLModelUserRepository(UserRepository):
         self.db.commit()
 
     def set_password(self, user_email: str, password: str) -> User:
-        user_model = (
-            self.db.query(UserModel).filter(UserModel.email == user_email).first()
-        )
+        statement = select(UserModel).where(UserModel.email == user_email)
+        user_model = self.db.exec(statement).first()
         if user_model is None:
             raise ValueError("User not found")
         user_model.hashed_password = password
@@ -42,7 +42,8 @@ class SQLModelUserRepository(UserRepository):
         )
 
     def all(self) -> list[User]:
-        users = self.db.query(UserModel).all()
+        statement = select(UserModel)
+        users = self.db.exec(statement).all()
         return [
             User(
                 id=user.id,
@@ -68,7 +69,8 @@ class SQLModelUserRepository(UserRepository):
         self.db.refresh(user_model)
 
     def get_by_email(self, email: str) -> User | None:
-        user_model = self.db.query(UserModel).filter(UserModel.email == email).first()
+        statement = select(UserModel).where(UserModel.email == email)
+        user_model = self.db.exec(statement).first()
         if user_model is None:
             return None
         return User(
@@ -80,7 +82,8 @@ class SQLModelUserRepository(UserRepository):
         )
 
     def update_password(self, user_id: int, new_hashed_password: str) -> bool:
-        user_model = self.db.query(UserModel).filter(UserModel.id == user_id).first()
+        statement = select(UserModel).where(UserModel.id == user_id)
+        user_model = self.db.exec(statement).first()
         if user_model is None:
             return False
         user_model.hashed_password = new_hashed_password
