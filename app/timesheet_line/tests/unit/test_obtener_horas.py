@@ -75,10 +75,10 @@ class TestListTimesheetLinesUseCase:
         mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
         assert result == sample_timesheet_lines
 
-    def test_execute_returns_empty_list_raises_error(
+    def test_execute_returns_empty_list_when_no_results(
         self, use_case, mock_gateway, mock_employee_gateway
     ):
-        """Test que verifica que se lanza TimesheetListError cuando no hay resultados."""
+        """Test que verifica que se devuelve una lista vacía cuando no hay resultados."""
         # Arrange
         employee_id = 1
         date_from = date(2024, 1, 14)
@@ -87,10 +87,13 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.return_value = True
         mock_gateway.all.return_value = []  # Sin resultados
 
-        # Act & Assert
-        with pytest.raises(TimesheetListError):
-            use_case.execute(employee_id, date_from, date_to)
+        # Act
+        result = use_case.execute(employee_id, date_from, date_to)
 
+        # Assert
+        assert result == []
+        assert isinstance(result, list)
+        assert len(result) == 0
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
 
