@@ -4,9 +4,6 @@ from fastapi import FastAPI
 from app.users.api.routers import router
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
-from app.users.infra.db.repositories import SQLModelUserRepository
-from app.shared.infra.db.session import SessionLocal
-from app.users.infra.db.models import UserModel
 
 
 app = FastAPI()
@@ -21,20 +18,9 @@ def setup_repositories():
     odoo_client = get_odoo_connection()
     employee_gateway = OdooEmployeeGateway(odoo_client)
 
-    # Configurar Base de datos
-    db = SessionLocal()
-    user_repository = SQLModelUserRepository(db)
-
     yield {
         "employee_gateway": employee_gateway,
-        "user_repository": user_repository,
-        "db": db,
     }
-
-    # Limpieza después de cada test
-    db.query(UserModel).delete()
-    db.commit()
-    db.close()
 
 
 @pytest.mark.integration

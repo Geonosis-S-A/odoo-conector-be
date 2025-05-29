@@ -151,7 +151,9 @@ def test_change_password_success(client_with_user_1, local_db_session):
 
 
 @pytest.mark.integration
-def test_change_password_incorrect_current_password(client_with_user_2, local_db_session):
+def test_change_password_incorrect_current_password(
+    client_with_user_2, local_db_session
+):
     """Test de integración: cambio de contraseña con contraseña actual incorrecta."""
     # Arrange: Crear usuario de prueba
     current_password = "old_password123"
@@ -177,7 +179,7 @@ def test_change_password_incorrect_current_password(client_with_user_2, local_db
     response = client_with_user_2.put("/auth/change-password", json=data)
 
     # Assert
-    assert response.status_code == 401
+    assert response.status_code == 400
     json_data = response.json()
     assert "Contraseña actual incorrecta" in json_data["detail"]
 
@@ -261,4 +263,4 @@ def test_change_password_inactive_user(client_with_user_4, local_db_session):
     # Assert
     assert response.status_code == 401
     json_data = response.json()
-    assert "Usuario inactivo" in json_data["detail"] 
+    assert "Usuario inactivo" in json_data["detail"]

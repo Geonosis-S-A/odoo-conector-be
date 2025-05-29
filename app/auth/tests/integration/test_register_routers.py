@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from app.auth.api.routes import router
 from app.shared.infra.db.session import get_db
 from app.users.infra.db.models import UserModel
-from app.users.infra.db.repositories import SQLModelUserRepository
 
 # Crear una aplicación de FastAPI para pruebas
 app = FastAPI()
@@ -63,7 +62,7 @@ def test_register_user(client, local_db_session):
     json_data = response.json()
     assert "id" in json_data, "El ID del usuario no está en la respuesta"
     assert json_data["email"] == new_user_data["email"], "El email no coincide"
-    assert json_data["is_active"] == True, "El usuario no está activo"
+    assert json_data["is_active"], "El usuario no está activo"
 
     # Verificar que el usuario se guardó en la base de datos
     saved_user = (

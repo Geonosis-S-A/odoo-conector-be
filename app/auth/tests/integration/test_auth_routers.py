@@ -82,7 +82,7 @@ def test_login_invalid_user(client):
     data = {"email": "noexiste@example.com", "password": "password123"}
     response = client.post("/auth/login", json=data)
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid credentials"
+    assert response.json()["detail"] == "User not found"
 
 
 @pytest.mark.integration

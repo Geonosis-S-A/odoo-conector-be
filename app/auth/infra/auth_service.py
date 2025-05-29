@@ -1,8 +1,13 @@
 from jose import jwt, JWTError
 from typing import Literal, Optional
 from sqlalchemy import true
+from app.auth.application.use_cases.exceptions.exceptions import (
+    TokenNotFound,
+    TokenRevoked,
+    UserNotFound,
+)
 from app.auth.domain.models import TokenData
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 from fastapi import HTTPException, status, Response
@@ -54,9 +59,9 @@ class TokenService:
             "roles": token_data.roles,
         }
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(
+            expire = datetime.now(timezone.utc) + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
 
@@ -74,7 +79,9 @@ class TokenService:
             "roles": token_data.roles,
         }
 
-        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(
             to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
@@ -100,42 +107,31 @@ class TokenService:
         token_repository: SQLModelTokenRepository,
         user_repository: SQLModelUserCredentialsRepository,
     ) -> str:
-        try:
-            # Verificar token de la cookie contra BD
-            refresh_token_db = token_repository.search_refresh_token(refresh_token)
-            # Si la refresh token esta vencida, tira unauthorized
-            if refresh_token_db.is_revoked:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Could not validate credentials",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+        # Verificar token de la cookie contra BD
+        refresh_token_db = token_repository.search_refresh_token(refresh_token)
+        if not refresh_token_db:
+            raise TokenNotFound("Invalid refresh token")
+        # Si la refresh token esta vencida, tira unauthorized
+        if refresh_token_db.is_revoked:
+            raise TokenRevoked("Token revoked")
 
-            # Se decodea el el token para ver si es valido
-            payload = self.verify_token(refresh_token)
-            token_data = TokenData(
-                user_id=payload["user_id"],
-                user_email=payload["user_email"],
-                user_name=payload["user_name"],
-                roles=payload["roles"],
-            )
-            # Con el payload, se verifica que el usuario siga existiendo en base de datos
-            user = user_repository.get_user_credentials(token_data.user_email)
-            if not user:
-                raise HTTPException(status_code=401, detail="User not found")
+        # Se decodea el el token para ver si es valido
+        payload = self.verify_token(refresh_token)
+        token_data = TokenData(
+            user_id=payload["user_id"],
+            user_email=payload["user_email"],
+            user_name=payload["user_name"],
+            roles=payload["roles"],
+        )
+        # Con el payload, se verifica que el usuario siga existiendo en base de datos
+        user = user_repository.get_user_credentials(token_data.user_email)
+        if not user:
+            raise UserNotFound("User not found")
 
-            # Se crea el nuevo access token
-            access_token = self.create_access_token(token_data)
+        # Se crea el nuevo access token
+        access_token = self.create_access_token(token_data)
 
-            return access_token
-        except Exception as e:
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
-
-    def verify_password(self, hashed_password: str, plain_password: str) -> bool:
-        return pwd_context.verify(plain_password, hashed_password)
-
-    def hash_password(self, password: str) -> str:
-        return pwd_context.hash(password)
+        return access_token
 
     def logout(
         self,
@@ -143,15 +139,12 @@ class TokenService:
         token_repository: SQLModelTokenRepository,
         refresh_token: str,
     ) -> None:
-        token_repository.delete_refresh_token(refresh_token)
+        success = token_repository.delete_refresh_token(refresh_token)
+        if not success:
+            raise TokenNotFound("Invalid refresh token")
         response.delete_cookie(
             key=settings.COOKIE_NAME,
             httponly=settings.COOKIE_HTTPONLY,
             secure=settings.COOKIE_SECURE,
             samesite=settings.COOKIE_SAMESITE,
         )
-
-    def is_active(self, user_state: bool):
-        if user_state:
-            return true
-        return False

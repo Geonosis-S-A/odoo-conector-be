@@ -9,6 +9,9 @@ class EmployeeGateway(ABC):
 
     @abstractmethod
     def exists_by_id(self, id: int) -> bool: ...
+    @abstractmethod
+    def get_by_email(self, email: str) -> Employee | None: ...
+
 
 
 class UserRepository(ABC):
@@ -20,3 +23,12 @@ class UserRepository(ABC):
 
     @abstractmethod
     def set_password(self, user_email: str, password: str) -> User: ...
+
+    @abstractmethod
+    def save(self, user: User) -> None: ...
+
+    @abstractmethod
+    def get_by_email(self, email: str) -> User | None: ...
+
+    @abstractmethod
+    def update_password(self, user_id: int, new_hashed_password: str) -> bool: ...
