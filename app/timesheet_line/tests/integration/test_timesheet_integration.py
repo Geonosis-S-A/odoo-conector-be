@@ -483,7 +483,7 @@ def test_delete_timesheet_not_found(test_client):
     # Assert
     assert delete_response.status_code == 404
     assert (
-        "No se encontró la línea de timesheet con ID: 99999"
+        "No se encontraron las líneas de timesheet con IDs: 99999"
         in delete_response.json()["detail"]
     )
 
@@ -515,6 +515,6 @@ def test_delete_timesheet_validation_errors(test_client):
     # Assert
     assert delete_response_again.status_code == 404
     assert (
-        f"No se encontró la línea de timesheet con ID: {created_id}"
+        f"No se encontraron las líneas de timesheet con IDs: {created_id}"
         in delete_response_again.json()["detail"]
     )
