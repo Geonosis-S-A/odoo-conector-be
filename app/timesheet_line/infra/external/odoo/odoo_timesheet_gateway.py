@@ -174,11 +174,11 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         ]
         return parsed_lines
 
-    def delete(self, timesheet_line_id: int) -> bool:
-        """Elimina una línea de hoja de tiempo de Odoo.
+    def delete(self, timesheet_lines_ids: list[int]) -> bool:
+        """Elimina líneas de hoja de tiempo de Odoo.
 
         Args:
-            timesheet_line_id: ID de la línea de hoja de tiempo a eliminar
+            timesheet_lines_ids: Lista de IDs de las líneas de hoja de tiempo a eliminar
 
         Returns:
             bool: True si la eliminación fue exitosa, False en caso contrario
@@ -190,7 +190,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             self.odoo_client["ODOO_PASSWORD"],
             "account.analytic.line",
             "unlink",  # Método de Odoo para eliminar registros
-            [[timesheet_line_id]],
+            [timesheet_lines_ids],  # Corregido: un solo nivel de array
         )
         if response:
             return True
