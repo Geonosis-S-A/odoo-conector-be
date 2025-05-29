@@ -1,14 +1,19 @@
 import pytest
 from unittest.mock import Mock
-from fastapi import HTTPException
 from app.auth.application.use_cases.change_password import ChangePasswordUseCase
+from app.auth.application.use_cases.exceptions.exceptions import (
+    UserNotFound,
+    UserInactive,
+    PasswordNotMatch,
+    PasswordUpdateError,
+)
 from app.auth.domain.models import UserCredentials
 
 
 class TestChangePasswordUseCase:
     @pytest.fixture
-    def mock_auth_service(self):
-        """Fixture que proporciona un servicio de autenticación mockeado."""
+    def mock_password_service(self):
+        """Fixture que proporciona un servicio de contraseñas mockeado."""
         return Mock()
 
     @pytest.fixture
@@ -17,12 +22,12 @@ class TestChangePasswordUseCase:
         return Mock()
 
     @pytest.fixture
-    def use_case(self, mock_auth_service, mock_user_repository):
+    def use_case(self, mock_password_service, mock_user_repository):
         """Fixture que proporciona el caso de uso con dependencias mockeadas."""
-        return ChangePasswordUseCase(mock_auth_service, mock_user_repository)
+        return ChangePasswordUseCase(mock_password_service, mock_user_repository)
 
     def test_change_password_success(
-        self, use_case, mock_auth_service, mock_user_repository
+        self, use_case, mock_password_service, mock_user_repository
     ):
         """Test que verifica el cambio exitoso de contraseña."""
         # Arrange
@@ -40,12 +45,11 @@ class TestChangePasswordUseCase:
         )
 
         mock_user_repository.get_user_by_id.return_value = mock_user_credentials
-        mock_auth_service.is_active.return_value = True
-        mock_auth_service.verify_password.side_effect = [
-            True,
-            False,
-        ]  # current correct, new different
-        mock_auth_service.hash_password.return_value = "hashed_new_password"
+        mock_password_service.verify_password.side_effect = [
+            True,  # current password is correct
+            False,  # new password is different from current
+        ]
+        mock_password_service.hash_password.return_value = "hashed_new_password"
         mock_user_repository.update_password.return_value = True
 
         # Act
@@ -54,10 +58,10 @@ class TestChangePasswordUseCase:
         # Assert
         assert result is True
         mock_user_repository.get_user_by_id.assert_called_once_with(user_id)
-        mock_auth_service.verify_password.assert_any_call(
+        mock_password_service.verify_password.assert_any_call(
             current_password, "hashed_old_password"
         )
-        mock_auth_service.hash_password.assert_called_once_with(new_password)
+        mock_password_service.hash_password.assert_called_once_with(new_password)
         mock_user_repository.update_password.assert_called_once_with(
             user_id, "hashed_new_password"
         )
@@ -69,19 +73,16 @@ class TestChangePasswordUseCase:
         current_password = "old_password"
         new_password = "new_password"
 
-        mock_user_repository.get_user_by_id.side_effect = HTTPException(
-            status_code=404, detail="User not found"
-        )
+        mock_user_repository.get_user_by_id.return_value = None
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(UserNotFound) as exc_info:
             use_case.execute(user_id, current_password, new_password)
 
-        assert exc_info.value.status_code == 404
-        assert "Usuario no encontrado" in str(exc_info.value.detail)
+        assert "Usuario no encontrado" in str(exc_info.value)
 
     def test_change_password_user_inactive(
-        self, use_case, mock_auth_service, mock_user_repository
+        self, use_case, mock_password_service, mock_user_repository
     ):
         """Test que verifica el error cuando el usuario está inactivo."""
         # Arrange
@@ -99,17 +100,15 @@ class TestChangePasswordUseCase:
         )
 
         mock_user_repository.get_user_by_id.return_value = mock_user_credentials
-        mock_auth_service.is_active.return_value = False
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(UserInactive) as exc_info:
             use_case.execute(user_id, current_password, new_password)
 
-        assert exc_info.value.status_code == 401
-        assert "Usuario inactivo" in str(exc_info.value.detail)
+        assert "Usuario inactivo" in str(exc_info.value)
 
     def test_change_password_incorrect_current_password(
-        self, use_case, mock_auth_service, mock_user_repository
+        self, use_case, mock_password_service, mock_user_repository
     ):
         """Test que verifica el error cuando la contraseña actual es incorrecta."""
         # Arrange
@@ -127,18 +126,18 @@ class TestChangePasswordUseCase:
         )
 
         mock_user_repository.get_user_by_id.return_value = mock_user_credentials
-        mock_auth_service.is_active.return_value = True
-        mock_auth_service.verify_password.return_value = False  # Contraseña incorrecta
+        mock_password_service.verify_password.return_value = (
+            False  # Contraseña incorrecta
+        )
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(PasswordNotMatch) as exc_info:
             use_case.execute(user_id, current_password, new_password)
 
-        assert exc_info.value.status_code == 401
-        assert "Contraseña actual incorrecta" in str(exc_info.value.detail)
+        assert "Contraseña actual incorrecta" in str(exc_info.value)
 
     def test_change_password_same_as_current(
-        self, use_case, mock_auth_service, mock_user_repository
+        self, use_case, mock_password_service, mock_user_repository
     ):
         """Test que verifica el error cuando la nueva contraseña es igual a la actual."""
         # Arrange
@@ -156,22 +155,21 @@ class TestChangePasswordUseCase:
         )
 
         mock_user_repository.get_user_by_id.return_value = mock_user_credentials
-        mock_auth_service.is_active.return_value = True
-        mock_auth_service.verify_password.return_value = (
-            True  # Ambas contraseñas son iguales
-        )
+        mock_password_service.verify_password.side_effect = [
+            True,  # current password is correct
+            True,  # new password is the same as current (both verify with the same hash)
+        ]
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(PasswordNotMatch) as exc_info:
             use_case.execute(user_id, current_password, new_password)
 
-        assert exc_info.value.status_code == 400
         assert "La nueva contraseña debe ser diferente a la actual" in str(
-            exc_info.value.detail
+            exc_info.value
         )
 
     def test_change_password_update_fails(
-        self, use_case, mock_auth_service, mock_user_repository
+        self, use_case, mock_password_service, mock_user_repository
     ):
         """Test que verifica el error cuando falla la actualización en la base de datos."""
         # Arrange
@@ -189,19 +187,17 @@ class TestChangePasswordUseCase:
         )
 
         mock_user_repository.get_user_by_id.return_value = mock_user_credentials
-        mock_auth_service.is_active.return_value = True
-        mock_auth_service.verify_password.side_effect = [
-            True,
-            False,
-        ]  # current correct, new different
-        mock_auth_service.hash_password.return_value = "hashed_new_password"
+        mock_password_service.verify_password.side_effect = [
+            True,  # current password is correct
+            False,  # new password is different from current
+        ]
+        mock_password_service.hash_password.return_value = "hashed_new_password"
         mock_user_repository.update_password.return_value = (
             False  # Falla la actualización
         )
 
         # Act & Assert
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(PasswordUpdateError) as exc_info:
             use_case.execute(user_id, current_password, new_password)
 
-        assert exc_info.value.status_code == 500
-        assert "Error al actualizar la contraseña" in str(exc_info.value.detail)
+        assert "Error al actualizar la contraseña" in str(exc_info.value)

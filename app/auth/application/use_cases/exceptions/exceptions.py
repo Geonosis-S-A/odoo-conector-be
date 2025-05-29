@@ -16,3 +16,11 @@ class OTPNotFound(Exception):
 
 class PasswordNotMatch(Exception):
     pass
+
+
+class UserInactive(Exception):
+    pass
+
+
+class PasswordUpdateError(Exception):
+    pass

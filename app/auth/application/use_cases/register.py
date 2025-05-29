@@ -9,5 +9,6 @@ class RegisterUseCase:
         self.password_service = BcryptPasswordService()
 
     def execute(self, user_email: str, password: str) -> User:
+        """En desuso"""
         hashed_password = self.password_service.hash_password(password)
         return self.user_repository.set_password(user_email, hashed_password)

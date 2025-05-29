@@ -20,7 +20,9 @@ from app.auth.application.use_cases.exceptions.exceptions import (
     EmployeeNotFound,
     OTPNotFound,
     PasswordNotMatch,
+    PasswordUpdateError,
     UserAlreadyExists,
+    UserInactive,
     UserNotFound,
 )
 from app.auth.application.use_cases.login import LoginUseCase
@@ -188,12 +190,14 @@ async def change_password(
             user_id, request.current_password, request.new_password
         )
         return ChangePasswordResponse(message="Contraseña cambiada exitosamente")
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error al cambiar la contraseña: {str(e)}"
-        )
+    except UserNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except UserInactive as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except PasswordNotMatch as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except PasswordUpdateError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/password-recovery/request")

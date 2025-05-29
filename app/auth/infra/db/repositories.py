@@ -20,13 +20,12 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
     def __init__(self, db: Session):
         self.db = db
 
-    def get_user_credentials(self, email: str) -> UserCredentials:
+    def get_user_credentials(self, email: str) -> UserCredentials | None:
         statement = select(UserModelDB).where(UserModelDB.email == email)
         user_model = self.db.exec(statement).first()
 
-        print(user_model)
         if not user_model or user_model.id is None:
-            raise HTTPException(status_code=401, detail="Invalid credentials")
+            return None
 
         # Convertir UserModel a UserCredentials
         return UserCredentials(
@@ -38,12 +37,12 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
             is_active=user_model.is_active,
         )
 
-    def get_user_by_id(self, user_id: int) -> UserCredentials:
+    def get_user_by_id(self, user_id: int) -> UserCredentials | None:
         statement = select(UserModelDB).where(UserModelDB.id == user_id)
         user_model = self.db.exec(statement).first()
 
         if not user_model or user_model.id is None:
-            raise HTTPException(status_code=404, detail="User not found")
+            return None
 
         # Convertir UserModel a UserCredentials
         return UserCredentials(
