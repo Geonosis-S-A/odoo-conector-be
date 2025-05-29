@@ -7,7 +7,7 @@ from app.users.infra.db.models import UserModel
 from app.auth.infra.db.models import RefreshTokenModel
 from passlib.context import CryptContext
 from jose import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from app.auth.infra.auth_service import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -34,7 +34,8 @@ def create_refresh_token_for_user(user_id, user_email, user_name, roles):
         "user_email": user_email,
         "user_name": user_name,
         "roles": roles,
-        "exp": datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        "exp": datetime.now(timezone.utc)
+        + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
     }
     return jwt.encode(
         payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM

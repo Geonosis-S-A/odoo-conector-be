@@ -3,6 +3,7 @@ import random
 import string
 
 from app.auth.domain.models import NewOTPCode
+from datetime import timezone
 
 
 class OTPService:
@@ -11,5 +12,5 @@ class OTPService:
 
     def create_otp(self, user_id: int) -> NewOTPCode:
         otp_code = self._generate_code()
-        expires_at = datetime.utcnow() + timedelta(minutes=15)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
         return NewOTPCode(user_id=user_id, code=otp_code, expires_at=expires_at)

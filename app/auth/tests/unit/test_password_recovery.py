@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 from app.auth.application.use_cases.password_recovery import PasswordRecoveryUseCase
 from app.auth.infra.db.models import OTPModel
@@ -110,7 +110,7 @@ async def test_verify_otp_success(
         id=1,
         user_id=1,
         code="123456",
-        expires_at=datetime.utcnow() + timedelta(minutes=15),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
         is_used=False,
     )
 
@@ -169,7 +169,7 @@ async def test_reset_password_success(
         id=1,
         user_id=1,
         code="123456",
-        expires_at=datetime.utcnow() + timedelta(minutes=15),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=15),
         is_used=False,
     )
 

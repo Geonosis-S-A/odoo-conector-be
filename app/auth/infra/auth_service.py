@@ -7,7 +7,7 @@ from app.auth.application.use_cases.exceptions.exceptions import (
     UserNotFound,
 )
 from app.auth.domain.models import TokenData
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from dotenv import load_dotenv
 from fastapi import HTTPException, status, Response
@@ -59,9 +59,9 @@ class TokenService:
             "roles": token_data.roles,
         }
         if expires_delta:
-            expire = datetime.utcnow() + expires_delta
+            expire = datetime.now(timezone.utc) + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(
+            expire = datetime.now(timezone.utc) + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
 
@@ -79,7 +79,9 @@ class TokenService:
             "roles": token_data.roles,
         }
 
-        expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
         to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(
             to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
