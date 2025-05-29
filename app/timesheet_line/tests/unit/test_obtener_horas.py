@@ -10,6 +10,13 @@ from app.project.domain.models import Project
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
+from app.users.domain.repositories import EmployeeGateway
+from app.timesheet_line.application.excepctions.exceptions import (
+    InvalidEmployeeIdError,
+    EmployeeNotExistsError,
+    InvalidDateRangeError,
+    TimesheetListError,
+)
 
 
 class TestListTimesheetLinesUseCase:
@@ -18,8 +25,12 @@ class TestListTimesheetLinesUseCase:
         return Mock(spec=OdooTimesheetLineGateway)
 
     @pytest.fixture
-    def use_case(self, mock_gateway):
-        return ListTimesheetLinesUseCase(mock_gateway)
+    def mock_employee_gateway(self):
+        return Mock(spec=EmployeeGateway)
+
+    @pytest.fixture
+    def use_case(self, mock_gateway, mock_employee_gateway):
+        return ListTimesheetLinesUseCase(mock_gateway, mock_employee_gateway)
 
     @pytest.fixture
     def sample_timesheet_lines(self):
@@ -44,122 +55,183 @@ class TestListTimesheetLinesUseCase:
             ),
         ]
 
-    def test_execute_without_filters(
-        self, use_case, mock_gateway, sample_timesheet_lines
+    def test_execute_success_with_required_params(
+        self, use_case, mock_gateway, mock_employee_gateway, sample_timesheet_lines
     ):
-        """Test que verifica la ejecución sin filtros."""
+        """Test que verifica la ejecución exitosa con parámetros obligatorios."""
         # Arrange
+        employee_id = 1
+        date_from = date(2024, 1, 14)
+        date_to = date(2024, 1, 22)
+
+        mock_employee_gateway.exists_by_id.return_value = True
         mock_gateway.all.return_value = sample_timesheet_lines
 
         # Act
-        result = use_case.execute()
+        result = use_case.execute(employee_id, date_from, date_to)
 
         # Assert
-        mock_gateway.all.assert_called_once_with(None, None, None)
+        mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
         assert result == sample_timesheet_lines
 
-    def test_execute_with_employee_filter(
-        self, use_case, mock_gateway, sample_timesheet_lines
+    def test_execute_returns_empty_list_raises_error(
+        self, use_case, mock_gateway, mock_employee_gateway
     ):
-        """Test que verifica la ejecución con filtro de empleado."""
+        """Test que verifica que se lanza TimesheetListError cuando no hay resultados."""
         # Arrange
         employee_id = 1
-        mock_gateway.all.return_value = [
-            sample_timesheet_lines[0]
-        ]  # Solo el primer timesheet
-
-        # Act
-        result = use_case.execute(employee_id=employee_id)
-
-        # Assert
-        mock_gateway.all.assert_called_once_with(employee_id, None, None)
-        assert len(result) == 1
-        assert result[0].employee_id == employee_id
-
-    def test_execute_with_date_range_filter(
-        self, use_case, mock_gateway, sample_timesheet_lines
-    ):
-        """Test que verifica la ejecución con filtro de rango de fechas."""
-        # Arrange
         date_from = date(2024, 1, 14)
-        date_to = date(2024, 1, 16)
-        mock_gateway.all.return_value = [
-            sample_timesheet_lines[0]
-        ]  # Solo el primer timesheet
+        date_to = date(2024, 1, 22)
 
-        # Act
-        result = use_case.execute(date_from=date_from, date_to=date_to)
+        mock_employee_gateway.exists_by_id.return_value = True
+        mock_gateway.all.return_value = []  # Sin resultados
 
-        # Assert
-        mock_gateway.all.assert_called_once_with(None, date_from, date_to)
-        assert len(result) == 1
-        assert date_from <= result[0].date <= date_to
+        # Act & Assert
+        with pytest.raises(TimesheetListError):
+            use_case.execute(employee_id, date_from, date_to)
 
-    def test_execute_with_date_from_only(
-        self, use_case, mock_gateway, sample_timesheet_lines
+        mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
+
+    def test_execute_with_specific_employee_and_date_range(
+        self, use_case, mock_gateway, mock_employee_gateway, sample_timesheet_lines
     ):
-        """Test que verifica la ejecución con solo fecha de inicio."""
-        # Arrange
-        date_from = date(2024, 1, 18)
-        mock_gateway.all.return_value = [
-            sample_timesheet_lines[1]
-        ]  # Solo el segundo timesheet
-
-        # Act
-        result = use_case.execute(date_from=date_from)
-
-        # Assert
-        mock_gateway.all.assert_called_once_with(None, date_from, None)
-        assert len(result) == 1
-        assert result[0].date >= date_from
-
-    def test_execute_with_date_to_only(
-        self, use_case, mock_gateway, sample_timesheet_lines
-    ):
-        """Test que verifica la ejecución con solo fecha de fin."""
-        # Arrange
-        date_to = date(2024, 1, 16)
-        mock_gateway.all.return_value = [
-            sample_timesheet_lines[0]
-        ]  # Solo el primer timesheet
-
-        # Act
-        result = use_case.execute(date_to=date_to)
-
-        # Assert
-        mock_gateway.all.assert_called_once_with(None, None, date_to)
-        assert len(result) == 1
-        assert result[0].date <= date_to
-
-    def test_execute_with_all_filters(
-        self, use_case, mock_gateway, sample_timesheet_lines
-    ):
-        """Test que verifica la ejecución con todos los filtros."""
+        """Test que verifica la ejecución con empleado específico y rango de fechas."""
         # Arrange
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 16)
-        mock_gateway.all.return_value = [sample_timesheet_lines[0]]
+
+        mock_employee_gateway.exists_by_id.return_value = True
+        mock_gateway.all.return_value = [
+            sample_timesheet_lines[0]
+        ]  # Solo el primer timesheet
 
         # Act
-        result = use_case.execute(
-            employee_id=employee_id, date_from=date_from, date_to=date_to
-        )
+        result = use_case.execute(employee_id, date_from, date_to)
 
         # Assert
+        mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
         assert len(result) == 1
         assert result[0].employee_id == employee_id
         assert date_from <= result[0].date <= date_to
 
-    def test_execute_returns_empty_list(self, use_case, mock_gateway):
-        """Test que verifica que se retorna una lista vacía cuando no hay resultados."""
+    # TESTS PARA VALIDACIONES
+    def test_execute_invalid_employee_id_negative(self, use_case):
+        """Test que verifica error con employee_id negativo."""
         # Arrange
-        mock_gateway.all.return_value = []
+        employee_id = -1
+        date_from = date(2024, 1, 14)
+        date_to = date(2024, 1, 22)
+
+        # Act & Assert
+        with pytest.raises(InvalidEmployeeIdError) as exc_info:
+            use_case.execute(employee_id, date_from, date_to)
+
+        assert "-1" in str(exc_info.value.message)
+
+    def test_execute_invalid_employee_id_zero(self, use_case):
+        """Test que verifica error con employee_id cero."""
+        # Arrange
+        employee_id = 0
+        date_from = date(2024, 1, 14)
+        date_to = date(2024, 1, 22)
+
+        # Act & Assert
+        with pytest.raises(InvalidEmployeeIdError) as exc_info:
+            use_case.execute(employee_id, date_from, date_to)
+
+        assert "0" in str(exc_info.value.message)
+
+    def test_execute_employee_not_exists(self, use_case, mock_employee_gateway):
+        """Test que verifica error cuando el empleado no existe."""
+        # Arrange
+        employee_id = 999
+        date_from = date(2024, 1, 14)
+        date_to = date(2024, 1, 22)
+
+        mock_employee_gateway.exists_by_id.return_value = False
+
+        # Act & Assert
+        with pytest.raises(EmployeeNotExistsError) as exc_info:
+            use_case.execute(employee_id, date_from, date_to)
+
+        assert "999" in str(exc_info.value.message)
+        mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+
+    def test_execute_invalid_date_range(self, use_case, mock_employee_gateway):
+        """Test que verifica error cuando el rango de fechas es inválido."""
+        # Arrange
+        employee_id = 1
+        date_from = date(2024, 1, 22)  # Fecha posterior
+        date_to = date(2024, 1, 14)  # Fecha anterior
+
+        mock_employee_gateway.exists_by_id.return_value = True
+
+        # Act & Assert
+        with pytest.raises(InvalidDateRangeError) as exc_info:
+            use_case.execute(employee_id, date_from, date_to)
+
+        assert "2024-01-22" in str(exc_info.value.message)
+        assert "2024-01-14" in str(exc_info.value.message)
+
+    def test_execute_gateway_error(self, use_case, mock_gateway, mock_employee_gateway):
+        """Test que verifica el manejo de errores del gateway."""
+        # Arrange
+        employee_id = 1
+        date_from = date(2024, 1, 14)
+        date_to = date(2024, 1, 22)
+
+        mock_employee_gateway.exists_by_id.return_value = True
+        mock_gateway.all.side_effect = Exception("Error de conexión")
+
+        # Act & Assert
+        with pytest.raises(Exception) as exc_info:
+            use_case.execute(employee_id, date_from, date_to)
+
+        assert "Error de conexión" in str(exc_info.value)
+
+    def test_execute_with_different_employee_ids(
+        self, use_case, mock_gateway, mock_employee_gateway, sample_timesheet_lines
+    ):
+        """Test que verifica la ejecución con diferentes employee_ids."""
+        # Arrange
+        employee_id = 2
+        date_from = date(2024, 1, 14)
+        date_to = date(2024, 1, 22)
+
+        mock_employee_gateway.exists_by_id.return_value = True
+        mock_gateway.all.return_value = [
+            sample_timesheet_lines[1]
+        ]  # Solo el segundo timesheet
 
         # Act
-        result = use_case.execute()
+        result = use_case.execute(employee_id, date_from, date_to)
 
         # Assert
-        mock_gateway.all.assert_called_once_with(None, None, None)
-        assert result == []
+        mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
+        assert len(result) == 1
+        assert result[0].employee_id == employee_id
+
+    def test_execute_with_wide_date_range(
+        self, use_case, mock_gateway, mock_employee_gateway, sample_timesheet_lines
+    ):
+        """Test que verifica la ejecución con un rango de fechas amplio."""
+        # Arrange
+        employee_id = 1
+        date_from = date(2024, 1, 1)
+        date_to = date(2024, 12, 31)
+
+        mock_employee_gateway.exists_by_id.return_value = True
+        mock_gateway.all.return_value = sample_timesheet_lines
+
+        # Act
+        result = use_case.execute(employee_id, date_from, date_to)
+
+        # Assert
+        mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_gateway.all.assert_called_once_with(employee_id, date_from, date_to)
+        assert result == sample_timesheet_lines

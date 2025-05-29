@@ -8,7 +8,10 @@ class EmployeeGateway(ABC):
     def all(self) -> list[Employee]: ...
 
     @abstractmethod
+    def exists_by_id(self, id: int) -> bool: ...
+    @abstractmethod
     def get_by_email(self, email: str) -> Employee | None: ...
+
 
 
 class UserRepository(ABC):

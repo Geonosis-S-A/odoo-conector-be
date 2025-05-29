@@ -47,6 +47,26 @@ class OdooEmployeeGateway(EmployeeGateway):
         ]
         return parsed_employees
 
+
+    def exists_by_id(self, id: int) -> bool:
+        """Verifica si un empleado existe en Odoo por su ID."""
+        try:
+            employee_data = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "hr.employee",  # Modelo de empleados en Odoo
+                    "search_read",
+                    [[("id", "=", id)]],  # Buscar por ID específico
+                    {"fields": ["id"], "limit": 1},
+                ),
+            )
+            return len(employee_data) > 0
+        except Exception:
+            return False
+
     def get_by_email(self, email: str) -> Employee | None:
         # Primero buscar los IDs de empleados con el email dado
         employee_ids = cast(
@@ -84,3 +104,4 @@ class OdooEmployeeGateway(EmployeeGateway):
             return None
 
         return self._transform_odoo_to_domain(employee_data[0])
+

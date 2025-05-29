@@ -68,28 +68,36 @@ def test_create_and_delete_timesheet_line(test_client):
 @pytest.mark.integration
 def test_list_timesheet_lines(test_client):
     """Test de integración que prueba el listado de líneas de timesheet."""
-    # Act
-    response = test_client.get("/api/v1/timesheet/")
+    # Act - Ahora necesitamos pasar los parámetros obligatorios
+    response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
+    )
 
-    # Assert
-    assert response.status_code == 200
-    data = response.json()
-    assert isinstance(data, list)
+    # Assert - Puede devolver 200 con datos o 422 sin datos
+    assert response.status_code in [200, 422]
 
-    # Verificar la estructura de los datos
-    if len(data) > 0:
-        assert all(isinstance(item["id"], int) for item in data)
-        assert all(isinstance(item["name"], str) for item in data)
-        assert all(isinstance(item["employee_id"], int) for item in data)
-        # Cambiado: project es un objeto, no un id plano
-        assert all(isinstance(item["project"], dict) for item in data)
-        assert all(isinstance(item["project"]["id"], int) for item in data)
-        assert all(isinstance(item["hours"], (int, float)) for item in data)
-        assert all(isinstance(item["date"], str) for item in data)
-        # Task puede ser None o un dict
-        assert all(
-            item["task"] is None or isinstance(item["task"], dict) for item in data
-        )
+    if response.status_code == 200:
+        # Si hay datos, verificar la estructura
+        data = response.json()
+        assert isinstance(data, list)
+
+        # Verificar la estructura de los datos si hay resultados
+        if len(data) > 0:
+            assert all(isinstance(item["id"], int) for item in data)
+            assert all(isinstance(item["name"], str) for item in data)
+            assert all(isinstance(item["employee_id"], int) for item in data)
+            # Cambiado: project es un objeto, no un id plano
+            assert all(isinstance(item["project"], dict) for item in data)
+            assert all(isinstance(item["project"]["id"], int) for item in data)
+            assert all(isinstance(item["hours"], (int, float)) for item in data)
+            assert all(isinstance(item["date"], str) for item in data)
+            # Task puede ser None o un dict
+            assert all(
+                item["task"] is None or isinstance(item["task"], dict) for item in data
+            )
+    elif response.status_code == 422:
+        # Si no hay datos, verificar el mensaje de error
+        assert "Error al obtener las líneas de timesheet" in response.json()["detail"]
 
 
 @pytest.mark.integration
@@ -143,7 +151,9 @@ def test_edit_timesheet_line(test_client):
     assert edit_response.json()["success"] is True
 
     # Verificar que los cambios se aplicaron
-    get_response = test_client.get("/api/v1/timesheet/")
+    get_response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
+    )
     assert get_response.status_code == 200
     updated_line = next(
         (line for line in get_response.json() if line["id"] == created_id), None
@@ -183,7 +193,7 @@ def test_edit_timesheet_line_validation(test_client):
     }
     edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
 
-    # Assert
+    # Assert - Verificar error de horas negativas
     assert edit_response.status_code == 400
     assert "Las horas no pueden ser negativas" in edit_response.json()["detail"]
 
@@ -193,12 +203,11 @@ def test_edit_timesheet_line_validation(test_client):
         f"/api/v1/timesheet/{created_id + 1}", json=edit_data
     )
 
-    # Assert
+    # Assert - Verificar error de ID mismatch
     assert edit_response.status_code == 400
-    assert (
-        "El ID en la URL no coincide con el ID en el body"
-        in edit_response.json()["detail"]
-    )
+    error_detail = edit_response.json()["detail"]
+    assert "El ID en la URL" in error_detail
+    assert "no coincide con el ID en el body" in error_detail
 
     # Limpieza
     delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
@@ -220,20 +229,25 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
     assert create_response.status_code == 200
     created_id = create_response.json()["id"]
 
-    # Act - Filtrar por empleado
-    response_with_filter = test_client.get("/api/v1/timesheet/?employee_id=1")
-    response_without_filter = test_client.get("/api/v1/timesheet/?employee_id=999")
+    # Act - Filtrar por empleado existente
+    response_with_filter = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
+    )
+
+    # Act - Filtrar por empleado que no existe (debería devolver 404)
+    response_without_filter = test_client.get(
+        "/api/v1/timesheet/?employee_id=999&date_from=2024-01-01&date_to=2024-12-31"
+    )
 
     # Assert
     assert response_with_filter.status_code == 200
-    assert response_without_filter.status_code == 200
+    assert response_without_filter.status_code == 404  # Empleado no existe
+    assert "no existe en el sistema" in response_without_filter.json()["detail"]
 
     data_with_filter = response_with_filter.json()
-    data_without_filter = response_without_filter.json()
 
     # Verificar que el timesheet creado aparece en el filtro correcto
     assert any(item["id"] == created_id for item in data_with_filter)
-    assert not any(item["id"] == created_id for item in data_without_filter)
 
     # Verificar que todos los resultados filtrados son del empleado correcto
     assert all(item["employee_id"] == 1 for item in data_with_filter)
@@ -283,7 +297,7 @@ def test_list_timesheet_lines_with_date_filter(test_client):
 
     # Act - Filtrar por rango de fechas que incluye solo las dos primeras
     response = test_client.get(
-        "/api/v1/timesheet/?date_from=2024-01-14&date_to=2024-01-22"
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-14&date_to=2024-01-22"
     )
 
     # Assert
@@ -334,8 +348,10 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
     created_id_old = create_response_old.json()["id"]
     created_id_new = create_response_new.json()["id"]
 
-    # Act
-    response = test_client.get("/api/v1/timesheet/?date_from=2024-01-15")
+    # Act - Ahora necesitamos pasar employee_id y date_to también
+    response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-15&date_to=2024-12-31"
+    )
 
     # Assert
     assert response.status_code == 200
@@ -380,8 +396,10 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
     created_id_old = create_response_old.json()["id"]
     created_id_new = create_response_new.json()["id"]
 
-    # Act
-    response = test_client.get("/api/v1/timesheet/?date_to=2024-01-15")
+    # Act - Ahora necesitamos pasar employee_id y date_from también
+    response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-01-15"
+    )
 
     # Assert
     assert response.status_code == 200
@@ -451,3 +469,60 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
     # Limpieza
     test_client.delete(f"/api/v1/timesheet/{created_id_emp1}")
     test_client.delete(f"/api/v1/timesheet/{created_id_emp2}")
+
+
+@pytest.mark.integration
+def test_list_timesheet_lines_no_results_returns_422(test_client):
+    """Test de integración que verifica que cuando no hay resultados se devuelve 422."""
+    # Act - Buscar timesheets en un rango donde no hay datos
+    response = test_client.get(
+        "/api/v1/timesheet/?employee_id=1&date_from=1990-01-01&date_to=1990-01-02"
+    )
+
+    # Assert
+    assert response.status_code == 422
+    assert "Error al obtener las líneas de timesheet" in response.json()["detail"]
+
+
+@pytest.mark.integration
+def test_delete_timesheet_not_found(test_client):
+    """Test de integración que prueba la eliminación de una línea de timesheet que no existe."""
+    # Act - Intentar eliminar un timesheet que no existe
+    delete_response = test_client.delete("/api/v1/timesheet/99999")
+
+    # Assert
+    assert delete_response.status_code == 404
+    assert (
+        "No se encontró la línea de timesheet con ID: 99999"
+        in delete_response.json()["detail"]
+    )
+
+
+@pytest.mark.integration
+def test_delete_timesheet_validation_errors(test_client):
+    """Test de integración que prueba los diferentes tipos de errores en delete."""
+    # Arrange - Crear una línea de timesheet
+    create_data = {
+        "name": "Test Timesheet for Delete",
+        "employee_id": 1,
+        "project_id": 1,
+        "hours": 8.0,
+        "date": "2024-03-20",
+    }
+    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
+    assert create_response.status_code == 200
+    created_id = create_response.json()["id"]
+
+    # Act - Eliminar correctamente primero
+    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    assert delete_response.status_code == 200
+
+    # Act - Intentar eliminar de nuevo el mismo timesheet (ya no existe)
+    delete_response_again = test_client.delete(f"/api/v1/timesheet/{created_id}")
+
+    # Assert
+    assert delete_response_again.status_code == 404
+    assert (
+        f"No se encontró la línea de timesheet con ID: {created_id}"
+        in delete_response_again.json()["detail"]
+    )

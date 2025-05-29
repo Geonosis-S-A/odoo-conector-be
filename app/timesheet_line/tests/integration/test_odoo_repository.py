@@ -87,6 +87,7 @@ class TestOdooTimesheetLineGateway:
         prev_lines = self.gateway.all()
 
         # Act
+        assert created_id is not None
         delete_result = self.gateway.delete(created_id)
         post_lines = self.gateway.all()
 
@@ -122,7 +123,9 @@ class TestOdooTimesheetLineGateway:
         assert update_result is True
 
         # Verificar que los cambios se aplicaron
+        assert created_id is not None
         updated_line = self.gateway.get_by_id(created_id)
+        assert updated_line is not None  # Nueva validación
         assert updated_line.id == created_id
         assert updated_line.hours == 2
         assert updated_line.name == "Test Timesheet Line Updated"
@@ -326,3 +329,21 @@ class TestOdooTimesheetLineGateway:
         for line in lines_filtered:
             assert line.employee_id == 1
             assert date(2024, 1, 14) <= line.date <= date(2024, 1, 16)
+
+    def test_get_by_id_not_found(self):
+        """Test que verifica que get_by_id devuelve None cuando no encuentra el timesheet."""
+        # Act
+        result = self.gateway.get_by_id(99999)  # ID que no existe
+
+        # Assert
+        assert result is None
+
+    def test_delete_timesheet_not_found(self):
+        """Test que verifica el comportamiento de delete cuando el timesheet no existe."""
+        # Act & Assert
+        # En Odoo, delete lanza una excepción cuando el registro no existe
+        with pytest.raises(Exception) as exc_info:
+            self.gateway.delete(99999)  # ID que no existe
+
+        # Verificar que es el tipo de error esperado de Odoo
+        assert "Record does not exist" in str(exc_info.value)

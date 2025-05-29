@@ -1,11 +1,15 @@
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from datetime import date
 from app.timesheet_line.application.use_cases.edit_timesheet import EditTimesheetUseCase
 from app.timesheet_line.api.schemas import EditTimesheetRequest
 from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.project.domain.models import Project
-from app.task.domain.models import Task
+from app.timesheet_line.application.excepctions.exceptions import (
+    InvalidHoursError,
+    TimesheetNotFoundError,
+    TimesheetEditError,
+)
 
 
 class TestEditTimesheetUseCase:
@@ -50,7 +54,7 @@ class TestEditTimesheetUseCase:
         assert result is True
         mock_gateway.get_by_id.assert_called_once_with(1)
         mock_gateway.update.assert_called_once()
-        
+
         # Verificar que se llamó a update con los datos correctos
         update_call_args = mock_gateway.update.call_args[0][0]
         assert isinstance(update_call_args, TimesheetLine)
@@ -71,7 +75,9 @@ class TestEditTimesheetUseCase:
         )
 
         # Act & Assert
-        with pytest.raises(ValueError, match="Las horas no pueden ser negativas"):
+        with pytest.raises(
+            InvalidHoursError, match="Las horas no pueden ser negativas"
+        ):
             use_case.execute(request)
 
     def test_edit_timesheet_not_found(self, use_case, mock_gateway):
@@ -86,11 +92,14 @@ class TestEditTimesheetUseCase:
             date=date(2024, 3, 20),
         )
 
-        # Mock de la respuesta del gateway
-        mock_gateway.get_by_id.side_effect = ValueError("No se encontró la línea de timesheet")
+        # Mock de la respuesta del gateway - ahora devuelve None en lugar de lanzar excepción
+        mock_gateway.get_by_id.return_value = None
 
         # Act & Assert
-        with pytest.raises(ValueError, match="No se encontró la línea de timesheet"):
+        with pytest.raises(
+            TimesheetNotFoundError,
+            match="No se encontró la línea de timesheet con ID: 999",
+        ):
             use_case.execute(request)
 
     def test_edit_timesheet_update_fails(self, use_case, mock_gateway):
@@ -117,10 +126,44 @@ class TestEditTimesheetUseCase:
         )
         mock_gateway.update.return_value = False
 
-        # Act
-        result = use_case.execute(request)
+        # Act & Assert
+        with pytest.raises(
+            TimesheetEditError, match="Error al editar la línea de timesheet con ID 1"
+        ):
+            use_case.execute(request)
 
-        # Assert
-        assert result is False
+        mock_gateway.get_by_id.assert_called_once_with(1)
+        mock_gateway.update.assert_called_once()
+
+    def test_edit_timesheet_update_exception(self, use_case, mock_gateway):
+        """Test que verifica el comportamiento cuando update lanza una excepción."""
+        # Arrange
+        request = EditTimesheetRequest(
+            id=1,
+            name="Test Timesheet",
+            employee_id=1,
+            project_id=1,
+            hours=4.0,
+            date=date(2024, 3, 20),
+        )
+
+        # Mock de la respuesta del gateway
+        mock_gateway.get_by_id.return_value = DetailedTimesheetLine(
+            id=1,
+            name="Old Name",
+            employee_id=1,
+            project=Project(id=1, name="Test Project"),
+            task=None,
+            hours=8.0,
+            date=date(2024, 3, 20),
+        )
+        mock_gateway.update.side_effect = ValueError("ID requerido")
+
+        # Act & Assert
+        with pytest.raises(
+            TimesheetEditError, match="Error al editar la línea de timesheet con ID 1"
+        ):
+            use_case.execute(request)
+
         mock_gateway.get_by_id.assert_called_once_with(1)
         mock_gateway.update.assert_called_once()
