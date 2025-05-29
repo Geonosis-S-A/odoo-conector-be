@@ -14,6 +14,7 @@ class LogoutUseCase:
         self.token_repository = token_repository
 
     def execute(self, response, refresh_token):
+        # Lo dejo que falle si es necesario
         return self.auth_service.logout(
             response,
             self.token_repository,

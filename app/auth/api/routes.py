@@ -21,6 +21,7 @@ from app.auth.application.use_cases.exceptions.exceptions import (
     OTPNotFound,
     PasswordNotMatch,
     PasswordUpdateError,
+    TokenNotFound,
     UserAlreadyExists,
     UserInactive,
     UserNotFound,
@@ -165,7 +166,10 @@ async def logout(
     auth_service = TokenService()
     token_repository = SQLModelTokenRepository(db)
     logout_use_case = LogoutUseCase(auth_service, token_repository)
-    logout_use_case.execute(response, refresh_token)
+    try:
+        logout_use_case.execute(response, refresh_token)
+    except TokenNotFound as e:
+        raise HTTPException(status_code=401, detail=str(e))
     return {"message": "Successfully logged out"}
 
 
