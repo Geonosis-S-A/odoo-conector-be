@@ -73,31 +73,25 @@ def test_list_timesheet_lines(test_client):
         "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
     )
 
-    # Assert - Puede devolver 200 con datos o 422 sin datos
-    assert response.status_code in [200, 422]
+    # Assert - Siempre debería devolver 200, con datos o lista vacía
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
 
-    if response.status_code == 200:
-        # Si hay datos, verificar la estructura
-        data = response.json()
-        assert isinstance(data, list)
-
-        # Verificar la estructura de los datos si hay resultados
-        if len(data) > 0:
-            assert all(isinstance(item["id"], int) for item in data)
-            assert all(isinstance(item["name"], str) for item in data)
-            assert all(isinstance(item["employee_id"], int) for item in data)
-            # Cambiado: project es un objeto, no un id plano
-            assert all(isinstance(item["project"], dict) for item in data)
-            assert all(isinstance(item["project"]["id"], int) for item in data)
-            assert all(isinstance(item["hours"], (int, float)) for item in data)
-            assert all(isinstance(item["date"], str) for item in data)
-            # Task puede ser None o un dict
-            assert all(
-                item["task"] is None or isinstance(item["task"], dict) for item in data
-            )
-    elif response.status_code == 422:
-        # Si no hay datos, verificar el mensaje de error
-        assert "Error al obtener las líneas de timesheet" in response.json()["detail"]
+    # Verificar la estructura de los datos si hay resultados
+    if len(data) > 0:
+        assert all(isinstance(item["id"], int) for item in data)
+        assert all(isinstance(item["name"], str) for item in data)
+        assert all(isinstance(item["employee_id"], int) for item in data)
+        # Cambiado: project es un objeto, no un id plano
+        assert all(isinstance(item["project"], dict) for item in data)
+        assert all(isinstance(item["project"]["id"], int) for item in data)
+        assert all(isinstance(item["hours"], (int, float)) for item in data)
+        assert all(isinstance(item["date"], str) for item in data)
+        # Task puede ser None o un dict
+        assert all(
+            item["task"] is None or isinstance(item["task"], dict) for item in data
+        )
 
 
 @pytest.mark.integration
@@ -472,16 +466,18 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
 
 
 @pytest.mark.integration
-def test_list_timesheet_lines_no_results_returns_422(test_client):
-    """Test de integración que verifica que cuando no hay resultados se devuelve 422."""
+def test_list_timesheet_lines_no_results_returns_empty_list(test_client):
+    """Test de integración que verifica que cuando no hay resultados se devuelve una lista vacía."""
     # Act - Buscar timesheets en un rango donde no hay datos
     response = test_client.get(
         "/api/v1/timesheet/?employee_id=1&date_from=1990-01-01&date_to=1990-01-02"
     )
 
     # Assert
-    assert response.status_code == 422
-    assert "Error al obtener las líneas de timesheet" in response.json()["detail"]
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 0
 
 
 @pytest.mark.integration

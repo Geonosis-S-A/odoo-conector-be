@@ -40,6 +40,5 @@ class ListTimesheetLinesUseCase:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
 
         timesheets = self.timesheet_line_gateway.all(employee_id, date_from, date_to)
-        if not timesheets:
-            raise TimesheetListError()
+        # Devolver la lista de timesheets (puede estar vacía, y eso está bien)
         return timesheets
