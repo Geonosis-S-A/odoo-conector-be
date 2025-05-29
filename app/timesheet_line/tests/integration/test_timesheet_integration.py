@@ -482,3 +482,47 @@ def test_list_timesheet_lines_no_results_returns_422(test_client):
     # Assert
     assert response.status_code == 422
     assert "Error al obtener las líneas de timesheet" in response.json()["detail"]
+
+
+@pytest.mark.integration
+def test_delete_timesheet_not_found(test_client):
+    """Test de integración que prueba la eliminación de una línea de timesheet que no existe."""
+    # Act - Intentar eliminar un timesheet que no existe
+    delete_response = test_client.delete("/api/v1/timesheet/99999")
+
+    # Assert
+    assert delete_response.status_code == 404
+    assert (
+        "No se encontró la línea de timesheet con ID: 99999"
+        in delete_response.json()["detail"]
+    )
+
+
+@pytest.mark.integration
+def test_delete_timesheet_validation_errors(test_client):
+    """Test de integración que prueba los diferentes tipos de errores en delete."""
+    # Arrange - Crear una línea de timesheet
+    create_data = {
+        "name": "Test Timesheet for Delete",
+        "employee_id": 1,
+        "project_id": 1,
+        "hours": 8.0,
+        "date": "2024-03-20",
+    }
+    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
+    assert create_response.status_code == 200
+    created_id = create_response.json()["id"]
+
+    # Act - Eliminar correctamente primero
+    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    assert delete_response.status_code == 200
+
+    # Act - Intentar eliminar de nuevo el mismo timesheet (ya no existe)
+    delete_response_again = test_client.delete(f"/api/v1/timesheet/{created_id}")
+
+    # Assert
+    assert delete_response_again.status_code == 404
+    assert (
+        f"No se encontró la línea de timesheet con ID: {created_id}"
+        in delete_response_again.json()["detail"]
+    )

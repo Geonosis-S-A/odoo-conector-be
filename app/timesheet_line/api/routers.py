@@ -38,6 +38,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     EmployeeNotExistsError,
     TimesheetIdMismatchError,
     TimesheetEditError,
+    TimesheetDeleteError,
 )
 
 
@@ -163,13 +164,14 @@ async def delete_timesheet_line(
     try:
         use_case = DeleteTimesheetUseCase(gateway)
         success = use_case.execute(timesheet_id)
-        if not success:
-            raise HTTPException(
-                status_code=404, detail="Línea de timesheet no encontrada"
-            )
         return {"message": "Línea de timesheet eliminada correctamente"}
-    except HTTPException:
-        raise
+    except TimesheetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetDeleteError as e:
+        raise HTTPException(status_code=422, detail=e.message)
+    except TimesheetDomainError as e:
+        # Captura cualquier otra excepción del dominio
+        raise HTTPException(status_code=400, detail=e.message)
     except Exception as e:
         raise HTTPException(
             status_code=500,

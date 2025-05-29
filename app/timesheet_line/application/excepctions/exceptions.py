@@ -121,3 +121,13 @@ class TimesheetEditError(TimesheetDomainError):
         if details:
             message += f": {details}"
         super().__init__(message)
+
+
+class TimesheetDeleteError(TimesheetDomainError):
+    """Error al eliminar una línea de timesheet."""
+
+    def __init__(self, timesheet_id: int, details: str = ""):
+        message = f"Error al eliminar la línea de timesheet con ID {timesheet_id}"
+        if details:
+            message += f": {details}"
+        super().__init__(message)

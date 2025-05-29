@@ -337,3 +337,13 @@ class TestOdooTimesheetLineGateway:
 
         # Assert
         assert result is None
+
+    def test_delete_timesheet_not_found(self):
+        """Test que verifica el comportamiento de delete cuando el timesheet no existe."""
+        # Act & Assert
+        # En Odoo, delete lanza una excepción cuando el registro no existe
+        with pytest.raises(Exception) as exc_info:
+            self.gateway.delete(99999)  # ID que no existe
+
+        # Verificar que es el tipo de error esperado de Odoo
+        assert "Record does not exist" in str(exc_info.value)

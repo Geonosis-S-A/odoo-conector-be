@@ -173,17 +173,18 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         Returns:
             bool: True si la eliminación fue exitosa, False en caso contrario
         """
-        try:
-            self.odoo_client["models"].execute_kw(
-                self.odoo_client["ODOO_DB"],
-                self.odoo_client["uid"],
-                self.odoo_client["ODOO_PASSWORD"],
-                "account.analytic.line",
-                "unlink",  # Método de Odoo para eliminar registros
-                [[timesheet_line_id]],
-            )
+
+        response = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "unlink",  # Método de Odoo para eliminar registros
+            [[timesheet_line_id]],
+        )
+        if response:
             return True
-        except Exception:
+        else:
             return False
 
     def update(self, timesheet_line: TimesheetLine) -> bool:
