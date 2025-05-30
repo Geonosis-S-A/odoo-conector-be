@@ -2,6 +2,7 @@ from app.task.domain.gateway import TaskGateway
 from app.task.domain.models import Task
 from app.project.domain.models import Project
 
+
 class OdooTaskGateway(TaskGateway):
     def __init__(self, odoo_client):
         self.odoo_client = odoo_client
@@ -59,19 +60,21 @@ class OdooTaskGateway(TaskGateway):
             )
             for task in tasks
         ]
-    
+
     def get_project_by_id(self, project_id: int) -> Project | None:
+        domain = [("id", "=", project_id)]
+
         project = self.odoo_client["models"].execute_kw(
             self.odoo_client["ODOO_DB"],
             self.odoo_client["uid"],
             self.odoo_client["ODOO_PASSWORD"],
             "project.project",
             "search_read",
-            [project_id],
+            [domain],
             {"fields": ["id", "name"]},
         )
 
         if not project:
             return None
 
-        return Project(id=project["id"], name=project["name"])
+        return Project(id=project[0]["id"], name=project[0]["name"])
