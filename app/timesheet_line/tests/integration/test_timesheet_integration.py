@@ -58,15 +58,17 @@ def test_create_and_delete_timesheet_line(test_client):
     assert isinstance(created_id, int)
     assert created_id > 0
 
-    # Act - Eliminar
-    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    # Act - Eliminar (usando el nuevo endpoint con body)
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+    )
     if delete_response.status_code != 200:
         print("Delete response:", delete_response.json())
     # Assert - Eliminar
     assert delete_response.status_code == 200
     assert (
         delete_response.json()["message"]
-        == "Línea de timesheet eliminada correctamente"
+        == "Líneas de timesheet eliminadas correctamente"
     )
 
 
@@ -166,7 +168,9 @@ def test_edit_timesheet_line(test_client):
     assert updated_line["hours"] == 4.0
 
     # Limpieza
-    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+    )
     assert delete_response.status_code == 200
 
 
@@ -215,7 +219,9 @@ def test_edit_timesheet_line_validation(test_client):
     assert "no coincide con el ID en el body" in error_detail
 
     # Limpieza
-    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+    )
     assert delete_response.status_code == 200
 
 
@@ -260,7 +266,9 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
     assert all(item["employee_id"] == 1 for item in data_with_filter)
 
     # Limpieza
-    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+    )
     assert delete_response.status_code == 200
 
 
@@ -314,8 +322,9 @@ def test_list_timesheet_lines_with_date_filter(test_client):
     assert len(created_ids_in_response) == 2
 
     # Limpieza
-    for created_id in created_ids:
-        test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": created_ids}
+    )
 
 
 @pytest.mark.integration
@@ -359,8 +368,9 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
     assert len(created_ids_in_response) == 1
 
     # Limpieza
-    for created_id in created_ids:
-        test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": created_ids}
+    )
 
 
 @pytest.mark.integration
@@ -403,8 +413,9 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
     assert len(created_ids_in_response) == 1
 
     # Limpieza
-    for created_id in created_ids:
-        test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": created_ids}
+    )
 
 
 @pytest.mark.integration
@@ -451,8 +462,9 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
     assert all(item["employee_id"] == 1 for item in data)
 
     # Limpieza
-    for created_id in created_ids:
-        test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": created_ids}
+    )
 
 
 @pytest.mark.integration
@@ -474,12 +486,14 @@ def test_list_timesheet_lines_no_results_returns_empty_list(test_client):
 def test_delete_timesheet_not_found(test_client):
     """Test de integración que prueba la eliminación de una línea de timesheet que no existe."""
     # Act - Intentar eliminar un timesheet que no existe
-    delete_response = test_client.delete("/api/v1/timesheet/99999")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": [99999]}
+    )
 
     # Assert
     assert delete_response.status_code == 404
     assert (
-        "No se encontraron las líneas de timesheet con IDs: 99999"
+        "No se encontraron las líneas de timesheet con IDs: [99999]"
         in delete_response.json()["detail"]
     )
 
@@ -502,15 +516,19 @@ def test_delete_timesheet_validation_errors(test_client):
     created_id = create_response.json()[0]["id"]
 
     # Act - Eliminar correctamente primero
-    delete_response = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+    )
     assert delete_response.status_code == 200
 
     # Act - Intentar eliminar de nuevo el mismo timesheet (ya no existe)
-    delete_response_again = test_client.delete(f"/api/v1/timesheet/{created_id}")
+    delete_response_again = test_client.request(
+        "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+    )
 
     # Assert
     assert delete_response_again.status_code == 404
     assert (
-        f"No se encontraron las líneas de timesheet con IDs: {created_id}"
+        f"No se encontraron las líneas de timesheet con IDs: [{created_id}]"
         in delete_response_again.json()["detail"]
     )

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import date, datetime
 
@@ -34,3 +34,7 @@ class EditTimesheetRequest(BaseModel):
     hours: float
     date: date
     task_id: Optional[int] = None
+
+
+class DeleteTimesheetRequest(BaseModel):
+    ids: List[int]
