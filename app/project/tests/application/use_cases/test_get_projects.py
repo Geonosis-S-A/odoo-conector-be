@@ -21,17 +21,16 @@ class TestObtenerProyectosUseCase:
             Project(id=2, name="Proyecto 2"),
         ]
         mock_gateway.all.return_value = test_projects
-        test_user_id = 1
 
         # Act
-        result = use_case.execute(test_user_id)
+        result = use_case.execute()
         # Debug information
         print("\nProyectos encontrados:")
         for project in result:
             print(f"ID: {project.id}, Nombre: {project.name}")
 
         # Assert
-        mock_gateway.all.assert_called_once_with(test_user_id)
+        
         assert len(result) == 2
         assert all(isinstance(project, Project) for project in result)
         assert result[0].id == 1

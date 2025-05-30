@@ -6,7 +6,7 @@ class OdooProjectGateway(ProjectGateway):
     def __init__(self, odoo_client):
         self.odoo_client = odoo_client
 
-    def all(self, user_id: int | None = None) -> list[Project]:
+    def all(self) -> list[Project]:
         domain = []
 
         projects = self.odoo_client["models"].execute_kw(
