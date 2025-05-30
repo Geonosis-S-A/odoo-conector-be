@@ -25,7 +25,7 @@ class OdooEmployeeGateway(EmployeeGateway):
         """Obtiene todos los empleados de Odoo.
 
         Returns:
-            List[User]: Lista de empleados transformados al modelo de dominio
+            List[Employee]: Lista de empleados transformados al modelo de dominio
         """
         odoo_employees = cast(
             List[Dict[str, Any]],
@@ -46,7 +46,6 @@ class OdooEmployeeGateway(EmployeeGateway):
             self._transform_odoo_to_domain(employee) for employee in odoo_employees
         ]
         return parsed_employees
-
 
     def exists_by_id(self, id: int) -> bool:
         """Verifica si un empleado existe en Odoo por su ID."""
@@ -104,4 +103,3 @@ class OdooEmployeeGateway(EmployeeGateway):
             return None
 
         return self._transform_odoo_to_domain(employee_data[0])
-

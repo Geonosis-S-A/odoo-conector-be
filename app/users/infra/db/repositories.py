@@ -91,3 +91,33 @@ class SQLModelUserRepository(UserRepository):
         self.db.commit()
         self.db.refresh(user_model)
         return True
+
+    def update_user(self, user: User) -> bool:
+        """Actualiza los datos de un usuario existente."""
+        statement = select(UserModel).where(UserModel.id == user.id)
+        user_model = self.db.exec(statement).first()
+        if user_model is None:
+            return False
+
+        # Actualizar solo los campos que pueden cambiar desde Odoo
+        user_model.email = user.email
+        user_model.full_name = user.full_name
+        # Mantener el estado actual de is_active e is_superuser
+
+        self.db.commit()
+        self.db.refresh(user_model)
+        return True
+
+    def get_by_id(self, user_id: int) -> User | None:
+        """Obtiene un usuario por su ID."""
+        statement = select(UserModel).where(UserModel.id == user_id)
+        user_model = self.db.exec(statement).first()
+        if user_model is None:
+            return None
+        return User(
+            id=user_model.id,
+            email=user_model.email,
+            full_name=user_model.full_name,
+            is_active=user_model.is_active,
+            is_superuser=user_model.is_superuser,
+        )
