@@ -47,6 +47,7 @@ async def get_tasks(
     gateway: TaskGateway = Depends(get_task_gateway),
     odoo_task_gateway: OdooTaskGateway = Depends(get_task_gateway),
     odoo_employee_gateway: OdooEmployeeGateway = Depends(get_employee_gateway),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Obtiene las tareas asociadas a un proyecto específico.
