@@ -8,6 +8,7 @@ from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
     DetailedTimesheetLineResponse,
     EditTimesheetRequest,
+    DeleteTimesheetRequest,
 )
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.application.use_cases.delete_timesheet import (
@@ -147,7 +148,7 @@ async def list_timesheet_lines(
 
 @router.delete("/", response_model=Dict[str, str])
 async def delete_timesheet_line(
-    request: list[int],
+    request: DeleteTimesheetRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: dict = Depends(get_current_user),
 ):
@@ -155,7 +156,7 @@ async def delete_timesheet_line(
     Elimina múltiples líneas de timesheet.
 
     Args:
-        request: Lista de IDs de las líneas de timesheet a eliminar
+        request: Objeto con lista de IDs de las líneas de timesheet a eliminar
         gateway: Gateway de timesheet (inyectado)
 
     Returns:
@@ -163,7 +164,7 @@ async def delete_timesheet_line(
     """
     try:
         use_case = DeleteTimesheetUseCase(gateway)
-        success = use_case.execute(request)
+        success = use_case.execute(request.ids)
         return {"message": "Líneas de timesheet eliminadas correctamente"}
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
