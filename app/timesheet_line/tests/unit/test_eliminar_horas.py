@@ -12,7 +12,6 @@ from app.project.domain.models import Project
 from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetNotFoundError,
     TimesheetDeleteError,
-    TimesheetListError,
 )
 
 

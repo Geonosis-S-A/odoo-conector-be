@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 
 
 class UserBase(BaseModel):
@@ -24,5 +24,11 @@ class UserInDB(UserBase):
         from_attributes = True
 
 
-class UserResponse(UserInDB):
-    pass
+class UserResponse(UserBase):
+    id: int
+
+
+class UserSyncResponse(BaseModel):
+    updated: List[UserResponse]
+    unchanged: List[UserResponse]
+    summary: str
