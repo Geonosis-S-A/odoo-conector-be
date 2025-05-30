@@ -27,10 +27,10 @@ class TasksNotFound_userId(ProjectErrors):
         message = f"Tareas del usuario con el id {user_id} no encontradas."
         super().__init__(message)
 
-class ProjectsNotFound_userId(ProjectErrors):
-    """Error cuando no se encuentran proyectos de un usuario."""
+class ProjectsNotFound(ProjectErrors):
+    """Error cuando no se encuentran proyectos."""
 
-    def __init__(self, user_id: int):
-        message = f"El usuario con el id {user_id} no tiene proyectos asignados."
+    def __init__(self):
+        message = f"No hay proyectos asignados."
         super().__init__(message)
 
