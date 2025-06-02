@@ -6,6 +6,7 @@ from sqlmodel import SQLModel
 from alembic import context
 
 from app.users.infra.db.models import UserModel
+from app.auth.infra.db.models import RefreshTokenModel, OTPModel
 from app.shared.infra.db.config import settings
 
 # this is the Alembic Config object, which provides
