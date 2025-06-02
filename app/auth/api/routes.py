@@ -114,7 +114,7 @@ async def login(
         value=tokens.refresh_token,
         httponly=True,
         secure=True,
-        samesite="lax",
+        samesite="none",
         path="/",  # Todo: Restringir al path refresh_token
         max_age=30 * 24 * 60 * 60,  # Todo: corregir hardcodeada
     )
