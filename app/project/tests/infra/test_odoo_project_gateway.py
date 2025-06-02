@@ -14,10 +14,10 @@ class TestOdooProjectGateway:
 
     def test_returns_all_projects_for_user(self):
         # Arrange
-        test_user_id = 2  # ID de usuario de prueba
+        # No user_id needed since all() returns all projects
 
         # Act
-        projects = self.gateway.all(test_user_id)
+        projects = self.gateway.all()
 
         # Debug information
         print("\nProyectos encontrados:")
