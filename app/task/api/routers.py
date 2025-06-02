@@ -3,7 +3,11 @@ from typing import List
 
 from app.shared.security.dependencies import get_current_user
 from app.task.api.schemas import TaskResponse
-from app.task.application.Exeptions import ProjectNotFound, TasksNotFound_projectId, TasksNotFound_userId
+from app.task.application.Exeptions import (
+    ProjectNotFound,
+    TasksNotFound_projectId,
+    TasksNotFound_userId,
+)
 from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
 from app.task.domain.gateway import TaskGateway
 from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
@@ -27,16 +31,17 @@ def get_task_gateway(
             status_code=500, detail="Error al conectar con el gateway de tareas"
         )
 
+
 def get_employee_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
 ) -> OdooEmployeeGateway:
     try:
         return OdooEmployeeGateway(odoo_connection)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/projects/{project_id}", response_model=List[TaskResponse])
+@router.get("/", response_model=List[TaskResponse])
 async def get_tasks(
     project_id: int,
     gateway: TaskGateway = Depends(get_task_gateway),
@@ -55,7 +60,9 @@ async def get_tasks(
         List[TaskResponse]: Lista de tareas del proyecto
     """
     try:
-        use_case = ObtenerTareasUseCase(gateway, odoo_task_gateway, odoo_employee_gateway)
+        use_case = ObtenerTareasUseCase(
+            gateway, odoo_task_gateway, odoo_employee_gateway
+        )
         tasks = use_case.execute(project_id)
         return [
             TaskResponse(
@@ -76,7 +83,7 @@ async def get_tasks(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/", response_model=List[TaskResponse])
+@router.get("/project/user", response_model=List[TaskResponse])
 async def get_tasks_by_user(
     user_id: int,
     gateway: TaskGateway = Depends(get_task_gateway),
@@ -95,7 +102,9 @@ async def get_tasks_by_user(
         List[TaskResponse]: Lista de tareas asignadas al usuario
     """
     try:
-        use_case = ObtenerTareasUseCase(gateway, odoo_task_gateway, odoo_employee_gateway)
+        use_case = ObtenerTareasUseCase(
+            gateway, odoo_task_gateway, odoo_employee_gateway
+        )
         tasks = use_case.execute_by_user(user_id)
         return [
             TaskResponse(
