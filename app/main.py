@@ -69,6 +69,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080",
         "https://odoo-conector-fe.vercel.app",
+        "https://odoo-conector-fe-murex.vercel.app",
     ]  # todo: cambiar a la url del front
     if ENV == "LOCAL"
     else [],  # En producción, especificar los orígenes permitidos
