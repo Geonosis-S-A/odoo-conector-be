@@ -104,7 +104,9 @@ class TestGetTasks:
         mock_odoo_task_gateway.get_project_by_id.assert_called_once_with(1)
         mock_odoo_task_gateway.all.assert_called_once_with(1)
 
-    def test_get_tasks_empty(self, mock_odoo_task_gateway, test_client):
+    def test_get_tasks_empty_returns_empty_array(
+        self, mock_odoo_task_gateway, test_client
+    ):
         # Arrange
         mock_project = Project(id=1, name="Proyecto A")
         mock_odoo_task_gateway.get_project_by_id.return_value = mock_project
@@ -114,7 +116,29 @@ class TestGetTasks:
         response = test_client.get("/api/v1/tasks/?project_id=1")
 
         # Assert
-        assert response.status_code == 404
+        assert response.status_code == 200
+        data = response.json()
+        assert data == []
+        assert len(data) == 0
+        mock_odoo_task_gateway.get_project_by_id.assert_called_once_with(1)
+        mock_odoo_task_gateway.all.assert_called_once_with(1)
+
+    def test_get_tasks_no_tasks_for_project_returns_empty_array(
+        self, mock_odoo_task_gateway, test_client
+    ):
+        # Arrange
+        mock_project = Project(id=1, name="Proyecto A")
+        mock_odoo_task_gateway.get_project_by_id.return_value = mock_project
+        mock_odoo_task_gateway.all.return_value = []
+
+        # Act
+        response = test_client.get("/api/v1/tasks/?project_id=1")
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data == []
+        assert len(data) == 0
         mock_odoo_task_gateway.get_project_by_id.assert_called_once_with(1)
         mock_odoo_task_gateway.all.assert_called_once_with(1)
 
@@ -128,22 +152,6 @@ class TestGetTasks:
         # Assert
         assert response.status_code == 404
         assert "Proyecto con el id 999 no encontrado" in response.json()["detail"]
-
-    def test_get_tasks_no_tasks_for_project(self, mock_odoo_task_gateway, test_client):
-        # Arrange
-        mock_project = Project(id=1, name="Proyecto A")
-        mock_odoo_task_gateway.get_project_by_id.return_value = mock_project
-        mock_odoo_task_gateway.all.return_value = None
-
-        # Act
-        response = test_client.get("/api/v1/tasks/?project_id=1")
-
-        # Assert
-        assert response.status_code == 404
-        assert (
-            "Tareas del proyecto con el id 1 no encontradas"
-            in response.json()["detail"]
-        )
 
     def test_get_tasks_server_error(self, mock_odoo_task_gateway, test_client):
         # Arrange

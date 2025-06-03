@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List
+from typing import List, Optional
 
 from app.shared.security.dependencies import get_current_user
 from app.task.api.schemas import TaskResponse
@@ -64,6 +64,7 @@ async def get_tasks(
             gateway, odoo_task_gateway, odoo_employee_gateway
         )
         tasks = use_case.execute(project_id)
+
         return [
             TaskResponse(
                 id=task.id,
