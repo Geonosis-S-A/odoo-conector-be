@@ -6,7 +6,6 @@ from app.task.domain.gateway import TaskGateway
 from app.task.application.Exeptions import (
     TasksNotFound_userId,
     ProjectNotFound,
-    TasksNotFound_projectId,
 )
 
 

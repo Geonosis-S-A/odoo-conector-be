@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Optional
+from typing import List
 
 from app.shared.security.dependencies import get_current_user
 from app.task.api.schemas import TaskResponse

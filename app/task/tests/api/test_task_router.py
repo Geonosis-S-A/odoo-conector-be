@@ -7,11 +7,6 @@ from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
 from app.project.domain.models import Project
-from app.task.application.Exeptions import (
-    ProjectNotFound,
-    TasksNotFound_projectId,
-    TasksNotFound_userId,
-)
 
 
 @pytest.fixture

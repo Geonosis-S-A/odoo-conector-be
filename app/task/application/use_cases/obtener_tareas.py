@@ -1,9 +1,7 @@
-from typing import Optional
 from app.task.domain.gateway import TaskGateway
 from app.task.domain.models import Task
 from app.task.application.Exeptions import (
     ProjectNotFound,
-    TasksNotFound_projectId,
     TasksNotFound_userId,
 )
 from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
