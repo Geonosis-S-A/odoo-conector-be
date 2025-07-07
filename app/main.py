@@ -73,7 +73,8 @@ app.add_middleware(
     ]  # todo: cambiar a la url del front
     if ENV == "LOCAL"
     else [
-        "https://odoo-conector-fe.vercel.app"
+        "https://odoo-conector-fe.vercel.app",
+        "http://localhost:8080",  # ! Sacar esto, solo temporal
     ],  # En producción, especificar los orígenes permitidos
     allow_credentials=True,
     allow_methods=["*"],
