@@ -134,9 +134,8 @@ class OdooClient:
                 ODOO_PASSWORD=self.password,
             )
         except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Error al conectar con Odoo: {str(e)}"
-            )
+            print("Error al conectar con Odoo: ", e)
+            raise HTTPException(status_code=500, detail="Error al conectar con Odoo")
 
 
 # Instancia global del cliente Odoo

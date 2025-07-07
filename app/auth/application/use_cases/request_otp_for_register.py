@@ -25,6 +25,7 @@ class RequestOTPForRegisterUseCase:
 
     async def execute(self, email: str) -> bool:
         employee = self.employee_gateway.get_by_email(email)
+        print("employee", employee)
         if not employee:
             raise EmployeeNotFound("El email no ha sido registrado en el sistema")
 
