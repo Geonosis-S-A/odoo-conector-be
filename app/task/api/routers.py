@@ -64,6 +64,7 @@ async def get_tasks(
             gateway, odoo_task_gateway, odoo_employee_gateway
         )
         tasks = use_case.execute(project_id)
+
         return [
             TaskResponse(
                 id=task.id,

@@ -30,10 +30,36 @@ class TestObtenerProyectosUseCase:
             print(f"ID: {project.id}, Nombre: {project.name}")
 
         # Assert
-        
+
         assert len(result) == 2
         assert all(isinstance(project, Project) for project in result)
         assert result[0].id == 1
         assert result[0].name == "Proyecto 1"
         assert result[1].id == 2
         assert result[1].name == "Proyecto 2"
+
+    def test_execute_returns_empty_list_when_no_projects(self, use_case, mock_gateway):
+        # Arrange
+        mock_gateway.all.return_value = []
+
+        # Act
+        result = use_case.execute()
+
+        # Assert
+        mock_gateway.all.assert_called_once()
+        assert result == []
+        assert len(result) == 0
+
+    def test_execute_returns_empty_list_when_gateway_returns_none(
+        self, use_case, mock_gateway
+    ):
+        # Arrange
+        mock_gateway.all.return_value = None
+
+        # Act
+        result = use_case.execute()
+
+        # Assert
+        mock_gateway.all.assert_called_once()
+        assert result == []
+        assert len(result) == 0

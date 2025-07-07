@@ -49,6 +49,23 @@ def test_get_user_projects(test_client):
 
 
 @pytest.mark.integration
+def test_get_projects_empty_returns_empty_array(test_client):
+    """Test de integración que verifica que cuando no hay proyectos se retorna un array vacío."""
+    # Note: This test assumes there might be scenarios where no projects exist
+    # In a real environment, this might be hard to test without data manipulation
+
+    # Act
+    response = test_client.get("/api/v1/projects/")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    # Even if there are projects, the response should be a list
+    # If empty, it should be an empty list, not a 404
+
+
+@pytest.mark.integration
 def test_get_projects_handles_odoo_connection_error():
     """Test de integración que verifica el manejo de errores de conexión con Odoo."""
     # TODO: Implementar mock de error de conexión con Odoo

@@ -6,7 +6,6 @@ from app.project.application.use_cases.obtener_proyectos import ObtenerProyectos
 from app.project.domain.gateway import ProjectGateway
 from app.project.infra.external.odd_project_gateway import OdooProjectGateway
 from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
-from app.task.application.Exeptions import ProjectsNotFound
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
@@ -27,6 +26,7 @@ def get_project_gateway(
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de proyectos"
         )
+
 
 def get_task_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
@@ -66,7 +66,8 @@ async def get_projects(
             )
             for project in projects
         ]
-    except ProjectsNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Error interno del servidor al obtener los proyectos")
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor al obtener los proyectos",
+        )

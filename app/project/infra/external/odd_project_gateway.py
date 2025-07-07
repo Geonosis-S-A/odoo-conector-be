@@ -6,7 +6,7 @@ class OdooProjectGateway(ProjectGateway):
     def __init__(self, odoo_client):
         self.odoo_client = odoo_client
 
-    def all(self) -> list[Project]:
+    def all(self) -> list[Project] | None:
         domain = []
 
         projects = self.odoo_client["models"].execute_kw(
@@ -18,5 +18,8 @@ class OdooProjectGateway(ProjectGateway):
             [domain],
             {"fields": ["id", "name"]},
         )
-        
+
+        if not projects:
+            return []
+
         return [Project(id=project["id"], name=project["name"]) for project in projects]

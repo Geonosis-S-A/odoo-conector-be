@@ -49,8 +49,10 @@ def setup_dependencies(mock_odoo_connection, mock_gateway):
 @pytest.fixture
 def override_gateway_dependency(mock_gateway):
     """Fixture para sobrescribir la dependencia del gateway de proyectos."""
+
     def override_get_project_gateway():
         return mock_gateway
+
     return override_get_project_gateway
 
 
@@ -58,7 +60,10 @@ def override_gateway_dependency(mock_gateway):
 def configure_test_client(test_client, mock_gateway, override_gateway_dependency):
     """Configura el test client con las dependencias mockeadas."""
     from app.project.api.routers import router
-    test_client.app.dependency_overrides[get_project_gateway] = override_gateway_dependency
+
+    test_client.app.dependency_overrides[get_project_gateway] = (
+        override_gateway_dependency
+    )
 
 
 class TestProjectGatewayDependency:
@@ -119,7 +124,7 @@ class TestGetProjects:
         # El método all() no acepta parámetros en la implementación actual
         mock_gateway.all.assert_called_once()
 
-    def test_get_projects_empty(self, mock_gateway, test_client):
+    def test_get_projects_empty_returns_empty_array(self, mock_gateway, test_client):
         # Arrange
         mock_gateway.all.return_value = []
 
@@ -128,8 +133,10 @@ class TestGetProjects:
         response = test_client.get("/api/v1/projects/", headers=headers)
 
         # Assert
-        # Cuando no hay proyectos, el endpoint debe devolver 404
-        assert response.status_code == 404
+        assert response.status_code == 200
+        data = response.json()
+        assert data == []
+        assert len(data) == 0
         # El método all() no acepta parámetros en la implementación actual
         mock_gateway.all.assert_called_once()
 

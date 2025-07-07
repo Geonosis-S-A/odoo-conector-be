@@ -6,5 +6,5 @@ from app.project.domain.models import Project
 
 class ProjectGateway(ABC):
     @abstractmethod
-    def all(self) -> list[Project]:
+    def all(self) -> list[Project] | None:
         pass
