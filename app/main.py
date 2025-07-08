@@ -75,7 +75,7 @@ app.add_middleware(
     if ENV == "LOCAL"
     else [
         "https://odoo-conector-fe.vercel.app",
-        "https://odoo-conector-fe-production.up.railway.app"
+        "https://odoo-conector-fe-production.up.railway.app",
         "http://localhost:8080",  # ! Sacar esto, solo temporal
     ],  # En producción, especificar los orígenes permitidos
     allow_credentials=True,
