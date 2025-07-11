@@ -222,7 +222,7 @@ async def request_otp(
         await password_recovery_use_case.request_otp(dto)
         return {"message": "OTP sent successfully"}
     except UserNotFound as e:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="El email no ha sido registrado")
     except OTPNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
 
