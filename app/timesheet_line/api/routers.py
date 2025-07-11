@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Dict
 from datetime import date
+import xmlrpc.client
 
 
 from app.shared.security.dependencies import get_current_user
@@ -40,6 +41,8 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetIdMismatchError,
     TimesheetEditError,
     TimesheetDeleteError,
+    OdooValidationError,
+    OdooConnectionError,
 )
 
 
@@ -88,6 +91,26 @@ async def create_timesheet_line(
         return lines
     except InvalidHoursError as e:
         raise HTTPException(status_code=400, detail=e.message)
+    except xmlrpc.client.Fault as fault_error:
+        # Error específico de Odoo (validaciones, restricciones, etc.)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Error de validación de Odoo: {fault_error.faultString}",
+        )
+    except xmlrpc.client.ProtocolError as protocol_error:
+        # Error de protocolo HTTP/HTTPS
+        raise HTTPException(
+            status_code=503,
+            detail=f"Error de conexión con Odoo: {protocol_error.errcode} - {protocol_error.errmsg}",
+        )
+    except OdooValidationError as e:
+        # Devolver exactamente el error que retorna Odoo
+        raise HTTPException(
+            status_code=422,
+            detail=f"Error de validación de Odoo: {e.odoo_error_message}",
+        )
+    except OdooConnectionError as e:
+        raise HTTPException(status_code=503, detail=e.message)
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
     except TimesheetCreationError as e:

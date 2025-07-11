@@ -49,6 +49,21 @@ class OdooConnectionError(TimesheetDomainError):
         super().__init__(message)
 
 
+class OdooValidationError(TimesheetDomainError):
+    """Error de validación específico de Odoo que contiene el mensaje original."""
+
+    def __init__(self, odoo_error_message: str, fault_code: str = ""):
+        """
+        Args:
+            odoo_error_message: Mensaje de error original de Odoo
+            fault_code: Código de error de Odoo (opcional)
+        """
+        self.odoo_error_message = odoo_error_message
+        self.fault_code = fault_code
+        # Usar el mensaje original de Odoo como mensaje de la excepción
+        super().__init__(odoo_error_message)
+
+
 class TimesheetCreationError(TimesheetDomainError):
     """Error al crear una línea de timesheet."""
 

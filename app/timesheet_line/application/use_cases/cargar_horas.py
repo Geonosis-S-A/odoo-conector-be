@@ -18,6 +18,20 @@ class CargarHorasUseCase:
     def execute(
         self, requests: list[CargarHorasRequest]
     ) -> list[DetailedTimesheetLine]:
+        """
+        Ejecuta la creación de líneas de timesheet.
+
+        Args:
+            requests: Lista de peticiones para crear líneas de timesheet
+
+        Returns:
+            list[DetailedTimesheetLine]: Lista de líneas de timesheet creadas
+
+        Raises:
+            InvalidHoursError: Cuando las horas son negativas
+            TimesheetCreationError: Para errores de creación
+            TimesheetNotFoundError: Cuando no se pueden obtener las líneas creadas
+        """
         timesheet_lines = []
         for req in requests:
             if req.hours < 0:
