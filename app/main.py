@@ -64,20 +64,31 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 
 # Configuración de CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+# Configuración de CORS según el entorno
+if ENV == "LOCAL":
+    allowed_origins = [
         "http://localhost:8080",
         "https://odoo-conector-fe.vercel.app",
         "https://odoo-conector-fe-murex.vercel.app",
         "https://odoo-conector-fe-production.up.railway.app",
-    ]  # todo: cambiar a la url del front
-    if ENV == "LOCAL"
-    else [
+    ]
+elif ENV == "STAGING":
+    allowed_origins = [
+        "https://odoo-conector-fe-production-3736.up.railway.app",
+    ]
+elif ENV == "PROD":
+    allowed_origins = [
+        "https://odoo-conector-fe-production.up.railway.app",
+    ]
+else:
+    allowed_origins = [
         "https://odoo-conector-fe.vercel.app",
         "https://odoo-conector-fe-production.up.railway.app",
-        "http://localhost:8080",  # ! Sacar esto, solo temporal
-    ],  # En producción, especificar los orígenes permitidos
+    ]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
