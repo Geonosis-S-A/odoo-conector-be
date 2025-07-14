@@ -1,13 +1,31 @@
 from abc import ABC, abstractmethod
-from app.timesheet_line.domain.models import TimesheetLine
+from datetime import date
+from typing import Optional
+from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 
-# Se definen las interfaces de los repositorios
 
-class TimesheetLineRepository(ABC):
+class TimesheetLineGateway(ABC):
     @abstractmethod
-    def save(self, timesheet_line: TimesheetLine) -> None:
-        pass
+    def create(self, timesheet_lines: list[TimesheetLine]) -> list[int] | None: ...
 
     @abstractmethod
-    def all(self) -> list[TimesheetLine]:
-        pass
+    def all(
+        self,
+        employee_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> list[DetailedTimesheetLine]: ...
+
+    @abstractmethod
+    def delete(self, timesheet_lines_ids: list[int]) -> bool: ...
+
+    @abstractmethod
+    def update(self, timesheet_line: TimesheetLine) -> bool: ...
+
+    @abstractmethod
+    def get_by_id(self, timesheet_line_id: int) -> DetailedTimesheetLine | None: ...
+
+    @abstractmethod
+    def get_by_ids(
+        self, timesheet_line_ids: list[int]
+    ) -> list[DetailedTimesheetLine]: ...
