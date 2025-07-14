@@ -13,7 +13,7 @@ class OdooConnection(TypedDict):
 
 
 def get_odoo_credentials() -> dict[str, str]:
-    """Obtiene las credenciales de Odoo según el entorno actual.
+    """Obtiene las credenciales de Odoo.
 
     Returns:
         dict: Diccionario con las credenciales de Odoo
@@ -22,19 +22,11 @@ def get_odoo_credentials() -> dict[str, str]:
         ValueError: Si alguna variable de entorno requerida no está definida
     """
     load_dotenv()
-    env = os.getenv("ENVIRONMENT", "local").lower()
 
     def get_env_var(name: str) -> str:
-        # Intentar obtener la variable específica del entorno
-        env_specific = os.getenv(f"{env.upper()}_{name}")
-        if env_specific:
-            return env_specific
-
-        # Si no existe, usar la variable base
         value = os.getenv(name)
         if not value:
             raise ValueError(f"Variable de entorno {name} no definida")
-
         return value
 
     return {
