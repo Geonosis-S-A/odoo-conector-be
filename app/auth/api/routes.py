@@ -49,7 +49,7 @@ from pydantic import BaseModel
 
 # Importar las dependencias correctas
 from app.auth.api.dependencies import (
-    get_email_service,
+    get_email_service_dependency,
     get_password_service,
 )
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
@@ -61,7 +61,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 # Definir la función de dependencia antes de los endpoints que la usan
 def get_password_recovery_use_case(
-    email_service=Depends(get_email_service),
+    email_service=Depends(get_email_service_dependency),
     password_service=Depends(get_password_service),
     db: Session = Depends(get_db),
 ) -> PasswordRecoveryUseCase:
@@ -75,7 +75,7 @@ def get_password_recovery_use_case(
 
 def get_request_otp_for_register_use_case(
     db: Session = Depends(get_db),
-    email_service=Depends(get_email_service),
+    email_service=Depends(get_email_service_dependency),
     odoo_client=Depends(get_odoo_connection),
 ) -> RequestOTPForRegisterUseCase:
     return RequestOTPForRegisterUseCase(
