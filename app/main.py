@@ -71,7 +71,7 @@ if ENV == "LOCAL":
     ]
 elif ENV == "STAGING":
     allowed_origins = [
-        "https://odoo-conector-fe-staging.up.railway.app",
+        "https://conecta-timesheet-staging-be.soportegeonosis.com.ar",
     ]
 elif ENV == "PROD":
     allowed_origins = [
