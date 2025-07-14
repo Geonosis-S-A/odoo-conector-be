@@ -382,23 +382,24 @@ class TestOdooTimesheetLineGateway:
                 name="Test Timesheet Line Emp1",
             )
         ]
-        timesheet_lines_emp2 = [
+        # Crear un segundo timesheet para el mismo empleado en una fecha diferente
+        timesheet_lines_emp1_diff_date = [
             TimesheetLine(
                 id=None,
-                employee_id=2,
+                employee_id=1,
                 project_id=1,
                 hours=1,
-                date=test_date,
-                name="Test Timesheet Line Emp2",
+                date=date(2024, 1, 10),  # Fecha fuera del rango de filtro
+                name="Test Timesheet Line Emp1 Old",
             )
         ]
 
         created_ids_emp1 = self.gateway.create(timesheet_lines_emp1)
-        created_ids_emp2 = self.gateway.create(timesheet_lines_emp2)
+        created_ids_emp1_old = self.gateway.create(timesheet_lines_emp1_diff_date)
 
-        assert created_ids_emp1 is not None and created_ids_emp2 is not None
+        assert created_ids_emp1 is not None and created_ids_emp1_old is not None
         created_id_emp1 = created_ids_emp1[0]
-        created_id_emp2 = created_ids_emp2[0]
+        created_id_emp1_old = created_ids_emp1_old[0]
 
         # Act
         lines_filtered = self.gateway.all(
@@ -409,10 +410,12 @@ class TestOdooTimesheetLineGateway:
         created_ids_filtered = [
             line.id
             for line in lines_filtered
-            if line.id in [created_id_emp1, created_id_emp2]
+            if line.id in [created_id_emp1, created_id_emp1_old]
         ]
         assert created_id_emp1 in created_ids_filtered
-        assert created_id_emp2 not in created_ids_filtered
+        assert (
+            created_id_emp1_old not in created_ids_filtered
+        )  # Fuera del rango de fechas
 
         # Verificar que todos los resultados son del empleado correcto y en el rango de fechas
         for line in lines_filtered:

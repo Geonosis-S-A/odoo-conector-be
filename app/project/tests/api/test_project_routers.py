@@ -81,11 +81,13 @@ class TestProjectGatewayDependency:
 
 
 class TestGetProjects:
-    def test_get_all_projects_success(self, mock_gateway, test_client):
+    def test_get_all_active_projects_success(self, mock_gateway, test_client):
+        """Test que verifica que el endpoint retorna todos los proyectos activos correctamente."""
         # Arrange
         mock_projects = [
-            Project(id=1, name="Proyecto 1"),
-            Project(id=2, name="Proyecto 2"),
+            Project(id=1, name="Proyecto Alpha"),
+            Project(id=2, name="Proyecto Beta"),
+            Project(id=3, name="Proyecto Gamma"),
         ]
         mock_gateway.all.return_value = mock_projects
 
@@ -96,22 +98,26 @@ class TestGetProjects:
         # Assert
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
+        assert len(data) == 3
         assert data[0]["id"] == 1
-        assert data[0]["name"] == "Proyecto 1"
+        assert data[0]["name"] == "Proyecto Alpha"
         assert data[1]["id"] == 2
-        assert data[1]["name"] == "Proyecto 2"
-        # El método all() no acepta parámetros en la implementación actual
-        mock_gateway.all.assert_called_once()
+        assert data[1]["name"] == "Proyecto Beta"
+        assert data[2]["id"] == 3
+        assert data[2]["name"] == "Proyecto Gamma"
 
-    def test_get_user_projects_success(self, mock_gateway, test_client):
+        # Verificar que el gateway se llama sin parámetros
+        mock_gateway.all.assert_called_once_with()
+
+    def test_get_projects_ignores_user_parameter(self, mock_gateway, test_client):
+        """Test que verifica que el endpoint ignora el parámetro user (no implementado)."""
         # Arrange
         mock_projects = [
-            Project(id=1, name="Proyecto Usuario"),
+            Project(id=1, name="Proyecto Test"),
         ]
         mock_gateway.all.return_value = mock_projects
 
-        # Act
+        # Act - Con parámetro user que debe ser ignorado
         headers = {"Authorization": "Bearer testtoken"}
         response = test_client.get("/api/v1/projects/?user=1", headers=headers)
 
@@ -120,11 +126,13 @@ class TestGetProjects:
         data = response.json()
         assert len(data) == 1
         assert data[0]["id"] == 1
-        assert data[0]["name"] == "Proyecto Usuario"
-        # El método all() no acepta parámetros en la implementación actual
-        mock_gateway.all.assert_called_once()
+        assert data[0]["name"] == "Proyecto Test"
+
+        # Verificar que el gateway se llama sin parámetros (ignora el user)
+        mock_gateway.all.assert_called_once_with()
 
     def test_get_projects_empty_returns_empty_array(self, mock_gateway, test_client):
+        """Test que verifica que el endpoint retorna una lista vacía cuando no hay proyectos."""
         # Arrange
         mock_gateway.all.return_value = []
 
@@ -137,10 +145,32 @@ class TestGetProjects:
         data = response.json()
         assert data == []
         assert len(data) == 0
-        # El método all() no acepta parámetros en la implementación actual
-        mock_gateway.all.assert_called_once()
+        assert isinstance(data, list)
+
+        # Verificar que el gateway se llama correctamente
+        mock_gateway.all.assert_called_once_with()
+
+    def test_get_projects_handles_none_from_gateway(self, mock_gateway, test_client):
+        """Test que verifica que el endpoint maneja correctamente cuando el gateway retorna None."""
+        # Arrange
+        mock_gateway.all.return_value = None
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.get("/api/v1/projects/", headers=headers)
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data == []
+        assert len(data) == 0
+        assert isinstance(data, list)
+
+        # Verificar que el gateway se llama correctamente
+        mock_gateway.all.assert_called_once_with()
 
     def test_get_projects_server_error(self, mock_gateway, test_client):
+        """Test que verifica el manejo de errores del servidor."""
         # Arrange
         mock_gateway.all.side_effect = Exception("Error de servidor")
 
@@ -151,3 +181,72 @@ class TestGetProjects:
         # Assert
         assert response.status_code == 500
         assert "Error interno del servidor" in response.json()["detail"]
+
+        # Verificar que el gateway se llama correctamente
+        mock_gateway.all.assert_called_once_with()
+
+    def test_get_projects_response_format(self, mock_gateway, test_client):
+        """Test que verifica el formato de respuesta del endpoint."""
+        # Arrange
+        mock_projects = [
+            Project(id=42, name="Proyecto con ID especial"),
+        ]
+        mock_gateway.all.return_value = mock_projects
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.get("/api/v1/projects/", headers=headers)
+
+        # Assert
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 1
+
+        # Verificar estructura de ProjectResponse
+        project = data[0]
+        assert set(project.keys()) == {"id", "name"}
+        assert project["id"] == 42
+        assert project["name"] == "Proyecto con ID especial"
+
+        # Verificar que el gateway se llama correctamente
+        mock_gateway.all.assert_called_once_with()
+
+    def test_get_projects_duplicate_handling_in_use_case(
+        self, mock_gateway, test_client
+    ):
+        """Test que verifica que los duplicados son manejados por el caso de uso."""
+        # Arrange - Simular duplicados que serían manejados por el caso de uso
+        mock_projects = [
+            Project(id=1, name="Proyecto Alpha"),
+            Project(id=2, name="Proyecto Beta"),
+            Project(id=1, name="Proyecto Alpha Duplicado"),  # Duplicado
+        ]
+        mock_gateway.all.return_value = mock_projects
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.get("/api/v1/projects/", headers=headers)
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+
+        # El caso de uso elimina duplicados, por lo que solo deben retornarse 2 proyectos únicos
+        assert len(data) == 2  # El caso de uso elimina duplicados
+
+        # Verificar que se mantienen los proyectos únicos
+        project_ids = [project["id"] for project in data]
+        assert 1 in project_ids
+        assert 2 in project_ids
+        assert len(set(project_ids)) == 2  # No hay duplicados
+
+        # Verificar que se mantiene el primer proyecto encontrado para cada ID
+        projects_by_id = {project["id"]: project for project in data}
+        assert projects_by_id[1]["name"] == "Proyecto Alpha"  # Primer nombre encontrado
+        assert projects_by_id[2]["name"] == "Proyecto Beta"
+
+        # Verificar que el gateway se llama correctamente
+        mock_gateway.all.assert_called_once_with()

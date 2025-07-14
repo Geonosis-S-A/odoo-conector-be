@@ -148,7 +148,7 @@ async def test_password_recovery_invalid_email(
         json={"email": "nonexistent@example.com"},
     )
     assert response.status_code == 404
-    assert response.json() == {"detail": "User not found"}
+    assert response.json() == {"detail": "El email no ha sido registrado en el sistema"}
 
 
 @pytest.mark.asyncio

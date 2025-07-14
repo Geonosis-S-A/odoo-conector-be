@@ -19,7 +19,6 @@ class TimesheetLine:
     date: date_t
     task_id: Optional[int] = None
 
-
     @classmethod
     def from_request(
         cls,
@@ -33,11 +32,11 @@ class TimesheetLine:
     ):
         return cls(
             id=id,
+            name=name,
             employee_id=employee_id,
             project_id=project_id,
             hours=hours,
             date=date,
-            name=name,
             task_id=task_id,
         )
 

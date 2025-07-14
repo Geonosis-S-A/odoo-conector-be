@@ -20,7 +20,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         date_obj: date = datetime.strptime(date_str, "%Y-%m-%d").date()
 
-        # Odoo devuelve los IDs como tuplas [id, nombre]
+        # Odoo devuelve los IDs como tuplas [id, nombre] o False si está vacío
         task_id: int | None = None
         raw_task_id = odoo_data.get("task_id")
         if isinstance(raw_task_id, list) and len(raw_task_id) > 0:
@@ -28,11 +28,27 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         elif isinstance(raw_task_id, (int, str)):
             task_id = int(raw_task_id)
 
+        # Manejar employee_id que puede ser False o [id, nombre]
+        employee_id = 0
+        raw_employee_id = odoo_data.get("employee_id", False)
+        if isinstance(raw_employee_id, list) and len(raw_employee_id) > 0:
+            employee_id = raw_employee_id[0]
+        elif isinstance(raw_employee_id, (int, str)):
+            employee_id = int(raw_employee_id)
+
+        # Manejar project_id que puede ser False o [id, nombre]
+        project_id = 0
+        raw_project_id = odoo_data.get("project_id", False)
+        if isinstance(raw_project_id, list) and len(raw_project_id) > 0:
+            project_id = raw_project_id[0]
+        elif isinstance(raw_project_id, (int, str)):
+            project_id = int(raw_project_id)
+
         return TimesheetLine(
             id=odoo_data.get("id", None),
             name=odoo_data.get("name", ""),
-            employee_id=odoo_data.get("employee_id", [0, ""])[0],
-            project_id=odoo_data.get("project_id", [0, ""])[0],
+            employee_id=employee_id,
+            project_id=project_id,
             hours=float(odoo_data.get("unit_amount", 0.0)),
             date=date_obj,
             task_id=task_id,
@@ -49,15 +65,20 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         date_obj: date = datetime.strptime(date_str, "%Y-%m-%d").date()
 
-        # Odoo devuelve los IDs como tuplas [id, nombre]
+        # Odoo devuelve los IDs como tuplas [id, nombre] o False si está vacío
         task: Task | None = None
         raw_task_id = odoo_data.get("task_id")
-        if raw_task_id is None:
+        if raw_task_id is None or raw_task_id is False:
             task = None
         elif isinstance(raw_task_id, list) and len(raw_task_id) > 0:
-            # Obtenemos la información del proyecto desde los datos de la línea de timesheet
-            project_id = odoo_data.get("project_id", [0, ""])[0]
-            project_name = odoo_data.get("project_id", [0, ""])[1]
+            # Obtener información del proyecto para el task
+            project_id = 0
+            project_name = ""
+            raw_project_id = odoo_data.get("project_id", False)
+            if isinstance(raw_project_id, list) and len(raw_project_id) > 0:
+                project_id = raw_project_id[0]
+                project_name = raw_project_id[1]
+
             task = Task(
                 id=raw_task_id[0],
                 name=raw_task_id[1],
@@ -65,13 +86,31 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 project_name=project_name,
             )
 
+        # Manejar employee_id que puede ser False o [id, nombre]
+        employee_id = 0
+        raw_employee_id = odoo_data.get("employee_id", False)
+        if isinstance(raw_employee_id, list) and len(raw_employee_id) > 0:
+            employee_id = raw_employee_id[0]
+        elif isinstance(raw_employee_id, (int, str)):
+            employee_id = int(raw_employee_id)
+
+        # Manejar project_id que puede ser False o [id, nombre]
+        project_id = 0
+        project_name = ""
+        raw_project_id = odoo_data.get("project_id", False)
+        if isinstance(raw_project_id, list) and len(raw_project_id) > 0:
+            project_id = raw_project_id[0]
+            project_name = raw_project_id[1]
+        elif isinstance(raw_project_id, (int, str)):
+            project_id = int(raw_project_id)
+
         return DetailedTimesheetLine(
             id=odoo_data.get("id", None),
             name=odoo_data.get("name", ""),
-            employee_id=odoo_data.get("employee_id", [0, ""])[0],
+            employee_id=employee_id,
             project=Project(
-                id=odoo_data.get("project_id", [0, ""])[0],
-                name=odoo_data.get("project_id", [0, ""])[1],
+                id=project_id,
+                name=project_name,
             ),
             hours=float(odoo_data.get("unit_amount", 0.0)),
             date=date_obj,

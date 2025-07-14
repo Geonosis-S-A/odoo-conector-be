@@ -28,7 +28,7 @@ def _cleanup_test_data(repository):
     for line in test_lines:
         if "Test Timesheet" in line.name:
             if line.id:
-                repository.delete(line.id)
+                repository.delete([line.id])
 
 
 @pytest.mark.integration
@@ -421,7 +421,7 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
 @pytest.mark.integration
 def test_list_timesheet_lines_with_combined_filters(test_client):
     """Test de integración que prueba el filtrado combinado por empleado y fechas."""
-    # Arrange
+    # Arrange - Solo crear timesheets para employee_id=1 (que existe)
     create_data_emp1 = [
         {
             "name": "Test Timesheet Emp1",
@@ -429,20 +429,13 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
             "project_id": 1,
             "hours": 8.0,
             "date": "2024-01-15",
-        },
-        {
-            "name": "Test Timesheet Emp2",
-            "employee_id": 2,
-            "project_id": 1,
-            "hours": 8.0,
-            "date": "2024-01-15",
-        },
+        }
     ]
     create_response_emp1 = test_client.post("/api/v1/timesheet/", json=create_data_emp1)
     assert create_response_emp1.status_code == 200
 
     created_ids = [item["id"] for item in create_response_emp1.json()]
-    assert len(created_ids) == 2  # Verificar que se crearon 2 timesheets
+    assert len(created_ids) == 1  # Verificar que se creó 1 timesheet
 
     # Act
     response = test_client.get(
@@ -455,7 +448,7 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
     assert isinstance(data, list)
 
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
-    # Solo el timesheet del empleado 1 debe estar en la respuesta
+    # El timesheet del empleado 1 debe estar en la respuesta
     assert len(created_ids_in_response) == 1
 
     # Verificar que todos los resultados son del empleado correcto
