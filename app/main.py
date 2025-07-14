@@ -68,22 +68,18 @@ async def generic_exception_handler(request: Request, exc: Exception):
 if ENV == "LOCAL":
     allowed_origins = [
         "http://localhost:8080",
-        "https://odoo-conector-fe.vercel.app",
-        "https://odoo-conector-fe-murex.vercel.app",
-        "https://odoo-conector-fe-production.up.railway.app",
     ]
 elif ENV == "STAGING":
     allowed_origins = [
-        "https://odoo-conector-fe-production-3736.up.railway.app",
+        "https://odoo-conector-fe-staging-3736.up.railway.app",
     ]
 elif ENV == "PROD":
     allowed_origins = [
-        "https://odoo-conector-fe-production.up.railway.app",
+        "https://odoo-conector-fe-production-3736.up.railway.app",
     ]
 else:
     allowed_origins = [
-        "https://odoo-conector-fe.vercel.app",
-        "https://odoo-conector-fe-production.up.railway.app",
+        "https://odoo-conector-fe-production-3736.up.railway.app",
     ]
 
 app.add_middleware(
