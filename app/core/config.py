@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     EMAIL_USER: str = os.getenv("EMAIL_USER", "")
     EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+    RESEND_APIKEY: str = os.getenv("RESEND_APIKEY", "")
 
     class Config:
         env_file = ".env"
