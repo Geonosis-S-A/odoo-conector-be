@@ -15,11 +15,75 @@ class OdooEmployeeGateway(EmployeeGateway):
             # Si no hay email válido, usamos un email temporal basado en el ID
             work_email = f"Carga_mi_mail_en_odoo_y_volve_a_sincronizar{odoo_data.get('id')}@temporary.com"
 
+        employee_id = odoo_data.get("id")
+        if not isinstance(employee_id, int):
+            raise ValueError(f"ID de empleado inválido: {employee_id}")
+
         return Employee(
-            id=odoo_data.get("id"),
+            id=employee_id,
             email=work_email,
             full_name=odoo_data.get("name", ""),
         )
+
+    def get_user_roles_by_email(self, email: str) -> List[int] | None:
+        """Obtiene los roles de un usuario de Odoo por su email."""
+        try:
+            # Buscar el usuario en res.users por email
+            user_ids = cast(
+                List[int],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "res.users",
+                    "search",
+                    [[["login", "=", email]]],
+                ),
+            )
+
+            if not user_ids:
+                return None
+
+            # Obtener los datos del usuario incluyendo sus roles
+            # Intentamos primero con 'groups_id', si falla probamos con 'group_ids'
+            try:
+                user_data = cast(
+                    List[Dict[str, Any]],
+                    self.odoo_client["models"].execute_kw(
+                        self.odoo_client["ODOO_DB"],
+                        self.odoo_client["uid"],
+                        self.odoo_client["ODOO_PASSWORD"],
+                        "res.users",
+                        "read",
+                        [user_ids[0:1]],  # Solo el primer usuario encontrado
+                        {"fields": ["groups_id"]},
+                    ),
+                )
+                field_name = "groups_id"
+            except Exception as e:
+                user_data = cast(
+                    List[Dict[str, Any]],
+                    self.odoo_client["models"].execute_kw(
+                        self.odoo_client["ODOO_DB"],
+                        self.odoo_client["uid"],
+                        self.odoo_client["ODOO_PASSWORD"],
+                        "res.users",
+                        "read",
+                        [user_ids[0:1]],  # Solo el primer usuario encontrado
+                        {"fields": ["group_ids"]},
+                    ),
+                )
+                field_name = "group_ids"
+
+            if not user_data:
+                return None
+
+            # Extraer los IDs de los grupos/roles
+            roles = cast(List[int], user_data[0].get(field_name, []))
+            return roles
+
+        except Exception as e:
+            return None
 
     def all(self) -> List[Employee]:
         """Obtiene todos los empleados de Odoo.

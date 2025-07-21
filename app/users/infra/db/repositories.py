@@ -20,6 +20,7 @@ class SQLModelUserRepository(UserRepository):
                 is_active=False,
                 is_superuser=user.is_superuser,
                 hashed_password="",  # TODO: Implementar hash de contraseña
+                roles=user.roles,
             )
             self.db.add(user_model)
         self.db.commit()
@@ -39,6 +40,7 @@ class SQLModelUserRepository(UserRepository):
             full_name=user_model.full_name,
             is_active=user_model.is_active,
             is_superuser=user_model.is_superuser,
+            roles=user_model.roles,
         )
 
     def all(self) -> list[User]:
@@ -51,6 +53,7 @@ class SQLModelUserRepository(UserRepository):
                 full_name=user.full_name,
                 is_active=user.is_active,
                 is_superuser=user.is_superuser,
+                roles=user.roles,
             )
             for user in users
         ]
@@ -63,6 +66,7 @@ class SQLModelUserRepository(UserRepository):
             is_active=user.is_active,
             is_superuser=user.is_superuser,
             hashed_password="",  # TODO: Implementar hash de contraseña
+            roles=user.roles,
         )
         self.db.add(user_model)
         self.db.commit()
@@ -79,6 +83,7 @@ class SQLModelUserRepository(UserRepository):
             full_name=user_model.full_name,
             is_active=user_model.is_active,
             is_superuser=user_model.is_superuser,
+            roles=user_model.roles,
         )
 
     def update_password(self, user_id: int, new_hashed_password: str) -> bool:
@@ -102,6 +107,7 @@ class SQLModelUserRepository(UserRepository):
         # Actualizar solo los campos que pueden cambiar desde Odoo
         user_model.email = user.email
         user_model.full_name = user.full_name
+        user_model.roles = user.roles
         # Mantener el estado actual de is_active e is_superuser
 
         self.db.commit()
@@ -120,4 +126,5 @@ class SQLModelUserRepository(UserRepository):
             full_name=user_model.full_name,
             is_active=user_model.is_active,
             is_superuser=user_model.is_superuser,
+            roles=user_model.roles,
         )

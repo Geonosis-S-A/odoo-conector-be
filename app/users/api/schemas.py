@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     full_name: str
     is_active: bool
     is_superuser: bool
+    roles: Optional[List[int]] = None
 
 
 class UserCreate(UserBase):
@@ -26,6 +27,9 @@ class UserInDB(UserBase):
 
 class UserResponse(UserBase):
     id: int
+
+    class Config:
+        from_attributes = True
 
 
 class UserSyncResponse(BaseModel):
