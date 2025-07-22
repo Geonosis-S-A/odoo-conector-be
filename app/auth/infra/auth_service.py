@@ -25,7 +25,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class Settings:
     # Database Settings (from .env)
-    DATABASE_URL: str = "sqlite:///./app.db"
+
     DIRECT_URL: Optional[str] = None
 
     # JWT Settings
