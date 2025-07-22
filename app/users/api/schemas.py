@@ -33,6 +33,8 @@ class UserResponse(UserBase):
 
 
 class UserSyncResponse(BaseModel):
-    updated: List[UserResponse]
-    unchanged: List[UserResponse]
-    summary: str
+    success: bool
+    message: str
+    users_created: int
+    users_updated: int
+    total_processed: int

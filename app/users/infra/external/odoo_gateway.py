@@ -85,6 +85,77 @@ class OdooEmployeeGateway(EmployeeGateway):
         except Exception as e:
             return None
 
+    def get_all_users_with_roles(self) -> List[Dict[str, Any]]:
+        """Obtiene todos los usuarios activos de Odoo con sus roles."""
+        try:
+            # Obtener usuarios activos con sus roles
+            users = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "res.users",
+                    "search_read",
+                    [[["active", "=", True]]],
+                    {
+                        "fields": ["id", "name", "login", "group_ids"],
+                        "order": "name",
+                    },
+                ),
+            )
+
+            # Filtrar usuarios que también sean empleados
+            user_employees = []
+            for user in users:
+                # Verificar si el usuario tiene un empleado asociado
+                employee_ids = cast(
+                    List[int],
+                    self.odoo_client["models"].execute_kw(
+                        self.odoo_client["ODOO_DB"],
+                        self.odoo_client["uid"],
+                        self.odoo_client["ODOO_PASSWORD"],
+                        "hr.employee",
+                        "search",
+                        [[["user_id", "=", user["id"]]]],
+                    ),
+                )
+
+                if employee_ids:
+                    # Obtener datos del empleado
+                    employee_data = cast(
+                        List[Dict[str, Any]],
+                        self.odoo_client["models"].execute_kw(
+                            self.odoo_client["ODOO_DB"],
+                            self.odoo_client["uid"],
+                            self.odoo_client["ODOO_PASSWORD"],
+                            "hr.employee",
+                            "read",
+                            [employee_ids[0:1]],
+                            {"fields": ["id", "name", "work_email"]},
+                        ),
+                    )
+
+                    if employee_data:
+                        # Combinar datos del usuario y empleado
+                        combined_data = {
+                            "id": employee_data[0]["id"],  # ID del empleado
+                            "name": employee_data[0]["name"],
+                            "email": employee_data[0].get("work_email")
+                            or user.get("login"),
+                            "user_id": user["id"],  # ID del usuario para referencia
+                            "roles": user.get("group_ids", [])
+                            if isinstance(user.get("group_ids"), list)
+                            else [],
+                        }
+                        user_employees.append(combined_data)
+
+            return user_employees
+
+        except Exception as e:
+            print(f"Error al obtener usuarios con roles: {e}")
+            return []
+
     def all(self) -> List[Employee]:
         """Obtiene todos los empleados de Odoo.
 
