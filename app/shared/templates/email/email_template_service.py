@@ -61,6 +61,19 @@ class EmailTemplateService:
                 "ISOLOGOTIPO_NEGRO-AZUL.png"
             )
 
+        # Manejar condiciones especiales para mostrar/ocultar secciones
+        show_body_section = context.get("SHOW_BODY_SECTION", "false") == "true"
+        
+        if not show_body_section:
+            # Remover la sección del motivo de revisión completa
+            import re
+            pattern = r'{{#if_SHOW_BODY_SECTION_true}}.*?{{/if_SHOW_BODY_SECTION_true}}'
+            template_content = re.sub(pattern, '', template_content, flags=re.DOTALL)
+        else:
+            # Remover solo las etiquetas condicionales
+            template_content = template_content.replace('{{#if_SHOW_BODY_SECTION_true}}', '')
+            template_content = template_content.replace('{{/if_SHOW_BODY_SECTION_true}}', '')
+
         # Reemplazar todas las variables del contexto
         for key, value in context.items():
             placeholder = f"{{{{{key}}}}}"
