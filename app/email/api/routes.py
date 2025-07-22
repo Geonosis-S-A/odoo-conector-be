@@ -39,7 +39,7 @@ async def review_mail(
     try:
         await email_service.send_review_mail(
             request.user_mail,
-            request.timesheet_line_id,
+            request.timesheet_line_ids,
             timesheet_line_gateway,
             request.body,
         )

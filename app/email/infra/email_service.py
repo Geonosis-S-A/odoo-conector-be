@@ -15,9 +15,9 @@ class EmailService(Protocol):
     async def send_review_mail(
         self,
         user_mail: str,
-        body: str,
-        timesheet_line_id: int,
+        timesheet_line_ids: list[int],
         timesheet_line_gateway: TimesheetLineGateway,
+        body: Optional[str] = None,
     ) -> None:
         """Envía un email de revisión al usuario"""
         pass
@@ -61,34 +61,53 @@ class ResendEmailService:
     async def send_review_mail(
         self,
         user_mail: str,
-        timesheet_line_id: int,
+        timesheet_line_ids: list[int],
         timesheet_line_gateway: TimesheetLineGateway,
         body: Optional[str] = None,
     ) -> None:
         """Envía un email de revisión al usuario usando Resend"""
         try:
-            timesheet_line = timesheet_line_gateway.get_by_id(timesheet_line_id)
+            # Obtener todos los timesheet lines
+            timesheet_lines = []
+            for timesheet_id in timesheet_line_ids:
+                timesheet_line = timesheet_line_gateway.get_by_id(timesheet_id)
+                if timesheet_line:
+                    timesheet_lines.append(timesheet_line)
+                else:
+                    print(f"Advertencia: No se encontró el timesheet con id {timesheet_id}")
             
-            if not timesheet_line:
-                raise Exception(f"No se encontró el timesheet con id {timesheet_line_id}")
+            if not timesheet_lines:
+                raise Exception("No se encontraron registros de timesheet válidos")
+            
+            # Preparar datos para el template
+            timesheet_data = []
+            for timesheet_line in timesheet_lines:
+                timesheet_data.append({
+                    "hours": f"{timesheet_line.hours} hs",
+                    "project_name": timesheet_line.project.name if timesheet_line.project else "",
+                    "task_name": timesheet_line.task.name if timesheet_line.task else "",
+                    "date": timesheet_line.date.strftime("%d/%m/%Y"),
+                })
+            
             # Usar el servicio de templates para renderizar el email
             html_body = email_template_service.render_template(
                 "review_mail",
                 BODY=body or "",
-                HOURS= f"{timesheet_line.hours} hs",
-                PROJECT_NAME=timesheet_line.project.name if timesheet_line.project else "",
-                TASK_NAME=timesheet_line.task.name if timesheet_line.task else "",
                 USER_MAIL=user_mail,
-                TIMESTAMP=timesheet_line.date.strftime("%d/%m/%Y"),
+                TIMESHEET_COUNT=len(timesheet_lines),
+                TIMESHEET_DATA=timesheet_data,
                 SHOW_BODY_SECTION="true" if body else "false",
             )
+
+            # Determinar el asunto según la cantidad de registros
+            subject = "⚠️ Revisión de registro de horas" if len(timesheet_lines) == 1 else f"⚠️ Revisión de {len(timesheet_lines)} registros de horas"
 
             # Enviar email usando Resend
             resend.Emails.send(
                 {
                     "from": f"Geonosis <{settings.EMAIL_USER}>",
                     "to": user_mail,
-                    "subject": "Revisión de horas ⚠️",
+                    "subject": subject,
                     "html": html_body,
                 }
             )

@@ -42,6 +42,57 @@ class EmailTemplateService:
             print(f"Error cargando imagen {image_name}: {e}")
             return ""
 
+    def _handle_timesheet_records(self, template_content: str, context: Dict[str, Any]) -> str:
+        """Maneja el renderizado de los registros de timesheet"""
+        if "TIMESHEET_DATA" in context:
+            timesheet_data = context.get("TIMESHEET_DATA", [])
+            timesheet_html = ""
+            
+            for i, data in enumerate(timesheet_data):
+                timesheet_html += f"""
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8F9FA;border-radius:8px;border:1px solid #E9ECEF;margin:24px 0;">
+                        <tbody>
+                            <tr>
+                                <td style="padding:20px;">
+                                    <h3 style="color:#333333;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont,'Segoe UI','Roboto','Oxygen','Ubuntu','Cantarell','Fira Sans','Droid Sans','Helvetica Neue',sans-serif;font-size:14px;font-weight:600;margin:0 0 12px 0;text-transform:uppercase;letter-spacing:0.5px;color:#666666;">
+                                        Registro #{i + 1}
+                                    </h3>
+                                    <p style="font-size:15px;line-height:22px;color:#333333;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:0;">
+                                        <strong>Proyecto:</strong> {data.get('project_name', '')}<br />
+                                        <strong>Tarea:</strong> {data.get('task_name', '')}<br />
+                                        <strong>Horas:</strong> {data.get('hours', '')}<br />
+                                        <strong>Fecha:</strong> {data.get('date', '')}
+                                    </p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                """
+            
+            template_content = template_content.replace("{{TIMESHEET_RECORDS}}", timesheet_html)
+
+            count = len(timesheet_data)
+            if count == 1:
+                context["TIMESHEET_MESSAGE"] = "uno de tus registros de horas ha sido marcado"
+            else:
+                context["TIMESHEET_MESSAGE"] = f"{count} de tus registros de horas han sido marcados"
+        
+        return template_content
+
+    def _handle_conditional_sections(self, template_content: str, context: Dict[str, Any]) -> str:
+        """Maneja las secciones condicionales como el motivo de revisión"""
+        show_body_section = context.get("SHOW_BODY_SECTION", "false") == "true"
+        
+        import re
+        pattern = r'{{#if_SHOW_BODY_SECTION_true}}.*?{{/if_SHOW_BODY_SECTION_true}}'
+        
+        if not show_body_section:
+            template_content = re.sub(pattern, '', template_content, flags=re.DOTALL)
+        else:
+            template_content = re.sub(r'{{#if_SHOW_BODY_SECTION_true}}|{{/if_SHOW_BODY_SECTION_true}}', '', template_content, flags=re.DOTALL)
+            
+        return template_content
+
     def render_template(self, template_name: str, **context: Any) -> str:
         """
         Renderiza un template con las variables de contexto proporcionadas.
@@ -61,23 +112,14 @@ class EmailTemplateService:
                 "ISOLOGOTIPO_NEGRO-AZUL.png"
             )
 
-        # Manejar condiciones especiales para mostrar/ocultar secciones
-        show_body_section = context.get("SHOW_BODY_SECTION", "false") == "true"
-        
-        if not show_body_section:
-            # Remover la sección del motivo de revisión completa
-            import re
-            pattern = r'{{#if_SHOW_BODY_SECTION_true}}.*?{{/if_SHOW_BODY_SECTION_true}}'
-            template_content = re.sub(pattern, '', template_content, flags=re.DOTALL)
-        else:
-            # Remover solo las etiquetas condicionales
-            template_content = template_content.replace('{{#if_SHOW_BODY_SECTION_true}}', '')
-            template_content = template_content.replace('{{/if_SHOW_BODY_SECTION_true}}', '')
+        template_content = self._handle_timesheet_records(template_content, context)
+        template_content = self._handle_conditional_sections(template_content, context)
 
-        # Reemplazar todas las variables del contexto
+        # Reemplazar todas las variables del contexto (excepto TIMESHEET_DATA que ya procesamos)
         for key, value in context.items():
-            placeholder = f"{{{{{key}}}}}"
-            template_content = template_content.replace(placeholder, str(value))
+            if key != "TIMESHEET_DATA":  # Skip ya que lo procesamos arriba
+                placeholder = f"{{{{{key}}}}}"
+                template_content = template_content.replace(placeholder, str(value))
 
         return template_content
 
