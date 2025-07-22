@@ -64,7 +64,7 @@ class SyncSingleUserChangesUseCase:
         if not has_changes:
             return {
                 "success": True,
-                "message": f"Usuario {user_id} no tiene cambios que sincronizar",
+                "message": "No hay cambios que sincronizar",
                 "user_updated": False,
                 "current_data": {
                     "email": local_user.email,
@@ -90,7 +90,7 @@ class SyncSingleUserChangesUseCase:
         if success:
             return {
                 "success": True,
-                "message": f"Usuario {user_id} sincronizado exitosamente",
+                "message": "Usuario sincronizado exitosamente",
                 "user_updated": True,
                 "changes_made": {
                     "email": {
