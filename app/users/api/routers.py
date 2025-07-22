@@ -11,12 +11,7 @@ from app.users.application.use_cases.sync_single_user_changes import (
 )
 from app.users.infra.db.repositories import SQLModelUserRepository
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
-from app.users.api.schemas import (
-    UserResponse,
-    UserSyncResponse,
-    UserSyncRequest,
-    SingleUserSyncResponse,
-)
+from app.users.api.schemas import UserResponse, UserSyncResponse, SingleUserSyncResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -61,15 +56,15 @@ async def sync_users(
         )
 
 
-@router.post("/sync-changes", response_model=SingleUserSyncResponse)
+@router.post("/sync/{user_id}", response_model=SingleUserSyncResponse)
 async def sync_user_changes(
-    request: UserSyncRequest,
+    user_id: int,
     db: Session = Depends(get_db),
     # current_user: dict = Depends(get_current_user),
 ):
     """
     Sincroniza cambios de un usuario específico desde Odoo.
-    Actualiza email, nombre y roles del usuario identificado por email.
+    Actualiza email, nombre y roles del usuario identificado por ID.
     Mantiene el estado de activación e is_superuser del usuario.
     """
     try:
@@ -85,7 +80,7 @@ async def sync_user_changes(
         )
 
         # Ejecutar sincronización para el usuario específico
-        result = use_case.execute(request.id)
+        result = use_case.execute(user_id)
 
         return SingleUserSyncResponse(
             success=result["success"],
@@ -98,5 +93,5 @@ async def sync_user_changes(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error al sincronizar usuario {request.id}: {str(e)}",
+            detail=f"Error al sincronizar usuario {user_id}: {str(e)}",
         )

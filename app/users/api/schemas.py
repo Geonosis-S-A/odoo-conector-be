@@ -40,10 +40,6 @@ class UserSyncResponse(BaseModel):
     total_processed: int
 
 
-class UserSyncRequest(BaseModel):
-    id: int
-
-
 class SingleUserSyncResponse(BaseModel):
     success: bool
     message: str
