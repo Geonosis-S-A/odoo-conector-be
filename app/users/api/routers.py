@@ -19,7 +19,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("/sync", response_model=UserSyncResponse)
 async def sync_users(
     db: Session = Depends(get_db),
-    # current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Sincroniza los usuarios desde Odoo a la base de datos local.
@@ -60,7 +60,7 @@ async def sync_users(
 async def sync_user_changes(
     user_id: int,
     db: Session = Depends(get_db),
-    # current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Sincroniza cambios de un usuario específico desde Odoo.
