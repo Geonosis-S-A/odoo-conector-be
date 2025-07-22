@@ -38,3 +38,15 @@ class UserSyncResponse(BaseModel):
     users_created: int
     users_updated: int
     total_processed: int
+
+
+class UserSyncRequest(BaseModel):
+    id: int
+
+
+class SingleUserSyncResponse(BaseModel):
+    success: bool
+    message: str
+    user_updated: bool
+    current_data: Optional[dict] = None
+    changes_made: Optional[dict] = None

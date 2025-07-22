@@ -6,10 +6,17 @@ from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
 from app.users.application.use_cases.sync_users import SyncUsersUseCase
-from app.users.application.use_cases.sync_user_changes import SyncUserChangesUseCase
+from app.users.application.use_cases.sync_single_user_changes import (
+    SyncSingleUserChangesUseCase,
+)
 from app.users.infra.db.repositories import SQLModelUserRepository
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
-from app.users.api.schemas import UserResponse, UserSyncResponse
+from app.users.api.schemas import (
+    UserResponse,
+    UserSyncResponse,
+    UserSyncRequest,
+    SingleUserSyncResponse,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -54,63 +61,42 @@ async def sync_users(
         )
 
 
-# @router.post("/sync-changes", response_model=UserSyncResponse)
-# async def sync_user_changes(
-#     db: Session = Depends(get_db),
-#     # current_user: dict = Depends(get_current_user),
-# ):
-#     """
-#     Sincroniza cambios de empleados desde Odoo SOLO para usuarios existentes.
-#     NO crea usuarios nuevos - eso se maneja por el proceso de login.
-#     Solo actualiza los campos email y full_name, manteniendo el estado actual del usuario.
-#     """
-#     try:
-#         # Inicializar dependencias
-#         odoo_client = get_odoo_connection()
-#         employee_gateway = OdooEmployeeGateway(odoo_client)
-#         user_repository = SQLModelUserRepository(db)
+@router.post("/sync-changes", response_model=SingleUserSyncResponse)
+async def sync_user_changes(
+    request: UserSyncRequest,
+    db: Session = Depends(get_db),
+    # current_user: dict = Depends(get_current_user),
+):
+    """
+    Sincroniza cambios de un usuario específico desde Odoo.
+    Actualiza email, nombre y roles del usuario identificado por email.
+    Mantiene el estado de activación e is_superuser del usuario.
+    """
+    try:
+        # Inicializar dependencias
+        odoo_client = get_odoo_connection()
+        employee_gateway = OdooEmployeeGateway(odoo_client)
+        user_repository = SQLModelUserRepository(db)
 
-#         # Crear y ejecutar caso de uso
-#         use_case = SyncUserChangesUseCase(
-#             employee_gateway=employee_gateway,
-#             user_repository=user_repository,
-#         )
-#         result = use_case.execute()
+        # Crear y ejecutar caso de uso
+        use_case = SyncSingleUserChangesUseCase(
+            employee_gateway=employee_gateway,
+            user_repository=user_repository,
+        )
 
-#         # Crear resumen
-#         summary = (
-#             f"Actualizados: {len(result['updated'])}, "
-#             f"Sin cambios: {len(result['unchanged'])}"
-#         )
+        # Ejecutar sincronización para el usuario específico
+        result = use_case.execute(request.id)
 
-#         return UserSyncResponse(
-#             updated=[
-#                 UserResponse(
-#                     id=user.id,
-#                     email=user.email,
-#                     full_name=user.full_name,
-#                     is_active=user.is_active,
-#                     is_superuser=user.is_superuser,
-#                 )
-#                 for user in result["updated"]
-#                 if user.id is not None
-#             ],
-#             unchanged=[
-#                 UserResponse(
-#                     id=user.id,
-#                     email=user.email,
-#                     full_name=user.full_name,
-#                     is_active=user.is_active,
-#                     is_superuser=user.is_superuser,
-#                 )
-#                 for user in result["unchanged"]
-#                 if user.id is not None
-#             ],
-#             summary=summary,
-#         )
+        return SingleUserSyncResponse(
+            success=result["success"],
+            message=result["message"],
+            user_updated=result["user_updated"],
+            current_data=result.get("current_data"),
+            changes_made=result.get("changes_made"),
+        )
 
-#     except Exception as e:
-#         raise HTTPException(
-#             status_code=500,
-#             detail=f"Error al sincronizar cambios de usuarios: {str(e)}",
-#         )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al sincronizar usuario {request.id}: {str(e)}",
+        )
