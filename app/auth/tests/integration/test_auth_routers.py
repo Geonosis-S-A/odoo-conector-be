@@ -39,6 +39,7 @@ def test_login_success(client, local_db_session):
         hashed_password=hashed_password,
         is_superuser=False,
         is_active=True,
+        roles=None,  # Usuario sin roles específicos
     )
     local_db_session.add(test_user)
     local_db_session.commit()
@@ -73,7 +74,47 @@ def test_login_success(client, local_db_session):
     assert json_data["user"]["user_id"] == saved_user.id
     assert json_data["user"]["user_name"] == saved_user.full_name
     assert json_data["user"]["user_email"] == saved_user.email
-    assert json_data["user"]["roles"] == ["user"]
+    # Ahora esperamos los roles reales del usuario (lista vacía si no tiene roles)
+    assert json_data["user"]["roles"] == []
+
+
+@pytest.mark.integration
+def test_login_success_with_roles(client, local_db_session):
+    """Test de integración: login exitoso con usuario que tiene roles específicos."""
+    # Arrange: Crear usuario de prueba con roles
+    password = "password123"
+    hashed_password = pwd_context.hash(password)
+    user_roles = [1, 2, 5]  # Lista de enteros que representan los roles
+
+    test_user = UserModel(
+        id=None,
+        email="user_with_roles@example.com",
+        full_name="Usuario Con Roles",
+        hashed_password=hashed_password,
+        is_superuser=False,
+        is_active=True,
+        roles=user_roles,
+    )
+    local_db_session.add(test_user)
+    local_db_session.commit()
+
+    data = {
+        "email": "user_with_roles@example.com",
+        "password": password,
+    }
+
+    # Act
+    response = client.post("/auth/login", json=data)
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json()
+    assert "access_token" in json_data
+    assert "user" in json_data
+    assert json_data["user"]["user_email"] == "user_with_roles@example.com"
+    assert json_data["user"]["user_name"] == "Usuario Con Roles"
+    # Verificar que los roles se retornan correctamente como lista de enteros
+    assert json_data["user"]["roles"] == user_roles
 
 
 @pytest.mark.integration

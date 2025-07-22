@@ -35,6 +35,7 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
             password=user_model.hashed_password,
             is_superuser=user_model.is_superuser,
             is_active=user_model.is_active,
+            roles=user_model.roles,
         )
 
     def get_user_by_id(self, user_id: int) -> UserCredentials | None:
@@ -52,6 +53,7 @@ class SQLModelUserCredentialsRepository(UserCredentialsRepository):
             password=user_model.hashed_password,
             is_superuser=user_model.is_superuser,
             is_active=user_model.is_active,
+            roles=user_model.roles,
         )
 
     def update_password(self, user_id: int, new_hashed_password: str) -> bool:

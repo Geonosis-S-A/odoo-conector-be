@@ -126,7 +126,7 @@ async def login(
             "user_id": tokens.user.user_id,
             "user_email": tokens.user.user_email,
             "user_name": tokens.user.user_name,
-            "roles": tokens.user.roles,  # Asegúrate de que los roles están correctamente definidos
+            "roles": tokens.user.roles,
         },
     }
 

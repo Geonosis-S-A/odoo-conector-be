@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import List, Optional
 
 
 @dataclass
@@ -7,7 +8,7 @@ class TokenData:
     user_id: int
     user_email: str
     user_name: str
-    roles: list[str]
+    roles: List[int]
 
 
 @dataclass
@@ -25,6 +26,7 @@ class UserCredentials:
     name: str
     is_superuser: bool
     is_active: bool
+    roles: Optional[List[int]] = None
 
 
 @dataclass

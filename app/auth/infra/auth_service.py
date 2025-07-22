@@ -117,16 +117,19 @@ class TokenService:
 
         # Se decodea el el token para ver si es valido
         payload = self.verify_token(refresh_token)
-        token_data = TokenData(
-            user_id=payload["user_id"],
-            user_email=payload["user_email"],
-            user_name=payload["user_name"],
-            roles=payload["roles"],
-        )
+
         # Con el payload, se verifica que el usuario siga existiendo en base de datos
-        user = user_repository.get_user_credentials(token_data.user_email)
+        user = user_repository.get_user_credentials(payload["user_email"])
         if not user:
             raise UserNotFound("User not found")
+
+        # Crear TokenData con los datos actuales del usuario (incluyendo roles actualizados)
+        token_data = TokenData(
+            user_id=user.id,
+            user_email=user.email,
+            user_name=user.name,
+            roles=user.roles or [],
+        )
 
         # Se crea el nuevo access token
         access_token = self.create_access_token(token_data)
