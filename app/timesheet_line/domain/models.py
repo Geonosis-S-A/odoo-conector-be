@@ -12,7 +12,7 @@ from app.task.domain.models import Task
 @dataclass
 class TimesheetLine:
     id: int | None
-    name: str
+    name: str | None
     employee_id: int
     project_id: int
     hours: float
@@ -23,7 +23,7 @@ class TimesheetLine:
     def from_request(
         cls,
         id: int | None,
-        name: str,
+        name: str | None,
         employee_id: int,
         project_id: int,
         hours: float,
@@ -50,4 +50,5 @@ class DetailedTimesheetLine:
     task: Task | None
     hours: float
     date: date_t
+    validated: bool
     create_date: Optional[datetime] = None

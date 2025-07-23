@@ -7,7 +7,7 @@ from app.task.api.schemas import TaskResponse
 
 
 class CargarHorasRequest(BaseModel):
-    name: str
+    name: Optional[str] | None = None
     employee_id: int
     project_id: int
     hours: float
@@ -24,6 +24,7 @@ class DetailedTimesheetLineResponse(BaseModel):
     hours: float
     date: date
     create_date: Optional[datetime] = None
+    validated: bool
 
 
 class EditTimesheetRequest(BaseModel):

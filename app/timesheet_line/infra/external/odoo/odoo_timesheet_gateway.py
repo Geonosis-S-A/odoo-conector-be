@@ -11,49 +11,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
     def __init__(self, odoo_client: OdooConnection) -> None:
         self.odoo_client = odoo_client
 
-    def _transform_odoo_to_domain(self, odoo_data: Dict[str, Any]) -> TimesheetLine:
-        """Transforma los datos de Odoo al modelo de dominio."""
-        # Odoo devuelve la fecha como string, por ejemplo "2024-05-19"
-        date_str = odoo_data.get("date")
-        if not date_str:
-            raise ValueError("La fecha es obligatoria para la línea de hoja de tiempo")
-
-        date_obj: date = datetime.strptime(date_str, "%Y-%m-%d").date()
-
-        # Odoo devuelve los IDs como tuplas [id, nombre] o False si está vacío
-        task_id: int | None = None
-        raw_task_id = odoo_data.get("task_id")
-        if isinstance(raw_task_id, list) and len(raw_task_id) > 0:
-            task_id = raw_task_id[0]
-        elif isinstance(raw_task_id, (int, str)):
-            task_id = int(raw_task_id)
-
-        # Manejar employee_id que puede ser False o [id, nombre]
-        employee_id = 0
-        raw_employee_id = odoo_data.get("employee_id", False)
-        if isinstance(raw_employee_id, list) and len(raw_employee_id) > 0:
-            employee_id = raw_employee_id[0]
-        elif isinstance(raw_employee_id, (int, str)):
-            employee_id = int(raw_employee_id)
-
-        # Manejar project_id que puede ser False o [id, nombre]
-        project_id = 0
-        raw_project_id = odoo_data.get("project_id", False)
-        if isinstance(raw_project_id, list) and len(raw_project_id) > 0:
-            project_id = raw_project_id[0]
-        elif isinstance(raw_project_id, (int, str)):
-            project_id = int(raw_project_id)
-
-        return TimesheetLine(
-            id=odoo_data.get("id", None),
-            name=odoo_data.get("name", ""),
-            employee_id=employee_id,
-            project_id=project_id,
-            hours=float(odoo_data.get("unit_amount", 0.0)),
-            date=date_obj,
-            task_id=task_id,
-        )
-
     def _transform_odoo_to_detailed_domain(
         self, odoo_data: Dict[str, Any]
     ) -> DetailedTimesheetLine:
@@ -106,7 +63,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         return DetailedTimesheetLine(
             id=odoo_data.get("id", None),
-            name=odoo_data.get("name", ""),
+            name=odoo_data.get("name", None),
             employee_id=employee_id,
             project=Project(
                 id=project_id,
@@ -116,6 +73,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             date=date_obj,
             task=task,
             create_date=odoo_data.get("create_date", None),
+            validated=odoo_data.get("validated", False),
         )
 
     def create(self, timesheet_lines: list[TimesheetLine]) -> list[int] | None:
@@ -132,7 +90,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         for timesheet_line in timesheet_lines:
             odoo_data = {
-                "name": timesheet_line.name,
                 "date": timesheet_line.date.isoformat(),
                 "unit_amount": timesheet_line.hours,
                 "employee_id": timesheet_line.employee_id,
@@ -142,6 +99,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             # Solo agregamos task_id si no es None
             if timesheet_line.task_id is not None:
                 odoo_data["task_id"] = timesheet_line.task_id
+
+            if timesheet_line.name is not None:
+                odoo_data["name"] = timesheet_line.name
 
             timesheet_entries.append(odoo_data)
 
@@ -203,6 +163,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "project_id",
                         "task_id",
                         "create_date",
+                        "validated",
                     ],
                 },
             ),
@@ -305,6 +266,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "project_id",
                         "task_id",
                         "create_date",
+                        "validated",
                     ],
                 },
             ),
@@ -344,6 +306,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "project_id",
                         "task_id",
                         "create_date",
+                        "validated",
                     ],
                 },
             ),
