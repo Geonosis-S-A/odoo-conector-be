@@ -63,7 +63,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         return DetailedTimesheetLine(
             id=odoo_data.get("id", None),
-            name=odoo_data.get("name", ""),
+            name=odoo_data.get("name", None),
             employee_id=employee_id,
             project=Project(
                 id=project_id,
@@ -90,7 +90,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         for timesheet_line in timesheet_lines:
             odoo_data = {
-                "name": timesheet_line.name,
                 "date": timesheet_line.date.isoformat(),
                 "unit_amount": timesheet_line.hours,
                 "employee_id": timesheet_line.employee_id,
@@ -100,6 +99,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             # Solo agregamos task_id si no es None
             if timesheet_line.task_id is not None:
                 odoo_data["task_id"] = timesheet_line.task_id
+
+            if timesheet_line.name is not None:
+                odoo_data["name"] = timesheet_line.name
 
             timesheet_entries.append(odoo_data)
 
@@ -264,6 +266,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "project_id",
                         "task_id",
                         "create_date",
+                        "validated",
                     ],
                 },
             ),
@@ -303,6 +306,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                         "project_id",
                         "task_id",
                         "create_date",
+                        "validated",
                     ],
                 },
             ),

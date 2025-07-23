@@ -7,7 +7,7 @@ from app.task.api.schemas import TaskResponse
 
 
 class CargarHorasRequest(BaseModel):
-    name: str
+    name: Optional[str] | None = None
     employee_id: int
     project_id: int
     hours: float
