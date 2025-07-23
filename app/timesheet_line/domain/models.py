@@ -50,4 +50,5 @@ class DetailedTimesheetLine:
     task: Task | None
     hours: float
     date: date_t
+    validated: bool
     create_date: Optional[datetime] = None

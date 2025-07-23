@@ -24,6 +24,7 @@ class DetailedTimesheetLineResponse(BaseModel):
     hours: float
     date: date
     create_date: Optional[datetime] = None
+    validated: bool
 
 
 class EditTimesheetRequest(BaseModel):
