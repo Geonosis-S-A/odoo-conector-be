@@ -25,7 +25,6 @@ class RequestOTPForRegisterUseCase:
 
     async def execute(self, email: str) -> bool:
         employee = self.employee_gateway.get_by_email(email)
-        print("employee", employee)
         if not employee:
             raise EmployeeNotFound("El email no ha sido registrado en el sistema")
 
@@ -34,6 +33,9 @@ class RequestOTPForRegisterUseCase:
         if bd_user:
             raise UserAlreadyExists("El email ya ha sido registrado en el sistema.")
 
+        # Obtener los roles del usuario desde Odoo
+        user_roles = self.employee_gateway.get_user_roles_by_email(email) or []
+
         # Creamos el usuario en nuestra bbdd
         user = User(
             id=employee.id,
@@ -41,7 +43,9 @@ class RequestOTPForRegisterUseCase:
             full_name=employee.full_name,
             is_active=False,
             is_superuser=False,
+            roles=user_roles,
         )
+
         self.user_repository.save(user)
 
         # Generamos el código OTP
@@ -50,4 +54,5 @@ class RequestOTPForRegisterUseCase:
 
         # Enviamos el email con el código OTP
         await self.email_service.send_otp_email(employee.email, new_otp.code)
+
         return True

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import List
 
 from app.users.domain.models import Employee, User
 
@@ -9,8 +10,12 @@ class EmployeeGateway(ABC):
 
     @abstractmethod
     def exists_by_id(self, id: int) -> bool: ...
+
     @abstractmethod
     def get_by_email(self, email: str) -> Employee | None: ...
+
+    @abstractmethod
+    def get_user_roles_by_email(self, email: str) -> List[int] | None: ...
 
 
 class UserRepository(ABC):

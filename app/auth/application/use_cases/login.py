@@ -40,12 +40,15 @@ class LoginUseCase:
         if not user_credentials.is_active:
             raise UserInactive("Inactive user")
 
+        # Usar los roles reales del usuario o una lista vacía si no tiene roles
+        user_roles = user_credentials.roles or []
+
         access_token = self.token_service.create_access_token(
             TokenData(
                 user_id=user_credentials.id,
                 user_email=user_credentials.email,
                 user_name=user_credentials.name,
-                roles=["user"],
+                roles=user_roles,
             )
         )
 
@@ -54,7 +57,7 @@ class LoginUseCase:
                 user_id=user_credentials.id,
                 user_email=user_credentials.email,
                 user_name=user_credentials.name,
-                roles=["user"],
+                roles=user_roles,
             )
         )
 
@@ -74,6 +77,6 @@ class LoginUseCase:
                 user_id=user_credentials.id,
                 user_name=user_credentials.name,
                 user_email=user_credentials.email,
-                roles=["user"],
+                roles=user_roles,
             ),
         )

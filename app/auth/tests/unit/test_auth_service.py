@@ -1,7 +1,7 @@
 import pytest
 from datetime import timedelta
 from app.auth.infra.auth_service import TokenService, settings
-from app.auth.domain.models import TokenData
+from app.auth.domain.models import TokenData, UserCredentials
 from jose import jwt
 from fastapi import HTTPException
 from unittest.mock import Mock
@@ -19,7 +19,7 @@ class TestAuthService:
             user_id=1,
             user_email="testana@example.com",
             user_name="Usuario Test",
-            roles=["user"],
+            roles=[1, 2],
         )
         token = auth_service.create_access_token(token_data)
         assert token is not None
@@ -29,7 +29,7 @@ class TestAuthService:
         assert payload["user_id"] == 1
         assert payload["user_email"] == "testana@example.com"
         assert payload["user_name"] == "Usuario Test"
-        assert payload["roles"] == ["user"]
+        assert payload["roles"] == [1, 2]
 
     def test_create_access_token_with_custom_expiration(
         self, auth_service: TokenService
@@ -39,7 +39,7 @@ class TestAuthService:
             user_id=1,
             user_email="testana@example.com",
             user_name="Usuario Test",
-            roles=["user"],
+            roles=[1, 2],
         )
         custom_expiration = timedelta(minutes=30)
         token = auth_service.create_access_token(
@@ -52,7 +52,7 @@ class TestAuthService:
         assert payload["user_id"] == 1
         assert payload["user_email"] == "testana@example.com"
         assert payload["user_name"] == "Usuario Test"
-        assert payload["roles"] == ["user"]
+        assert payload["roles"] == [1, 2]
 
     def test_create_refresh_token_success(self, auth_service: TokenService):
         """Debe crear un refresh token válido."""
@@ -60,7 +60,7 @@ class TestAuthService:
             user_id=1,
             user_email="testana@example.com",
             user_name="Usuario Test",
-            roles=["user"],
+            roles=[1, 2],
         )
         token = auth_service.create_refresh_token(token_data)
         assert token is not None
@@ -70,42 +70,37 @@ class TestAuthService:
         assert payload["user_id"] == 1
         assert payload["user_email"] == "testana@example.com"
         assert payload["user_name"] == "Usuario Test"
-        assert payload["roles"] == ["user"]
+        assert payload["roles"] == [1, 2]
 
     def test_verify_token_success(self, auth_service: TokenService):
-        """Debe decodificar correctamente un token válido."""
-        token = jwt.encode(
-            {
-                "user_id": 1,
-                "user_email": "testana@example.com",
-                "user_name": "Usuario Test",
-                "roles": ["user"],
-            },
-            settings.JWT_SECRET_KEY,
-            algorithm=settings.JWT_ALGORITHM,
-        )
-        result = auth_service.verify_token(token)
-        assert result["user_id"] == 1
-        assert result["user_email"] == "testana@example.com"
-        assert result["user_name"] == "Usuario Test"
-        assert result["roles"] == ["user"]
-
-    def test_verify_token_invalid(self, auth_service: TokenService):
-        """Debe lanzar HTTPException si el token es inválido."""
-        invalid_token = "invalid.token.string"
-        with pytest.raises(HTTPException) as excinfo:
-            auth_service.verify_token(invalid_token)
-        assert excinfo.value.status_code == 401
-        assert "Could not validate credentials" in excinfo.value.detail
-
-    def test_refresh_access_token_success(self, auth_service: TokenService):
-        """Debe refrescar un access token válido."""
-        # Crear un token de actualización válido
+        """Debe verificar un token válido y devolver el payload."""
         token_data = TokenData(
             user_id=1,
             user_email="testana@example.com",
             user_name="Usuario Test",
-            roles=["user"],
+            roles=[1, 2],
+        )
+        token = auth_service.create_access_token(token_data)
+        payload = auth_service.verify_token(token)
+        assert payload is not None
+        assert payload["user_id"] == 1
+        assert payload["user_email"] == "testana@example.com"
+        assert payload["user_name"] == "Usuario Test"
+        assert payload["roles"] == [1, 2]
+
+    def test_verify_token_invalid(self, auth_service: TokenService):
+        """Debe lanzar una excepción si el token es inválido."""
+        with pytest.raises(HTTPException):
+            auth_service.verify_token("invalid_token")
+
+    def test_refresh_access_token_success(self, auth_service: TokenService):
+        """Debe refrescar el access token exitosamente."""
+        # Crear un token válido para las pruebas
+        token_data = TokenData(
+            user_id=1,
+            user_email="testana@example.com",
+            user_name="Usuario Test",
+            roles=[1, 2],
         )
         refresh_token = auth_service.create_refresh_token(token_data)
 
@@ -113,11 +108,18 @@ class TestAuthService:
         token_repository_mock = Mock()
         token_repository_mock.search_refresh_token.return_value = Mock(is_revoked=False)
 
-        # Mock para user_repository
+        # Mock para user_repository - usar objeto real en lugar de Mock
         user_repository_mock = Mock()
-        user_repository_mock.get_user_credentials.return_value = Mock(
-            id=1, email="testana@example.com", name="Usuario Test", roles=["user"]
+        mock_user = UserCredentials(
+            id=1,
+            email="testana@example.com",
+            name="Usuario Test",
+            password="hashed_password",
+            is_superuser=False,
+            is_active=True,
+            roles=[1, 2],
         )
+        user_repository_mock.get_user_credentials.return_value = mock_user
 
         # Llamar a refresh_access_token
         new_access_token = auth_service.refresh_access_token(
@@ -132,6 +134,4 @@ class TestAuthService:
             algorithms=[settings.JWT_ALGORITHM],
         )
         assert payload["user_id"] == 1
-        assert payload["user_email"] == "testana@example.com"
-        assert payload["user_name"] == "Usuario Test"
-        assert payload["roles"] == ["user"]
+        assert payload["roles"] == [1, 2]

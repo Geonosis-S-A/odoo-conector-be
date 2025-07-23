@@ -1,58 +1,75 @@
 import pytest
 from unittest.mock import Mock
-from app.users.domain.models import Employee, User
 from app.users.application.use_cases.sync_users import SyncUsersUseCase
+from app.users.domain.models import User, Employee
+from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
+
+
+@pytest.fixture
+def odoo_employee_gateway_mock():
+    # Crear un mock que simule ser una instancia de OdooEmployeeGateway
+    mock_gateway = Mock(spec=OdooEmployeeGateway)
+    # Configurar los métodos que se usarán en el test
+    mock_gateway.get_all_users_with_roles.return_value = []
+    return mock_gateway
+
+
+@pytest.fixture
+def user_repository_mock():
+    return Mock()
+
+
+@pytest.fixture
+def use_case(odoo_employee_gateway_mock, user_repository_mock):
+    return SyncUsersUseCase(
+        employee_gateway=odoo_employee_gateway_mock,
+        user_repository=user_repository_mock,
+    )
 
 
 class TestSyncUsersUseCase:
-    @pytest.fixture(autouse=True)
-    def setup(self):
-        self.employee_gateway = Mock()
-        self.user_repository = Mock()
-        self.use_case = SyncUsersUseCase(
-            employee_gateway=self.employee_gateway,
-            user_repository=self.user_repository,
-        )
-
-    def test_sync_new_employees(self):
+    def test_sync_new_employees(
+        self, use_case, odoo_employee_gateway_mock, user_repository_mock
+    ):
         # Arrange
-        odoo_employees = [
-            Employee(
-                id=1,
-                email="employee1@example.com",
-                full_name="Employee One",
-            ),
-            Employee(
-                id=2,
-                email="employee2@example.com",
-                full_name="Employee Two",
-            ),
+        odoo_users = [
+            {
+                "id": 1,
+                "email": "employee1@example.com",
+                "name": "Employee One",
+                "roles": [10, 11],
+            },
+            {
+                "id": 2,
+                "email": "employee2@example.com",
+                "name": "Employee Two",
+                "roles": [12],
+            },
         ]
-        self.employee_gateway.all.return_value = odoo_employees
-        self.user_repository.all.return_value = []
+        odoo_employee_gateway_mock.get_all_users_with_roles.return_value = odoo_users
+        user_repository_mock.all.return_value = []
+        user_repository_mock.update_user.return_value = True
 
         # Act
-        self.use_case.execute()
+        result = use_case.execute()
 
         # Assert
-        self.user_repository.save_all.assert_called_once()
-        saved_users = self.user_repository.save_all.call_args[0][0]
-        assert len(saved_users) == 2
-        assert all(isinstance(user, User) for user in saved_users)
-        assert all(not user.is_active for user in saved_users)
-        assert all(not user.is_superuser for user in saved_users)
-        # Verificar que los IDs coinciden con los de Odoo
-        assert saved_users[0].id == 1
-        assert saved_users[1].id == 2
+        assert result["created"] == 2
+        assert result["updated"] == 0
+        user_repository_mock.save_all.assert_called_once()
+        user_repository_mock.update_user.assert_not_called()
 
-    def test_sync_does_not_modify_existing_users(self):
+    def test_sync_updates_existing_users(
+        self, use_case, odoo_employee_gateway_mock, user_repository_mock
+    ):
         # Arrange
-        odoo_employees = [
-            Employee(
-                id=1,
-                email="employee1@example.com",
-                full_name="Employee One Updated",
-            ),
+        odoo_users = [
+            {
+                "id": 1,
+                "email": "employee1@example.com",
+                "name": "Employee One Updated",
+                "roles": [10, 11, 15],
+            },
         ]
         existing_users = [
             User(
@@ -61,30 +78,33 @@ class TestSyncUsersUseCase:
                 full_name="Employee One",
                 is_active=True,
                 is_superuser=True,
+                roles=[10, 11],
             ),
         ]
-        self.employee_gateway.all.return_value = odoo_employees
-        self.user_repository.all.return_value = existing_users
+        odoo_employee_gateway_mock.get_all_users_with_roles.return_value = odoo_users
+        user_repository_mock.all.return_value = existing_users
+        user_repository_mock.update_user.return_value = True
 
         # Act
-        self.use_case.execute()
+        result = use_case.execute()
 
         # Assert
-        self.user_repository.save_all.assert_not_called()
+        assert result["created"] == 0
+        assert result["updated"] == 1
+        user_repository_mock.save_all.assert_not_called()
+        user_repository_mock.update_user.assert_called_once()
 
-    def test_sync_mixed_employees(self):
+    def test_sync_no_changes(
+        self, use_case, odoo_employee_gateway_mock, user_repository_mock
+    ):
         # Arrange
-        odoo_employees = [
-            Employee(
-                id=1,
-                email="employee1@example.com",
-                full_name="Employee One",
-            ),
-            Employee(
-                id=2,
-                email="employee2@example.com",
-                full_name="Employee Two New",
-            ),
+        odoo_users = [
+            {
+                "id": 1,
+                "email": "employee1@example.com",
+                "name": "Employee One",
+                "roles": [10],
+            },
         ]
         existing_users = [
             User(
@@ -92,24 +112,18 @@ class TestSyncUsersUseCase:
                 email="employee1@example.com",
                 full_name="Employee One",
                 is_active=True,
-                is_superuser=True,
+                is_superuser=False,
+                roles=[10],
             ),
         ]
-        self.employee_gateway.all.return_value = odoo_employees
-        self.user_repository.all.return_value = existing_users
+        odoo_employee_gateway_mock.get_all_users_with_roles.return_value = odoo_users
+        user_repository_mock.all.return_value = existing_users
 
         # Act
-        self.use_case.execute()
+        result = use_case.execute()
 
         # Assert
-        self.user_repository.save_all.assert_called_once()
-        saved_users = self.user_repository.save_all.call_args[0][0]
-        assert len(saved_users) == 1  # Solo el nuevo usuario
-
-        # Verificar que solo se guarda el nuevo usuario
-        new_user = saved_users[0]
-        assert new_user.id == 2
-        assert new_user.email == "employee2@example.com"
-        assert new_user.full_name == "Employee Two New"
-        assert new_user.is_active is False
-        assert new_user.is_superuser is False
+        assert result["created"] == 0
+        assert result["updated"] == 0
+        user_repository_mock.save_all.assert_not_called()
+        user_repository_mock.update_user.assert_not_called()

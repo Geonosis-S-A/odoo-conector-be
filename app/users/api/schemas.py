@@ -7,6 +7,7 @@ class UserBase(BaseModel):
     full_name: str
     is_active: bool
     is_superuser: bool
+    roles: Optional[List[int]] = None
 
 
 class UserCreate(UserBase):
@@ -27,8 +28,21 @@ class UserInDB(UserBase):
 class UserResponse(UserBase):
     id: int
 
+    class Config:
+        from_attributes = True
+
 
 class UserSyncResponse(BaseModel):
-    updated: List[UserResponse]
-    unchanged: List[UserResponse]
-    summary: str
+    success: bool
+    message: str
+    users_created: int
+    users_updated: int
+    total_processed: int
+
+
+class SingleUserSyncResponse(BaseModel):
+    success: bool
+    message: str
+    user_updated: bool
+    current_data: Optional[dict] = None
+    changes_made: Optional[dict] = None
