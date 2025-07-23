@@ -22,7 +22,7 @@ from app.timesheet_line.application.use_cases.edit_timesheet import EditTimeshee
 from app.timesheet_line.application.use_cases.obtener_horas import (
     ListTimesheetLinesUseCase,
 )
-from app.timesheet_line.application.use_cases.validate_timesheet import (
+from app.timesheet_line.application.use_cases.validar_timesheet import (
     ValidateTimesheetUseCase,
 )
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
@@ -298,7 +298,7 @@ async def validate_timesheet_lines(
 
     try:
         use_case = ValidateTimesheetUseCase(gateway)
-        success = use_case.execute(request.ids)
+        success = use_case.execute(request.timesheetline_ids)
         return {"success": success}
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import Mock
 from datetime import date
-from app.timesheet_line.application.use_cases.validate_timesheet import (
+from app.timesheet_line.application.use_cases.validar_timesheet import (
     ValidateTimesheetUseCase,
 )
 from app.timesheet_line.domain.models import DetailedTimesheetLine

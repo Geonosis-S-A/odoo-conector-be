@@ -42,4 +42,4 @@ class DeleteTimesheetRequest(BaseModel):
 
 
 class ValidateTimesheetRequest(BaseModel):
-    ids: List[int]
+    timesheetline_ids: List[int]
