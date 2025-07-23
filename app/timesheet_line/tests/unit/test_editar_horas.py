@@ -44,6 +44,7 @@ class TestEditTimesheetUseCase:
             task=None,
             hours=8.0,
             date=date(2024, 3, 20),
+            validated=False,
         )
         mock_gateway.update.return_value = True
 
@@ -123,6 +124,7 @@ class TestEditTimesheetUseCase:
             task=None,
             hours=8.0,
             date=date(2024, 3, 20),
+            validated=False,
         )
         mock_gateway.update.return_value = False
 
@@ -156,6 +158,7 @@ class TestEditTimesheetUseCase:
             task=None,
             hours=8.0,
             date=date(2024, 3, 20),
+            validated=False,
         )
         mock_gateway.update.side_effect = ValueError("ID requerido")
 

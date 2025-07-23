@@ -43,6 +43,7 @@ class TestListTimesheetLinesUseCase:
                 task=None,
                 hours=8.0,
                 date=date(2024, 1, 15),
+                validated=False,
             ),
             DetailedTimesheetLine(
                 id=2,
@@ -52,6 +53,7 @@ class TestListTimesheetLinesUseCase:
                 task=None,
                 hours=4.0,
                 date=date(2024, 1, 20),
+                validated=False,
             ),
         ]
 

@@ -228,48 +228,67 @@ def test_edit_timesheet_line_validation(test_client):
 @pytest.mark.integration
 def test_list_timesheet_lines_with_employee_filter(test_client):
     """Test de integración que prueba el filtrado por empleado."""
-    # Arrange - Crear una línea de timesheet
-    create_data = [
-        {
-            "name": "Test Timesheet",
-            "employee_id": 1,
-            "project_id": 1,
-            "hours": 8.0,
-            "date": "2024-03-20",
+    # Mock admin user to allow filtering by different employee IDs
+    from app.main import app
+    from app.shared.security.dependencies import get_current_user
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [30],  # Admin role
         }
-    ]
-    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
-    assert create_response.status_code == 200
-    created_id = create_response.json()[0]["id"]
 
-    # Act - Filtrar por empleado existente
-    response_with_filter = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
-    )
+    app.dependency_overrides[get_current_user] = mock_admin_user
 
-    # Act - Filtrar por empleado que no existe (debería devolver 404)
-    response_without_filter = test_client.get(
-        "/api/v1/timesheet/?employee_id=999&date_from=2024-01-01&date_to=2024-12-31"
-    )
+    try:
+        # Arrange - Crear una línea de timesheet
+        create_data = [
+            {
+                "name": "Test Timesheet",
+                "employee_id": 1,
+                "project_id": 1,
+                "hours": 8.0,
+                "date": "2024-03-20",
+            }
+        ]
+        create_response = test_client.post("/api/v1/timesheet/", json=create_data)
+        assert create_response.status_code == 200
+        created_id = create_response.json()[0]["id"]
 
-    # Assert
-    assert response_with_filter.status_code == 200
-    assert response_without_filter.status_code == 404  # Empleado no existe
-    assert "no existe en el sistema" in response_without_filter.json()["detail"]
+        # Act - Filtrar por empleado existente
+        response_with_filter = test_client.get(
+            "/api/v1/timesheet/?employee_id=1&date_from=2024-01-01&date_to=2024-12-31"
+        )
 
-    data_with_filter = response_with_filter.json()
+        # Act - Filtrar por empleado que no existe (debería devolver 404)
+        response_without_filter = test_client.get(
+            "/api/v1/timesheet/?employee_id=999&date_from=2024-01-01&date_to=2024-12-31"
+        )
 
-    # Verificar que el timesheet creado aparece en el filtro correcto
-    assert any(item["id"] == created_id for item in data_with_filter)
+        # Assert
+        assert response_with_filter.status_code == 200
+        assert response_without_filter.status_code == 404  # Empleado no existe
+        assert "no existe en el sistema" in response_without_filter.json()["detail"]
 
-    # Verificar que todos los resultados filtrados son del empleado correcto
-    assert all(item["employee_id"] == 1 for item in data_with_filter)
+        data_with_filter = response_with_filter.json()
 
-    # Limpieza
-    delete_response = test_client.request(
-        "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
-    )
-    assert delete_response.status_code == 200
+        # Verificar que el timesheet creado aparece en el filtro correcto
+        assert any(item["id"] == created_id for item in data_with_filter)
+
+        # Verificar que todos los resultados filtrados son del empleado correcto
+        assert all(item["employee_id"] == 1 for item in data_with_filter)
+
+        # Limpieza
+        delete_response = test_client.request(
+            "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+        )
+        assert delete_response.status_code == 200
+
+    finally:
+        # Restore original dependency
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.integration
@@ -525,3 +544,241 @@ def test_delete_timesheet_validation_errors(test_client):
         f"No se encontraron las líneas de timesheet con IDs: [{created_id}]"
         in delete_response_again.json()["detail"]
     )
+
+
+@pytest.mark.integration
+def test_validate_timesheet_lines_success(test_client):
+    """Test de integración que prueba la validación exitosa de líneas de timesheet."""
+    # Arrange - Crear líneas de timesheet
+    create_data = [
+        {
+            "name": "Test Timesheet for Validation 1",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        },
+        {
+            "name": "Test Timesheet for Validation 2",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 4.0,
+            "date": "2024-03-21",
+        },
+    ]
+    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
+    assert create_response.status_code == 200
+    created_ids = [item["id"] for item in create_response.json()]
+    assert len(created_ids) == 2
+
+    # Mock admin user for validation endpoint
+    from app.main import app
+    from app.shared.security.dependencies import get_current_user
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [30],  # Admin role
+        }
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+
+    try:
+        # Act - Validar las líneas
+        validate_response = test_client.post(
+            "/api/v1/timesheet/validate", json={"ids": created_ids}
+        )
+
+        # Assert
+        assert validate_response.status_code == 200
+        assert validate_response.json()["success"] is True
+
+        # Verificar que las líneas se marcaron como validadas
+        # (Nota: En un test real, verificaríamos consultando Odoo, pero para integration test basic esto es suficiente)
+
+    finally:
+        # Cleanup - Delete timesheets first (while still admin), then restore dependency
+        delete_response = test_client.request(
+            "DELETE", "/api/v1/timesheet/", json={"ids": created_ids}
+        )
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_timesheet_lines_permission_denied(test_client):
+    """Test de integración que prueba el error de permisos al validar líneas de timesheet."""
+    # Arrange - Crear líneas de timesheet
+    create_data = [
+        {
+            "name": "Test Timesheet for Permission Test",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        }
+    ]
+    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
+    assert create_response.status_code == 200
+    created_id = create_response.json()[0]["id"]
+
+    # Act - Intentar validar con usuario normal (sin permisos de admin)
+    # El test_client usa el usuario normal por defecto (sin rol 30)
+    validate_response = test_client.post(
+        "/api/v1/timesheet/validate", json={"ids": [created_id]}
+    )
+
+    # Assert
+    assert validate_response.status_code == 403
+    assert (
+        "No tienes permisos para validar las líneas de timesheet"
+        in validate_response.json()["detail"]
+    )
+
+    # Cleanup - Switch to admin user to delete timesheet
+    from app.main import app
+    from app.shared.security.dependencies import get_current_user
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [30],  # Admin role
+        }
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+
+    try:
+        delete_response = test_client.request(
+            "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+        )
+        assert delete_response.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_timesheet_lines_not_found(test_client):
+    """Test de integración que prueba la validación de líneas de timesheet que no existen."""
+    # Mock admin user for validation endpoint
+    from app.main import app
+    from app.shared.security.dependencies import get_current_user
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [30],  # Admin role
+        }
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+
+    try:
+        # Act - Intentar validar líneas que no existen
+        validate_response = test_client.post(
+            "/api/v1/timesheet/validate", json={"ids": [99999, 99998]}
+        )
+
+        # Assert
+        assert validate_response.status_code == 404
+        assert (
+            "No se encontraron las líneas de timesheet con IDs: [99999, 99998]"
+            in validate_response.json()["detail"]
+        )
+
+    finally:
+        # Cleanup - Restore original dependency
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_timesheet_lines_empty_list(test_client):
+    """Test de integración que prueba la validación con lista vacía de IDs."""
+    # Mock admin user for validation endpoint
+    from app.main import app
+    from app.shared.security.dependencies import get_current_user
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [30],  # Admin role
+        }
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+
+    try:
+        # Act - Intentar validar con lista vacía
+        validate_response = test_client.post(
+            "/api/v1/timesheet/validate", json={"ids": []}
+        )
+
+        # Assert
+        assert validate_response.status_code == 404
+        assert (
+            "No se encontraron las líneas de timesheet con IDs: []"
+            in validate_response.json()["detail"]
+        )
+
+    finally:
+        # Cleanup - Restore original dependency
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_timesheet_lines_mixed_existing_and_nonexisting(test_client):
+    """Test de integración que prueba la validación con IDs mixtos (algunos existen, otros no)."""
+    # Arrange - Crear una línea de timesheet
+    create_data = [
+        {
+            "name": "Test Timesheet for Mixed Test",
+            "employee_id": 1,
+            "project_id": 1,
+            "hours": 8.0,
+            "date": "2024-03-20",
+        }
+    ]
+    create_response = test_client.post("/api/v1/timesheet/", json=create_data)
+    assert create_response.status_code == 200
+    created_id = create_response.json()[0]["id"]
+
+    # Mock admin user for validation endpoint
+    from app.main import app
+    from app.shared.security.dependencies import get_current_user
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [30],  # Admin role
+        }
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+
+    try:
+        # Act - Intentar validar con un ID existente y uno inexistente
+        validate_response = test_client.post(
+            "/api/v1/timesheet/validate", json={"ids": [created_id, 99999]}
+        )
+
+        # Assert
+        assert validate_response.status_code == 404
+        assert (
+            "No se encontraron las líneas de timesheet con IDs:"
+            in validate_response.json()["detail"]
+        )
+        assert str(created_id) in validate_response.json()["detail"]
+        assert "99999" in validate_response.json()["detail"]
+
+    finally:
+        # Cleanup - Delete timesheet first (while still admin), then restore dependency
+        delete_response = test_client.request(
+            "DELETE", "/api/v1/timesheet/", json={"ids": [created_id]}
+        )
+        assert delete_response.status_code == 200
+        app.dependency_overrides.clear()

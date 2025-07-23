@@ -29,3 +29,6 @@ class TimesheetLineGateway(ABC):
     def get_by_ids(
         self, timesheet_line_ids: list[int]
     ) -> list[DetailedTimesheetLine]: ...
+
+    @abstractmethod
+    def validate(self, timesheet_line_ids: list[int]) -> bool: ...
