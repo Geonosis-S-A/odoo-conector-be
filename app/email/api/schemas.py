@@ -11,4 +11,4 @@ class SupportMailRequest(BaseModel):
 class ReviewMailRequest(BaseModel):
     user_mail: str
     body: Optional[str] = None
-    timesheet_line_ids: list[int]
+    timesheetline_ids: list[int]
