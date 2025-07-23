@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, List
 
 
@@ -46,3 +46,19 @@ class SingleUserSyncResponse(BaseModel):
     user_updated: bool
     current_data: Optional[dict] = None
     changes_made: Optional[dict] = None
+
+
+class EmployeeResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+
+    class Config:
+        from_attributes = True
+
+
+class EmployeesListResponse(BaseModel):
+    success: bool
+    message: str
+    employees: List[EmployeeResponse]
+    total_employees: int

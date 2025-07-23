@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
@@ -9,9 +8,15 @@ from app.users.application.use_cases.sync_users import SyncUsersUseCase
 from app.users.application.use_cases.sync_single_user_changes import (
     SyncSingleUserChangesUseCase,
 )
+from app.users.application.use_cases.get_all_employees import GetAllEmployeesUseCase
 from app.users.infra.db.repositories import SQLModelUserRepository
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
-from app.users.api.schemas import UserResponse, UserSyncResponse, SingleUserSyncResponse
+from app.users.api.schemas import (
+    UserSyncResponse,
+    SingleUserSyncResponse,
+    EmployeesListResponse,
+    EmployeeResponse,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -67,6 +72,14 @@ async def sync_user_changes(
     Actualiza email, nombre y roles del usuario identificado por ID.
     Mantiene el estado de activación e is_superuser del usuario.
     """
+
+    roles: list[int] = current_user["roles"]
+    is_admin = 30 in roles
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver todos los usuarios",
+        )
     try:
         # Inicializar dependencias
         odoo_client = get_odoo_connection()
@@ -94,4 +107,46 @@ async def sync_user_changes(
         raise HTTPException(
             status_code=500,
             detail=f"Error al sincronizar usuario {user_id}: {str(e)}",
+        )
+
+
+@router.get("/employees", response_model=EmployeesListResponse)
+async def get_all_employees(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Obtiene todos los empleados registrados en Odoo.
+    Retorna una lista completa de empleados con ID, email y nombre completo.
+    """
+    try:
+        # Inicializar dependencias
+        odoo_client = get_odoo_connection()
+        employee_gateway = OdooEmployeeGateway(odoo_client)
+
+        # Crear y ejecutar caso de uso
+        use_case = GetAllEmployeesUseCase(employee_gateway=employee_gateway)
+
+        # Ejecutar obtención de empleados
+        employees = use_case.execute()
+
+        # Convertir Employee del dominio a EmployeeResponse del schema
+        employees_response = [
+            EmployeeResponse(
+                id=employee.id,
+                email=employee.email,
+                full_name=employee.full_name,
+            )
+            for employee in employees
+        ]
+
+        return EmployeesListResponse(
+            success=True,
+            message="Empleados obtenidos exitosamente",
+            employees=employees_response,
+            total_employees=len(employees_response),
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error al obtener empleados: {str(e)}"
         )
