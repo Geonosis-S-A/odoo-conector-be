@@ -588,7 +588,7 @@ def test_validate_timesheet_lines_success(test_client):
     try:
         # Act - Validar las líneas
         validate_response = test_client.post(
-            "/api/v1/timesheet/validate", json={"ids": created_ids}
+            "/api/v1/timesheet/validate", json={"timesheetline_ids": created_ids}
         )
 
         # Assert
@@ -626,7 +626,7 @@ def test_validate_timesheet_lines_permission_denied(test_client):
     # Act - Intentar validar con usuario normal (sin permisos de admin)
     # El test_client usa el usuario normal por defecto (sin rol 30)
     validate_response = test_client.post(
-        "/api/v1/timesheet/validate", json={"ids": [created_id]}
+        "/api/v1/timesheet/validate", json={"timesheetline_ids": [created_id]}
     )
 
     # Assert
@@ -679,7 +679,7 @@ def test_validate_timesheet_lines_not_found(test_client):
     try:
         # Act - Intentar validar líneas que no existen
         validate_response = test_client.post(
-            "/api/v1/timesheet/validate", json={"ids": [99999, 99998]}
+            "/api/v1/timesheet/validate", json={"timesheetline_ids": [99999, 99998]}
         )
 
         # Assert
@@ -714,7 +714,7 @@ def test_validate_timesheet_lines_empty_list(test_client):
     try:
         # Act - Intentar validar con lista vacía
         validate_response = test_client.post(
-            "/api/v1/timesheet/validate", json={"ids": []}
+            "/api/v1/timesheet/validate", json={"timesheetline_ids": []}
         )
 
         # Assert
@@ -763,7 +763,8 @@ def test_validate_timesheet_lines_mixed_existing_and_nonexisting(test_client):
     try:
         # Act - Intentar validar con un ID existente y uno inexistente
         validate_response = test_client.post(
-            "/api/v1/timesheet/validate", json={"ids": [created_id, 99999]}
+            "/api/v1/timesheet/validate",
+            json={"timesheetline_ids": [created_id, 99999]},
         )
 
         # Assert
