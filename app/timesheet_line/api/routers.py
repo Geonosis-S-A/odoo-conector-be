@@ -3,6 +3,8 @@ from typing import List, Dict
 from datetime import date
 import xmlrpc.client
 
+from sqlalchemy import false
+
 
 from app.shared.security.dependencies import get_current_user
 from app.timesheet_line.api.schemas import (
@@ -129,9 +131,13 @@ async def create_timesheet_line(
 async def list_timesheet_lines(
     gateway: OdooTimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
-    employee_id: int = Query(..., description="ID del empleado para filtrar"),
-    date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
-    date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    employee_id: int | None = Query(None, description="ID del empleado para filtrar"),
+    date_from: date | None = Query(
+        None, description="Fecha de inicio del rango (YYYY-MM-DD)"
+    ),
+    date_to: date | None = Query(
+        None, description="Fecha de fin del rango (YYYY-MM-DD)"
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -147,6 +153,17 @@ async def list_timesheet_lines(
     Returns:
         List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
     """
+    roles: list[int] = current_user["roles"]
+    print(roles)
+    is_admin = 30 in roles
+    if (
+        (employee_id is not None and current_user["user_id"] != employee_id)
+        or (employee_id is None)
+    ) and (not is_admin):
+        raise HTTPException(
+            status_code=403, detail="No tienes permisos para ver esta información"
+        )
+
     try:
         use_case = ListTimesheetLinesUseCase(gateway, employee_gateway)
         timesheets = use_case.execute(employee_id, date_from, date_to)

@@ -23,20 +23,22 @@ class ListTimesheetLinesUseCase:
 
     def execute(
         self,
-        employee_id: int,
-        date_from: date,
-        date_to: date,
+        employee_id: int | None,
+        date_from: date | None,
+        date_to: date | None,
     ) -> List[DetailedTimesheetLine]:
         # Validación de employee_id
-        if employee_id <= 0:
+        if employee_id is not None and employee_id <= 0:
             raise InvalidEmployeeIdError(employee_id)
 
         # Verificar si el empleado existe
-        if not self.employee_gateway.exists_by_id(employee_id):
+        if employee_id is not None and not self.employee_gateway.exists_by_id(
+            employee_id
+        ):
             raise EmployeeNotExistsError(employee_id)
 
         # Validación de rango de fechas
-        if date_from > date_to:
+        if date_from is not None and date_to is not None and date_from > date_to:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
 
         timesheets = self.timesheet_line_gateway.all(employee_id, date_from, date_to)
