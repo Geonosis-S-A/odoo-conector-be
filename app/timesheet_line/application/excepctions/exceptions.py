@@ -146,3 +146,13 @@ class TimesheetDeleteError(TimesheetDomainError):
         if details:
             message += f": {details}"
         super().__init__(message)
+
+
+class TimesheetValidateError(TimesheetDomainError):
+    """Error al validar una línea de timesheet."""
+
+    def __init__(self, timesheet_ids: list[int], details: str = ""):
+        message = f"Error al validar las líneas de timesheet con IDs {timesheet_ids}"
+        if details:
+            message += f": {details}"
+        super().__init__(message)

@@ -12,6 +12,7 @@ from app.timesheet_line.api.schemas import (
     DetailedTimesheetLineResponse,
     EditTimesheetRequest,
     DeleteTimesheetRequest,
+    ValidateTimesheetRequest,
 )
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.application.use_cases.delete_timesheet import (
@@ -20,6 +21,9 @@ from app.timesheet_line.application.use_cases.delete_timesheet import (
 from app.timesheet_line.application.use_cases.edit_timesheet import EditTimesheetUseCase
 from app.timesheet_line.application.use_cases.obtener_horas import (
     ListTimesheetLinesUseCase,
+)
+from app.timesheet_line.application.use_cases.validate_timesheet import (
+    ValidateTimesheetUseCase,
 )
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import (
@@ -45,6 +49,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetDeleteError,
     OdooValidationError,
     OdooConnectionError,
+    TimesheetValidateError,
 )
 
 
@@ -263,4 +268,47 @@ def edit_timesheet(
         raise HTTPException(
             status_code=500,
             detail="Error interno del servidor al editar la línea de timesheet",
+        )
+
+
+@router.post("/validate", response_model=Dict[str, bool])
+async def validate_timesheet_lines(
+    request: ValidateTimesheetRequest,
+    gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Valida múltiples líneas de timesheet (marca validated=True).
+
+    Args:
+        request: Objeto con lista de IDs de las líneas de timesheet a validar
+        gateway: Gateway de timesheet (inyectado)
+
+    Returns:
+        Dict[str, bool]: Resultado de la validación
+    """
+
+    roles: list[int] = current_user["roles"]
+    is_admin = 30 in roles
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para validar las líneas de timesheet",
+        )
+
+    try:
+        use_case = ValidateTimesheetUseCase(gateway)
+        success = use_case.execute(request.ids)
+        return {"success": success}
+    except TimesheetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetValidateError as e:
+        raise HTTPException(status_code=422, detail=e.message)
+    except TimesheetDomainError as e:
+        # Captura cualquier otra excepción del dominio
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor al validar las líneas de timesheet",
         )

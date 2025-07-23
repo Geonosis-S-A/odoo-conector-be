@@ -48,7 +48,7 @@ def override_get_current_user():
             "user_id": 1,
             "user_email": "test@example.com",
             "user_name": "Test User",
-            "roles": ["user"],
+            "roles": [1],  # Cambio: usar enteros en lugar de strings
         }
 
     return _override

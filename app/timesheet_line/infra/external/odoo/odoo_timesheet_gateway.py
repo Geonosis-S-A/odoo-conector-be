@@ -320,3 +320,26 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             self._transform_odoo_to_detailed_domain(line_data)
             for line_data in odoo_data
         ]
+
+    def validate(self, timesheet_line_ids: list[int]) -> bool:
+        """Valida múltiples líneas de hoja de tiempo en Odoo (marca validated=True).
+
+        Args:
+            timesheet_line_ids: Lista de IDs de las líneas de hoja de tiempo a validar
+
+        Returns:
+            bool: True si la validación fue exitosa, False en caso contrario
+        """
+        if not timesheet_line_ids:
+            return True
+
+        response = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "write",
+            [timesheet_line_ids, {"validated": True}],
+        )
+
+        return bool(response)

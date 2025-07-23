@@ -39,3 +39,7 @@ class EditTimesheetRequest(BaseModel):
 
 class DeleteTimesheetRequest(BaseModel):
     ids: List[int]
+
+
+class ValidateTimesheetRequest(BaseModel):
+    ids: List[int]

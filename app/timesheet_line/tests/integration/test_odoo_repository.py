@@ -439,3 +439,90 @@ class TestOdooTimesheetLineGateway:
 
         # Verificar que es el tipo de error esperado de Odoo
         assert "Record does not exist" in str(exc_info.value)
+
+    def test_validate_timesheet_line(self):
+        """Test que verifica la validación de una línea de timesheet."""
+        # Arrange
+        timesheet_lines = [
+            TimesheetLine(
+                id=None,
+                employee_id=1,
+                project_id=1,
+                hours=1,
+                date=date(2021, 1, 1),
+                name="Test Timesheet Line for Validation",
+            )
+        ]
+        created_ids = self.gateway.create(timesheet_lines)
+        assert created_ids is not None
+        created_id = created_ids[0]
+
+        # Act
+        validate_result = self.gateway.validate([created_id])
+
+        # Assert
+        assert validate_result is True
+
+        # Verificar que la línea aún existe (validate no debe eliminar)
+        updated_line = self.gateway.get_by_id(created_id)
+        assert updated_line is not None
+        assert updated_line.id == created_id
+
+    def test_validate_multiple_timesheet_lines(self):
+        """Test que verifica la validación de múltiples líneas de timesheet."""
+        # Arrange
+        timesheet_lines = [
+            TimesheetLine(
+                id=None,
+                employee_id=1,
+                project_id=1,
+                hours=1,
+                date=date(2021, 1, 1),
+                name="Test Timesheet Line 1 for Validation",
+            ),
+            TimesheetLine(
+                id=None,
+                employee_id=1,
+                project_id=1,
+                hours=2,
+                date=date(2021, 1, 2),
+                name="Test Timesheet Line 2 for Validation",
+            ),
+        ]
+        created_ids = self.gateway.create(timesheet_lines)
+        assert created_ids is not None
+        assert len(created_ids) == 2
+
+        # Act
+        validate_result = self.gateway.validate(created_ids)
+
+        # Assert
+        assert validate_result is True
+
+        # Verificar que las líneas aún existen
+        for created_id in created_ids:
+            updated_line = self.gateway.get_by_id(created_id)
+            assert updated_line is not None
+            assert updated_line.id == created_id
+
+    def test_validate_empty_list(self):
+        """Test que verifica la validación con lista vacía de IDs."""
+        # Act
+        validate_result = self.gateway.validate([])
+
+        # Assert
+        assert validate_result is True
+
+    def test_validate_timesheet_not_found(self):
+        """Test que verifica el comportamiento de validate cuando el timesheet no existe."""
+        # Act & Assert
+        # En Odoo, validate con un ID inexistente puede lanzar una excepción o devolver False
+        # Dependiendo de la implementación exacta de Odoo
+        with pytest.raises(Exception) as exc_info:
+            self.gateway.validate([99999])  # ID que no existe
+
+        # Verificar que es el tipo de error esperado de Odoo
+        assert (
+            "Record does not exist" in str(exc_info.value)
+            or "not found" in str(exc_info.value).lower()
+        )
