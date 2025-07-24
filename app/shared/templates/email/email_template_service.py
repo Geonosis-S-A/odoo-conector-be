@@ -61,7 +61,8 @@ class EmailTemplateService:
                                         <strong>Proyecto:</strong> {data.get('project_name', '')}<br />
                                         <strong>Tarea:</strong> {data.get('task_name', '')}<br />
                                         <strong>Horas:</strong> {data.get('hours', '')}<br />
-                                        <strong>Fecha:</strong> {data.get('date', '')}
+                                        <strong>Fecha:</strong> {data.get('date', '')}<br />
+                                        <strong>Aprobador:</strong> {data.get('approver_mail', '')}<br />
                                     </p>
                                 </td>
                             </tr>

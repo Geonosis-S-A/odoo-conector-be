@@ -10,5 +10,6 @@ class SupportMailRequest(BaseModel):
 
 class ReviewMailRequest(BaseModel):
     user_mail: str
+    approver_mail: str
     body: Optional[str] = None
     timesheetline_ids: list[int]
