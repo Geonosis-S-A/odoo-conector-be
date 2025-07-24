@@ -33,6 +33,7 @@ class TestEditTimesheetUseCase:
             project_id=1,
             hours=4.0,
             date=date(2024, 3, 20),
+            validated=False,  # Campo obligatorio
         )
 
         # Mock de la respuesta del gateway
@@ -63,6 +64,40 @@ class TestEditTimesheetUseCase:
         assert update_call_args.name == "Test Timesheet"
         assert update_call_args.hours == 4.0
 
+    def test_edit_timesheet_success_with_validated_true(self, use_case, mock_gateway):
+        """Test que verifica la edición exitosa de una línea de timesheet validada (el use case no tiene restricciones)."""
+        # Arrange
+        request = EditTimesheetRequest(
+            id=1,
+            name="Test Timesheet",
+            employee_id=1,
+            project_id=1,
+            hours=4.0,
+            date=date(2024, 3, 20),
+            validated=True,  # Timesheet validado
+        )
+
+        # Mock de la respuesta del gateway
+        mock_gateway.get_by_id.return_value = DetailedTimesheetLine(
+            id=1,
+            name="Old Name",
+            employee_id=1,
+            project=Project(id=1, name="Test Project"),
+            task=None,
+            hours=8.0,
+            date=date(2024, 3, 20),
+            validated=True,
+        )
+        mock_gateway.update.return_value = True
+
+        # Act
+        result = use_case.execute(request)
+
+        # Assert - El use case no tiene restricciones de autorización
+        assert result is True
+        mock_gateway.get_by_id.assert_called_once_with(1)
+        mock_gateway.update.assert_called_once()
+
     def test_edit_timesheet_negative_hours(self, use_case):
         """Test que verifica que no se pueden editar horas negativas."""
         # Arrange
@@ -73,6 +108,7 @@ class TestEditTimesheetUseCase:
             project_id=1,
             hours=-1.0,  # Horas negativas
             date=date(2024, 3, 20),
+            validated=False,  # Campo obligatorio
         )
 
         # Act & Assert
@@ -91,6 +127,7 @@ class TestEditTimesheetUseCase:
             project_id=1,
             hours=4.0,
             date=date(2024, 3, 20),
+            validated=False,  # Campo obligatorio
         )
 
         # Mock de la respuesta del gateway - ahora devuelve None en lugar de lanzar excepción
@@ -113,6 +150,7 @@ class TestEditTimesheetUseCase:
             project_id=1,
             hours=4.0,
             date=date(2024, 3, 20),
+            validated=False,  # Campo obligatorio
         )
 
         # Mock de la respuesta del gateway
@@ -147,6 +185,7 @@ class TestEditTimesheetUseCase:
             project_id=1,
             hours=4.0,
             date=date(2024, 3, 20),
+            validated=False,  # Campo obligatorio
         )
 
         # Mock de la respuesta del gateway
