@@ -35,6 +35,7 @@ class EditTimesheetRequest(BaseModel):
     hours: float
     date: date
     task_id: Optional[int] = None
+    validated: bool
 
 
 class DeleteTimesheetRequest(BaseModel):
