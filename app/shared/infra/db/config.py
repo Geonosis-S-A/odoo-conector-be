@@ -1,10 +1,14 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class DatabaseSettings:
     # Entorno actual (local, staging, production)
     ENV = os.getenv("ENV", "LOCAL")
 
+    print(f"ENV: {ENV}")
     # Base de datos para desarrollo
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
 
