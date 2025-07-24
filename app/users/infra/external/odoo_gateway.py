@@ -238,3 +238,85 @@ class OdooEmployeeGateway(EmployeeGateway):
             return None
 
         return self._transform_odoo_to_domain(employee_data[0])
+
+    def get_employee_with_user_data(self, employee_id: int) -> Dict[str, Any] | None:
+        """
+        Obtiene los datos de un empleado por ID, incluyendo información de usuario si existe.
+
+        - Nombre y email: siempre del modelo hr.employee
+        - Roles: solo si el empleado tiene user_id, del modelo res.users
+
+        Args:
+            employee_id: ID del empleado en Odoo
+
+        Returns:
+            Dict con datos del empleado y usuario (si existe), o None si no se encuentra
+        """
+        try:
+            # 1. Buscar el empleado por ID en hr.employee (nombre y email provienen de aquí)
+            employee_data = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "hr.employee",
+                    "read",
+                    [[employee_id]],
+                    {"fields": ["id", "name", "work_email", "user_id"]},
+                ),
+            )
+
+            if not employee_data:
+                return None
+
+            employee = employee_data[0]
+
+            # 2. Preparar datos básicos del empleado (nombre y email del hr.employee)
+            result = {
+                "id": employee["id"],
+                "name": employee.get("name", ""),  # Del hr.employee
+                "email": employee.get("work_email", ""),  # Del hr.employee
+                "user_id": None,
+                "has_user": False,
+                "roles": [],
+            }
+
+            # 3. Si el empleado tiene user_id asociado, obtener roles del res.users
+            user_id = employee.get("user_id")
+            if user_id and isinstance(user_id, (list, tuple)) and len(user_id) > 0:
+                # user_id viene como [id, nombre] de Odoo
+                actual_user_id = user_id[0] if isinstance(user_id[0], int) else None
+
+                if actual_user_id:
+                    # Obtener datos del usuario incluyendo roles del res.users
+                    user_data = cast(
+                        List[Dict[str, Any]],
+                        self.odoo_client["models"].execute_kw(
+                            self.odoo_client["ODOO_DB"],
+                            self.odoo_client["uid"],
+                            self.odoo_client["ODOO_PASSWORD"],
+                            "res.users",
+                            "read",
+                            [[actual_user_id]],
+                            {"fields": ["id", "login", "group_ids"]},
+                        ),
+                    )
+
+                    if user_data:
+                        user = user_data[0]
+                        result.update(
+                            {
+                                "user_id": actual_user_id,
+                                "has_user": True,
+                                "roles": user.get("group_ids", [])
+                                if isinstance(user.get("group_ids"), list)
+                                else [],
+                            }
+                        )
+
+            return result
+
+        except Exception as e:
+            print(f"Error al obtener empleado {employee_id}: {e}")
+            return None
