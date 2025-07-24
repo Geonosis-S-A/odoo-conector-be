@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.auth.infra.auth_service import JWTPayload
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
@@ -24,7 +25,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.post("/sync", response_model=UserSyncResponse)
 async def sync_users(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Sincroniza los usuarios desde Odoo a la base de datos local.
@@ -32,6 +33,14 @@ async def sync_users(
     - Los usuarios existentes se actualizan con sus datos y roles más recientes
     - Mantiene el estado de activación e is_superuser de usuarios existentes
     """
+    roles: list[int] = current_user["roles"]
+    is_admin = 30 in roles
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para sincronizar usuarios",
+        )
+
     try:
         # Inicializar dependencias
         odoo_client = get_odoo_connection()
@@ -65,7 +74,7 @@ async def sync_users(
 async def sync_user_changes(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Sincroniza cambios de un usuario específico desde Odoo.
@@ -73,13 +82,15 @@ async def sync_user_changes(
     Mantiene el estado de activación e is_superuser del usuario.
     """
 
+    # El user es admin o es el mismo usuario
     roles: list[int] = current_user["roles"]
     is_admin = 30 in roles
-    if not is_admin:
+    if not is_admin and current_user["user_id"] != user_id:
         raise HTTPException(
             status_code=403,
-            detail="No tienes permisos para ver todos los usuarios",
+            detail="No tienes permisos para sincronizar este usuario",
         )
+
     try:
         # Inicializar dependencias
         odoo_client = get_odoo_connection()
@@ -112,7 +123,7 @@ async def sync_user_changes(
 
 @router.get("/employees", response_model=EmployeesListResponse)
 async def get_all_employees(
-    current_user: dict = Depends(get_current_user),
+    current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Obtiene todos los empleados registrados en Odoo.
