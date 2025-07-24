@@ -245,6 +245,15 @@ def edit_timesheet(
     Raises:
         HTTPException: Si hay un error al editar la línea
     """
+    roles: list[int] = current_user["roles"]
+    is_admin = 30 in roles
+
+    if req.validated and not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para editar las líneas de timesheet si ya fueron validadas",
+        )
+
     try:
         # Asegurar que el ID en la URL coincide con el ID en el body
         if timesheet_id != req.id:

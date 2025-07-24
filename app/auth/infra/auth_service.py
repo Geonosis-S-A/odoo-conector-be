@@ -1,5 +1,5 @@
 from jose import jwt, JWTError
-from typing import Literal, Optional
+from typing import Literal, Optional, TypedDict, List
 from sqlalchemy import true
 from app.auth.application.use_cases.exceptions.exceptions import (
     TokenNotFound,
@@ -48,52 +48,58 @@ class Settings:
 settings = Settings()
 
 
+class JWTPayload(TypedDict):
+    user_id: int
+    user_email: str
+    user_name: str
+    roles: List[int]  # IDs de roles
+    exp: int  # timestamp de expiración
+
+
 class TokenService:
     def create_access_token(
         self, token_data: TokenData, expires_delta: Optional[timedelta] = None
     ) -> str:
-        to_encode = {
-            "user_id": token_data.user_id,
-            "user_email": token_data.user_email,
-            "user_name": token_data.user_name,
-            "roles": token_data.roles,
-        }
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
         else:
             expire = datetime.now(timezone.utc) + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
-
-        to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(
-            to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-        )
-        return encoded_jwt
-
-    def create_refresh_token(self, token_data: TokenData) -> str:
-        to_encode = {
+        to_encode: JWTPayload = {
             "user_id": token_data.user_id,
             "user_email": token_data.user_email,
             "user_name": token_data.user_name,
             "roles": token_data.roles,
+            "exp": int(expire.timestamp()),
         }
-
-        expire = datetime.now(timezone.utc) + timedelta(
-            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
-        )
-        to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(
-            to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+            dict(to_encode), settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
         )
         return encoded_jwt
 
-    def verify_token(self, token: str) -> dict:
+    def create_refresh_token(self, token_data: TokenData) -> str:
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        to_encode: JWTPayload = {
+            "user_id": token_data.user_id,
+            "user_email": token_data.user_email,
+            "user_name": token_data.user_name,
+            "roles": token_data.roles,
+            "exp": int(expire.timestamp()),
+        }
+        encoded_jwt = jwt.encode(
+            dict(to_encode), settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
+        return encoded_jwt
+
+    def verify_token(self, token: str) -> JWTPayload:
         try:
             payload = jwt.decode(
                 token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
             )
-            return payload
+            return payload  # type: ignore
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

@@ -37,8 +37,10 @@ async def review_mail(
     current_user: dict = Depends(get_current_user),
 ):
     try:
+        print(request)
         await email_service.send_review_mail(
             request.user_mail,
+            request.approver_mail,
             request.timesheetline_ids,
             timesheet_line_gateway,
             request.body,
