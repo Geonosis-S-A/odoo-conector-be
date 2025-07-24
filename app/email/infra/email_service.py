@@ -61,6 +61,7 @@ class ResendEmailService:
     async def send_review_mail(
         self,
         user_mail: str,
+        approver_mail: str,
         timesheet_line_ids: list[int],
         timesheet_line_gateway: TimesheetLineGateway,
         body: Optional[str] = None,
@@ -87,6 +88,7 @@ class ResendEmailService:
                     "project_name": timesheet_line.project.name if timesheet_line.project else "",
                     "task_name": timesheet_line.task.name if timesheet_line.task else "",
                     "date": timesheet_line.date.strftime("%d/%m/%Y"),
+                    "approver_mail": approver_mail,
                 })
             
             # Usar el servicio de templates para renderizar el email
