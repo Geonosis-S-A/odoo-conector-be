@@ -133,7 +133,7 @@ class SyncSingleUserChangesUseCase:
                 "user_updated": False,
                 "current_data": {
                     "employee_id": employee_id,
-                    "user_id": local_employee.id,
+                    "user_id": None,
                     "has_user_id": has_user,
                     "email": local_employee.email,
                     "full_name": local_employee.full_name,
