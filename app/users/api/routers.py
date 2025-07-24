@@ -70,26 +70,20 @@ async def sync_users(
         )
 
 
-@router.post("/sync/{user_id}", response_model=SingleUserSyncResponse)
+@router.post("/sync/{employee_id}", response_model=SingleUserSyncResponse)
 async def sync_user_changes(
-    user_id: int,
+    employee_id: int,
     db: Session = Depends(get_db),
     current_user: JWTPayload = Depends(get_current_user),
 ):
     """
-    Sincroniza cambios de un usuario específico desde Odoo.
-    Actualiza email, nombre y roles del usuario identificado por ID.
+    Sincroniza cambios de un empleado específico desde Odoo.
+    Recibe el ID del empleado y verifica si tiene un usuario asociado.
+    Si tiene usuario asociado: actualiza email, nombre y roles del usuario.
+    Si no tiene usuario asociado: retorna mensaje informativo.
     Mantiene el estado de activación e is_superuser del usuario.
     """
 
-    # El user es admin o es el mismo usuario
-    roles: list[int] = current_user["roles"]
-    is_admin = 30 in roles
-    if not is_admin and current_user["user_id"] != user_id:
-        raise HTTPException(
-            status_code=403,
-            detail="No tienes permisos para sincronizar este usuario",
-        )
 
     try:
         # Inicializar dependencias
@@ -103,8 +97,8 @@ async def sync_user_changes(
             user_repository=user_repository,
         )
 
-        # Ejecutar sincronización para el usuario específico
-        result = use_case.execute(user_id)
+        # Ejecutar sincronización para el empleado específico
+        result = use_case.execute(employee_id)
 
         return SingleUserSyncResponse(
             success=result["success"],
@@ -117,7 +111,7 @@ async def sync_user_changes(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error al sincronizar usuario {user_id}: {str(e)}",
+            detail=f"Error al sincronizar empleado {employee_id}: {str(e)}",
         )
 
 
