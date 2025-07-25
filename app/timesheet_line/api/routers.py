@@ -143,6 +143,10 @@ async def list_timesheet_lines(
     date_to: date | None = Query(
         None, description="Fecha de fin del rango (YYYY-MM-DD)"
     ),
+    project_id: int | None = Query(None, description="ID del proyecto para filtrar"),
+    validated: bool | None = Query(
+        None, description="Filtrar por estado de validación"
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -154,6 +158,8 @@ async def list_timesheet_lines(
         employee_id: ID del empleado para filtrar (obligatorio)
         date_from: Fecha de inicio del rango para filtrar (obligatorio)
         date_to: Fecha de fin del rango para filtrar (obligatorio)
+        project_id: ID del proyecto para filtrar (opcional)
+        validated: Filtrar por estado de validación (opcional)
 
     Returns:
         List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
@@ -171,7 +177,9 @@ async def list_timesheet_lines(
 
     try:
         use_case = ListTimesheetLinesUseCase(gateway, employee_gateway)
-        timesheets = use_case.execute(employee_id, date_from, date_to)
+        timesheets = use_case.execute(
+            employee_id, date_from, date_to, project_id, validated
+        )
         return timesheets
     except InvalidEmployeeIdError as e:
         raise HTTPException(status_code=400, detail=e.message)
