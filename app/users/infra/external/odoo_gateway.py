@@ -239,6 +239,101 @@ class OdooEmployeeGateway(EmployeeGateway):
 
         return self._transform_odoo_to_domain(employee_data[0])
 
+    def get_all_employees_with_user_data(self) -> List[Dict[str, Any]]:
+        """
+        Obtiene todos los empleados de Odoo con su información de usuario asociado.
+
+        Para cada empleado retorna:
+        - Datos básicos del empleado (id, name, email del hr.employee)
+        - Si tiene user_id asociado y los roles correspondientes del res.users
+
+        Returns:
+            List[Dict]: Lista de empleados con su información de usuario
+        """
+        try:
+            # 1. Obtener todos los empleados con campos básicos incluyendo user_id
+            employees_data = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "hr.employee",
+                    "search_read",
+                    [[]],  # Sin filtros (todos los empleados)
+                    {
+                        "fields": ["id", "name", "work_email", "user_id"],
+                        "order": "name",
+                    },
+                ),
+            )
+
+            result = []
+
+            # 2. Obtener todos los user_ids únicos que necesitamos consultar
+            user_ids_to_fetch = []
+            for employee in employees_data:
+                user_id = employee.get("user_id")
+                if user_id and isinstance(user_id, (list, tuple)) and len(user_id) > 0:
+                    actual_user_id = user_id[0] if isinstance(user_id[0], int) else None
+                    if actual_user_id and actual_user_id not in user_ids_to_fetch:
+                        user_ids_to_fetch.append(actual_user_id)
+
+            # 3. Obtener datos de usuarios con roles en una sola consulta
+            users_data = {}
+            if user_ids_to_fetch:
+                users_info = cast(
+                    List[Dict[str, Any]],
+                    self.odoo_client["models"].execute_kw(
+                        self.odoo_client["ODOO_DB"],
+                        self.odoo_client["uid"],
+                        self.odoo_client["ODOO_PASSWORD"],
+                        "res.users",
+                        "read",
+                        [user_ids_to_fetch],
+                        {"fields": ["id", "login", "group_ids"]},
+                    ),
+                )
+
+                # Crear un diccionario para acceso rápido por user_id
+                users_data = {user["id"]: user for user in users_info}
+
+            # 4. Procesar cada empleado y combinar con datos de usuario
+            for employee in employees_data:
+                employee_result = {
+                    "id": employee["id"],
+                    "name": employee.get("name", ""),
+                    "email": employee.get("work_email", ""),
+                    "user_id": None,
+                    "has_user": False,
+                    "roles": [],
+                }
+
+                # Verificar si tiene user_id asociado
+                user_id = employee.get("user_id")
+                if user_id and isinstance(user_id, (list, tuple)) and len(user_id) > 0:
+                    actual_user_id = user_id[0] if isinstance(user_id[0], int) else None
+
+                    if actual_user_id and actual_user_id in users_data:
+                        user_info = users_data[actual_user_id]
+                        employee_result.update(
+                            {
+                                "user_id": actual_user_id,
+                                "has_user": True,
+                                "roles": user_info.get("group_ids", [])
+                                if isinstance(user_info.get("group_ids"), list)
+                                else [],
+                            }
+                        )
+
+                result.append(employee_result)
+
+            return result
+
+        except Exception as e:
+            print(f"Error al obtener empleados con datos de usuario: {e}")
+            return []
+
     def get_employee_with_user_data(self, employee_id: int) -> Dict[str, Any] | None:
         """
         Obtiene los datos de un empleado por ID, incluyendo información de usuario si existe.
