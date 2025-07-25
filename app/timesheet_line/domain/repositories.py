@@ -14,6 +14,8 @@ class TimesheetLineGateway(ABC):
         employee_id: Optional[int] = None,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
+        project_id: Optional[int] = None,
+        validated: Optional[bool] = None,
     ) -> list[DetailedTimesheetLine]: ...
 
     @abstractmethod

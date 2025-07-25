@@ -26,6 +26,8 @@ class ListTimesheetLinesUseCase:
         employee_id: int | None,
         date_from: date | None,
         date_to: date | None,
+        project_id: int | None,
+        validated: bool | None,
     ) -> List[DetailedTimesheetLine]:
         # Validación de employee_id
         if employee_id is not None and employee_id <= 0:
@@ -41,6 +43,8 @@ class ListTimesheetLinesUseCase:
         if date_from is not None and date_to is not None and date_from > date_to:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
 
-        timesheets = self.timesheet_line_gateway.all(employee_id, date_from, date_to)
+        timesheets = self.timesheet_line_gateway.all(
+            employee_id, date_from, date_to, project_id, validated
+        )
         # Devolver la lista de timesheets (puede estar vacía, y eso está bien)
         return timesheets
