@@ -17,6 +17,9 @@ class EmployeeGateway(ABC):
     @abstractmethod
     def get_user_roles_by_email(self, email: str) -> List[int] | None: ...
 
+    @abstractmethod
+    def get_by_id(self, id: int) -> Employee | None: ...
+
 
 class UserRepository(ABC):
     @abstractmethod

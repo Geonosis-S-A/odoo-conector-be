@@ -3,9 +3,8 @@ from typing import List, Dict
 from datetime import date
 import xmlrpc.client
 
-from sqlalchemy import false
-
-
+from app.auth.infra.email_service import get_email_service
+from app.email.api.schemas import ReviewMailRequest
 from app.shared.security.dependencies import get_current_user
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
@@ -329,3 +328,47 @@ async def validate_timesheet_lines(
             status_code=500,
             detail="Error interno del servidor al validar las líneas de timesheet",
         )
+
+
+@router.post("/review")
+async def review_mail(
+    request: ReviewMailRequest,
+    email_service=Depends(get_email_service),
+    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    roles: list[int] = current_user["roles"]
+    is_admin = 30 in roles
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para enviar correos de revisión",
+        )
+
+    timesheet_lines = timesheet_gateway.get_by_ids(request.timesheetline_ids)
+
+    employees_bucket = {}
+    for timesheet_line in timesheet_lines:
+        employee = employee_gateway.get_by_id(timesheet_line.employee_id)
+        if employee is None:
+            continue
+        if employee.email not in employees_bucket:
+            employees_bucket[employee.email] = []
+        employees_bucket[employee.email].append(timesheet_line)
+
+    # El receiver es la key y los timesheet_lines son los valores.
+    try:
+        for receiver_mail, timesheet_lines in employees_bucket.items():
+            await email_service.send_review_mail(
+                receiver_mail,
+                request.approver_mail,
+                timesheet_lines,
+                timesheet_line_gateway,
+                request.body,
+            )
+
+        return {"message": "Mail enviado correctamente!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

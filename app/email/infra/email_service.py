@@ -23,19 +23,21 @@ class EmailService(Protocol):
         pass
 
 
-class ResendEmailService:
+class CustomResendEmailService:
     """Implementación del servicio de email usando Resend"""
 
     def __init__(self):
         """Inicializa el cliente de Resend con la API key"""
         resend.api_key = settings.RESEND_APIKEY
 
-    async def send_support_mail(self, user_name: str, subject: str, body: str, date: datetime) -> None:
+    async def send_support_mail(
+        self, user_name: str, subject: str, body: str, date: datetime
+    ) -> None:
         """Envía un email de soporte al usuario usando Resend"""
         try:
             # Formatear la fecha para mostrar en el email
             formatted_date = date.strftime("%d/%m/%Y")
-            
+
             # Usar el servicio de templates para renderizar el email
             html_body = email_template_service.render_template(
                 "support_mail",
@@ -57,7 +59,7 @@ class ResendEmailService:
 
         except Exception as e:
             raise Exception(f"Error al enviar email con Resend: {str(e)}")
-        
+
     async def send_review_mail(
         self,
         user_mail: str,
@@ -75,22 +77,30 @@ class ResendEmailService:
                 if timesheet_line:
                     timesheet_lines.append(timesheet_line)
                 else:
-                    print(f"Advertencia: No se encontró el timesheet con id {timesheet_id}")
-            
+                    print(
+                        f"Advertencia: No se encontró el timesheet con id {timesheet_id}"
+                    )
+
             if not timesheet_lines:
                 raise Exception("No se encontraron registros de timesheet válidos")
-            
+
             # Preparar datos para el template
             timesheet_data = []
             for timesheet_line in timesheet_lines:
-                timesheet_data.append({
-                    "hours": f"{timesheet_line.hours} hs",
-                    "project_name": timesheet_line.project.name if timesheet_line.project else "",
-                    "task_name": timesheet_line.task.name if timesheet_line.task else "",
-                    "date": timesheet_line.date.strftime("%d/%m/%Y"),
-                    "approver_mail": approver_mail,
-                })
-            
+                timesheet_data.append(
+                    {
+                        "hours": f"{timesheet_line.hours} hs",
+                        "project_name": timesheet_line.project.name
+                        if timesheet_line.project
+                        else "",
+                        "task_name": timesheet_line.task.name
+                        if timesheet_line.task
+                        else "",
+                        "date": timesheet_line.date.strftime("%d/%m/%Y"),
+                        "approver_mail": approver_mail,
+                    }
+                )
+
             # Usar el servicio de templates para renderizar el email
             html_body = email_template_service.render_template(
                 "review_mail",
@@ -102,7 +112,11 @@ class ResendEmailService:
             )
 
             # Determinar el asunto según la cantidad de registros
-            subject = "⚠️ Revisión de registro de horas" if len(timesheet_lines) == 1 else f"⚠️ Revisión de {len(timesheet_lines)} registros de horas"
+            subject = (
+                "⚠️ Revisión de registro de horas"
+                if len(timesheet_lines) == 1
+                else f"⚠️ Revisión de {len(timesheet_lines)} registros de horas"
+            )
 
             # Enviar email usando Resend
             resend.Emails.send(
@@ -118,8 +132,6 @@ class ResendEmailService:
             raise Exception(f"Error al enviar email con Resend: {str(e)}")
 
 
-
-
-def get_email_service() -> ResendEmailService:
+def get_email_service() -> CustomResendEmailService:
     """Factory function para obtener una instancia del servicio de email"""
-    return ResendEmailService()
+    return CustomResendEmailService()
