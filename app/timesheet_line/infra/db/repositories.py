@@ -1,4 +1,4 @@
-from sqlmodel import Session, select
+from sqlmodel import Session, desc, select
 from app.timesheet_line.domain.models import (
     CreateTimesheetLineNotification,
     TimesheetLineNotification,
@@ -26,11 +26,15 @@ class SQLModelTimesheetLineNotificationRepository(TimesheetLineNotificationRepos
     def get_by_timesheet_id(
         self, timesheet_line_id: int
     ) -> TimesheetLineNotification | None:
+        # Puede haber varias, devuelvo la de creación más reciente
         db_timesheet_line_notification = self.db.exec(
-            select(TimesheetLineNotificationModel).where(
+            select(TimesheetLineNotificationModel)
+            .where(
                 TimesheetLineNotificationModel.timesheet_line_id == timesheet_line_id
             )
+            .order_by(desc(TimesheetLineNotificationModel.created_at))
         ).first()
+
         if db_timesheet_line_notification is None:
             return None
         if db_timesheet_line_notification.id is None:

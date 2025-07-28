@@ -163,6 +163,9 @@ async def list_timesheet_lines(
         None, description="Filtrar por estado de validación"
     ),
     current_user: dict = Depends(get_current_user),
+    notification_repository: TimesheetLineNotificationRepository = Depends(
+        get_notification_repository
+    ),
 ):
     """
     Lista todas las líneas de timesheet con filtros obligatorios.
@@ -191,7 +194,9 @@ async def list_timesheet_lines(
         )
 
     try:
-        use_case = ListTimesheetLinesUseCase(gateway, employee_gateway)
+        use_case = ListTimesheetLinesUseCase(
+            gateway, employee_gateway, notification_repository
+        )
         timesheets = use_case.execute(
             employee_id, date_from, date_to, project_id, validated
         )
