@@ -10,7 +10,7 @@ from app.auth.application.use_cases.exceptions.exceptions import (
     UserNotFound,
 )
 from app.auth.domain.repositories import OTPRepository
-from app.auth.infra.email_service import EmailService
+from app.auth.infra.email_service import AuthEmailService
 from app.auth.infra.password_service import PasswordService
 from app.users.domain.repositories import UserRepository
 
@@ -19,7 +19,7 @@ class PasswordRecoveryUseCase:
     def __init__(
         self,
         user_repository: UserRepository,
-        email_service: EmailService,
+        email_service: AuthEmailService,
         password_service: PasswordService,
         otp_repository: OTPRepository,
     ):

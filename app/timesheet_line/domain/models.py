@@ -6,6 +6,7 @@ from typing import Optional
 
 from app.project.domain.models import Project
 from app.task.domain.models import Task
+from app.timesheet_line.api.schemas import TimesheetLineNotificationResponse
 
 
 # Ejemplo. Hay que ver si le damos uso.
@@ -52,3 +53,20 @@ class DetailedTimesheetLine:
     date: date_t
     validated: bool
     create_date: Optional[datetime] = None
+    notification: Optional[TimesheetLineNotificationResponse] = None
+
+
+@dataclass
+class CreateTimesheetLineNotification:
+    timesheet_line_id: int
+    approver_id: int
+    receiver_id: int
+
+
+@dataclass
+class TimesheetLineNotification:
+    id: int
+    timesheet_line_id: int
+    approver_id: int
+    receiver_id: int
+    created_at: datetime

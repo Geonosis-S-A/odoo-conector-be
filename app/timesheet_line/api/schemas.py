@@ -15,6 +15,12 @@ class CargarHorasRequest(BaseModel):
     task_id: int | None = None
 
 
+class TimesheetLineNotificationResponse(BaseModel):
+    id: int
+    sender_name: str
+    sended_at: datetime
+
+
 class DetailedTimesheetLineResponse(BaseModel):
     id: int
     name: str
@@ -25,6 +31,7 @@ class DetailedTimesheetLineResponse(BaseModel):
     date: date
     create_date: Optional[datetime] = None
     validated: bool
+    notification: Optional[TimesheetLineNotificationResponse] = None
 
 
 class EditTimesheetRequest(BaseModel):

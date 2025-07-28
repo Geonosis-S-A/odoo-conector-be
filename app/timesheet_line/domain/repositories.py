@@ -1,7 +1,12 @@
 from abc import ABC, abstractmethod
 from datetime import date
 from typing import Optional
-from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
+from app.timesheet_line.domain.models import (
+    CreateTimesheetLineNotification,
+    DetailedTimesheetLine,
+    TimesheetLine,
+    TimesheetLineNotification,
+)
 
 
 class TimesheetLineGateway(ABC):
@@ -34,3 +39,23 @@ class TimesheetLineGateway(ABC):
 
     @abstractmethod
     def validate(self, timesheet_line_ids: list[int]) -> bool: ...
+
+
+class TimesheetLineNotificationRepository(ABC):
+    @abstractmethod
+    def create(
+        self, timesheet_line_notification: CreateTimesheetLineNotification
+    ) -> bool: ...
+
+    @abstractmethod
+    def delete(self, timesheet_line_notification_id: int) -> bool: ...
+
+    @abstractmethod
+    def get_by_timesheet_id(
+        self, timesheet_line_id: int
+    ) -> TimesheetLineNotification | None: ...
+
+    @abstractmethod
+    def get_by_timesheet_ids(
+        self, timesheet_line_ids: list[int]
+    ) -> list[TimesheetLineNotification]: ...

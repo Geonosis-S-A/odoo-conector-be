@@ -7,13 +7,13 @@ from app.core.config import settings
 from app.shared.templates.email.email_template_service import email_template_service
 
 
-class EmailService(Protocol):
+class AuthEmailService(Protocol):
     async def send_otp_email(self, email: str, otp_code: str) -> None:
         """Envía un email con el código OTP al usuario"""
         pass
 
 
-class ResendEmailService:
+class AuthResendEmailService:
     """Implementación del servicio de email usando Resend"""
 
     def __init__(self):
@@ -70,6 +70,6 @@ class SMTPEmailService:
             raise Exception(f"Error al enviar email: {str(e)}")
 
 
-def get_email_service() -> ResendEmailService:
+def get_auth_email_service() -> AuthResendEmailService:
     """Factory function para obtener una instancia del servicio de email"""
-    return ResendEmailService()
+    return AuthResendEmailService()
