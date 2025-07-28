@@ -8,6 +8,8 @@ from app.timesheet_line.application.use_cases.obtener_horas import (
     ListTimesheetLinesUseCase,
 )
 from app.timesheet_line.domain.models import DetailedTimesheetLine
+from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
+from app.users.domain.models import Employee
 from app.project.domain.models import Project
 from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetNotFoundError,
@@ -257,12 +259,37 @@ class TestListTimesheetLinesUseCase:
         return Mock()
 
     @pytest.fixture
-    def use_case(self, mock_timesheet_gateway, mock_employee_gateway):
+    def mock_notification_repository(self):
+        """Fixture que proporciona un notification repository mockeado."""
+        return Mock(spec=TimesheetLineNotificationRepository)
+
+    @pytest.fixture
+    def sample_employees(self):
+        """Fixture que proporciona empleados de prueba."""
+        return [
+            Employee(id=1, full_name="John Doe", email="john@example.com"),
+            Employee(id=2, full_name="Jane Smith", email="jane@example.com"),
+        ]
+
+    @pytest.fixture
+    def use_case(
+        self,
+        mock_timesheet_gateway,
+        mock_employee_gateway,
+        mock_notification_repository,
+    ):
         """Fixture que proporciona el caso de uso con los gateways mockeados."""
-        return ListTimesheetLinesUseCase(mock_timesheet_gateway, mock_employee_gateway)
+        return ListTimesheetLinesUseCase(
+            mock_timesheet_gateway, mock_employee_gateway, mock_notification_repository
+        )
 
     def test_list_timesheets_empty_result_returns_empty_list_corrected_behavior(
-        self, use_case, mock_timesheet_gateway, mock_employee_gateway
+        self,
+        use_case,
+        mock_timesheet_gateway,
+        mock_employee_gateway,
+        mock_notification_repository,
+        sample_employees,
     ):
         """Test que verifica el comportamiento CORRECTO: cuando no hay timesheets en un rango de fechas,
         debería devolver una lista vacía (no un error 422).
@@ -276,6 +303,8 @@ class TestListTimesheetLinesUseCase:
 
         # Mock: el empleado existe
         mock_employee_gateway.exists_by_id.return_value = True
+        # Mock: lista de empleados para el mapeo de notificaciones
+        mock_employee_gateway.all.return_value = sample_employees
 
         # Mock: no hay timesheets en el rango de fechas (lista vacía)
         mock_timesheet_gateway.all.return_value = []
@@ -290,6 +319,9 @@ class TestListTimesheetLinesUseCase:
 
         # Verificar que se llamaron los métodos correctos
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.all.assert_called_once()
         mock_timesheet_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, None
         )
+        # No se debe llamar get_by_timesheet_id si no hay timesheets
+        mock_notification_repository.get_by_timesheet_id.assert_not_called()
