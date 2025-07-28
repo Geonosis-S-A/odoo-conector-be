@@ -281,7 +281,7 @@ class TestListTimesheetLinesUseCase:
         mock_timesheet_gateway.all.return_value = []
 
         # Act
-        result = use_case.execute(employee_id, date_from, date_to)
+        result = use_case.execute(employee_id, date_from, date_to, None, None)
 
         # Assert
         assert result == []
@@ -291,5 +291,5 @@ class TestListTimesheetLinesUseCase:
         # Verificar que se llamaron los métodos correctos
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_timesheet_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to
+            employee_id, date_from, date_to, None, None
         )
