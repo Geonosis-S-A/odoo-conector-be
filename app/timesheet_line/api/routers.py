@@ -3,8 +3,11 @@ from typing import List, Dict
 from datetime import date
 import xmlrpc.client
 
+from sqlmodel import Session
+
 from app.email.api.schemas import ReviewMailRequest
 from app.email.infra.email_service import get_email_service
+from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
@@ -24,10 +27,17 @@ from app.timesheet_line.application.use_cases.obtener_horas import (
 from app.timesheet_line.application.use_cases.validar_timesheet import (
     ValidateTimesheetUseCase,
 )
-from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.timesheet_line.domain.models import CreateTimesheetLineNotification
+from app.timesheet_line.domain.repositories import (
+    TimesheetLineGateway,
+    TimesheetLineNotificationRepository,
+)
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
+)
+from app.timesheet_line.infra.db.repositories import (
+    SQLModelTimesheetLineNotificationRepository,
 )
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
@@ -73,6 +83,12 @@ def get_employee_gateway(
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de empleados"
         )
+
+
+def get_notification_repository(
+    db: Session = Depends(get_db),
+) -> TimesheetLineNotificationRepository:
+    return SQLModelTimesheetLineNotificationRepository(db)
 
 
 @router.post("/", response_model=list[DetailedTimesheetLineResponse])
@@ -338,6 +354,9 @@ async def review_mail(
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: dict = Depends(get_current_user),
+    notification_repository: TimesheetLineNotificationRepository = Depends(
+        get_notification_repository
+    ),
 ):
     roles: list[int] = current_user["roles"]
     is_admin = 30 in roles
@@ -347,6 +366,14 @@ async def review_mail(
             detail="No tienes permisos para enviar correos de revisión",
         )
 
+    approver = employee_gateway.get_by_email(request.approver_mail)
+    if approver is None:
+        raise HTTPException(
+            status_code=404,
+            detail="El empleado que intenta enviar el correo de revisión no existe",
+        )
+    approver_id = approver.id
+
     timesheet_lines = timesheet_gateway.get_by_ids(request.timesheetline_ids)
 
     employees_bucket = {}
@@ -355,19 +382,31 @@ async def review_mail(
         if employee is None:
             continue
         if employee.email not in employees_bucket:
-            employees_bucket[employee.email] = []
-        employees_bucket[employee.email].append(timesheet_line)
+            employees_bucket[employee.email] = {
+                "timesheets": [],
+                "employee_id": None,
+            }
+        employees_bucket[employee.email]["timesheets"].append(timesheet_line)
+        employees_bucket[employee.email]["employee_id"] = employee.id
 
     # El receiver es la key y los timesheet_lines son los valores.
     try:
-        for receiver_mail, timesheet_lines in employees_bucket.items():
+        for receiver_mail, employee_data in employees_bucket.items():
             await email_service.send_review_mail(
                 receiver_mail,
                 request.approver_mail,
-                timesheet_lines,
+                employee_data["timesheets"],
                 timesheet_line_gateway,
                 request.body,
             )
+            for timesheet_line in employee_data["timesheets"]:
+                notification_repository.create(
+                    CreateTimesheetLineNotification(
+                        timesheet_line_id=timesheet_line.id,
+                        approver_id=approver_id,
+                        receiver_id=employee_data["employee_id"],
+                    )
+                )
 
         return {"message": "Emails enviados correctamente!"}
     except Exception as e:

@@ -1,7 +1,7 @@
 from datetime import datetime, UTC, timedelta
 from typing import Optional
 from sqlmodel import SQLModel, Field, Relationship
-from app.auth.infra.db.models import UserModel
+from app.users.infra.db.models import UserModel
 
 
 def default_ttl():
@@ -18,7 +18,7 @@ class TimesheetLineNotificationModel(SQLModel, table=True):
     timesheet_line_id: int = Field(
         index=True, description="ID de timesheet_line en Odoo"
     )
-    sender_id: int = Field(foreign_key="usermodel.id", index=True)
+    approver_id: int = Field(foreign_key="usermodel.id", index=True)
     receiver_id: int = Field(foreign_key="usermodel.id", index=True)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     ttl: Optional[datetime] = Field(
@@ -29,7 +29,7 @@ class TimesheetLineNotificationModel(SQLModel, table=True):
     # Relaciones opcionales (puedes omitirlas si no las necesitas)
     sender: Optional["UserModel"] = Relationship(
         sa_relationship_kwargs={
-            "foreign_keys": "[TimesheetLineNotificationModel.sender_id]"
+            "foreign_keys": "[TimesheetLineNotificationModel.approver_id]"
         }
     )
     receiver: Optional["UserModel"] = Relationship(

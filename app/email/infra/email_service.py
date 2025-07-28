@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.shared.templates.email.email_template_service import email_template_service
 from datetime import datetime
 
+from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 
 
@@ -64,25 +65,13 @@ class CustomResendEmailService:
         self,
         user_mail: str,
         approver_mail: str,
-        timesheet_line_ids: list[int],
+        timesheet_lines: list[DetailedTimesheetLine],
         timesheet_line_gateway: TimesheetLineGateway,
         body: Optional[str] = None,
     ) -> None:
         """Envía un email de revisión al usuario usando Resend"""
         try:
             # Obtener todos los timesheet lines
-            timesheet_lines = []
-            for timesheet_id in timesheet_line_ids:
-                timesheet_line = timesheet_line_gateway.get_by_id(timesheet_id)
-                if timesheet_line:
-                    timesheet_lines.append(timesheet_line)
-                else:
-                    print(
-                        f"Advertencia: No se encontró el timesheet con id {timesheet_id}"
-                    )
-
-            if not timesheet_lines:
-                raise Exception("No se encontraron registros de timesheet válidos")
 
             # Preparar datos para el template
             timesheet_data = []

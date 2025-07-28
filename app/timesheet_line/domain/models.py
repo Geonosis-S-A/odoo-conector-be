@@ -52,3 +52,19 @@ class DetailedTimesheetLine:
     date: date_t
     validated: bool
     create_date: Optional[datetime] = None
+
+
+@dataclass
+class CreateTimesheetLineNotification:
+    timesheet_line_id: int
+    approver_id: int
+    receiver_id: int
+
+
+@dataclass
+class TimesheetLineNotification:
+    id: int
+    timesheet_line_id: int
+    approver_id: int
+    receiver_id: int
+    created_at: datetime
