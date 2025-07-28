@@ -356,7 +356,6 @@ async def validate_timesheet_lines(
 async def review_mail(
     request: ReviewMailRequest,
     email_service: CommonResendEmailService = Depends(get_common_email_service),
-    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: dict = Depends(get_current_user),
