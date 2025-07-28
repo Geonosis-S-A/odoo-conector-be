@@ -338,8 +338,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             self.odoo_client["uid"],
             self.odoo_client["ODOO_PASSWORD"],
             "account.analytic.line",
-            "write",
-            [timesheet_line_ids, {"validated": True}],
+            "action_validate_timesheet",
+            [timesheet_line_ids],
+            {},
         )
 
         return bool(response)
