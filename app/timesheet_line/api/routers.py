@@ -3,8 +3,8 @@ from typing import List, Dict
 from datetime import date
 import xmlrpc.client
 
-from app.auth.infra.email_service import get_email_service
 from app.email.api.schemas import ReviewMailRequest
+from app.email.infra.email_service import get_email_service
 from app.shared.security.dependencies import get_current_user
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
