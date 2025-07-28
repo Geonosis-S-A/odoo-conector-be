@@ -8,7 +8,7 @@ from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 
 
-class EmailService(Protocol):
+class CommonEmailService(Protocol):
     async def send_support_mail(self, email: str, subject: str, body: str) -> None:
         """Envía un email de soporte al usuario"""
         pass
@@ -24,7 +24,7 @@ class EmailService(Protocol):
         pass
 
 
-class CustomResendEmailService:
+class CommonResendEmailService:
     """Implementación del servicio de email usando Resend"""
 
     def __init__(self):
@@ -66,7 +66,6 @@ class CustomResendEmailService:
         user_mail: str,
         approver_mail: str,
         timesheet_lines: list[DetailedTimesheetLine],
-        timesheet_line_gateway: TimesheetLineGateway,
         body: Optional[str] = None,
     ) -> None:
         """Envía un email de revisión al usuario usando Resend"""
@@ -119,8 +118,3 @@ class CustomResendEmailService:
 
         except Exception as e:
             raise Exception(f"Error al enviar email con Resend: {str(e)}")
-
-
-def get_email_service() -> CustomResendEmailService:
-    """Factory function para obtener una instancia del servicio de email"""
-    return CustomResendEmailService()

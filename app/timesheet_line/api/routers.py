@@ -5,8 +5,9 @@ import xmlrpc.client
 
 from sqlmodel import Session
 
+from app.email.api.dependencies import get_common_email_service
 from app.email.api.schemas import ReviewMailRequest
-from app.email.infra.email_service import get_email_service
+from app.email.infra.email_service import CommonResendEmailService
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
 from app.timesheet_line.api.schemas import (
@@ -354,7 +355,7 @@ async def validate_timesheet_lines(
 @router.post("/review")
 async def review_mail(
     request: ReviewMailRequest,
-    email_service=Depends(get_email_service),
+    email_service: CommonResendEmailService = Depends(get_common_email_service),
     timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
@@ -401,7 +402,6 @@ async def review_mail(
                 receiver_mail,
                 request.approver_mail,
                 employee_data["timesheets"],
-                timesheet_line_gateway,
                 request.body,
             )
             for timesheet_line in employee_data["timesheets"]:

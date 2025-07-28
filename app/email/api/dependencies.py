@@ -1,6 +1,5 @@
-from app.email.infra.email_service import CustomResendEmailService
+from app.email.infra.email_service import CommonResendEmailService
 
 
-def get_email_service_dependency() -> CustomResendEmailService:
-    """Dependencia para obtener el servicio de email"""
-    return CustomResendEmailService()
+def get_common_email_service() -> CommonResendEmailService:
+    return CommonResendEmailService()
