@@ -369,6 +369,6 @@ async def review_mail(
                 request.body,
             )
 
-        return {"message": "Mail enviado correctamente!"}
+        return {"message": "Emails enviados correctamente!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
