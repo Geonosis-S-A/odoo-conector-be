@@ -59,6 +59,7 @@ class ListTimesheetLinesUseCase:
         employees_dict = {employee.id: employee for employee in employees}
         # Devolver la lista de timesheets (puede estar vacía, y eso está bien)
         for timesheet in timesheets:
+            # es ineficiente, pero van a ser pocos. Todo: mejorar
             notification = self.notification_repository.get_by_timesheet_id(
                 timesheet.id
             )

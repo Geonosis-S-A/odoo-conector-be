@@ -23,6 +23,11 @@ class SQLModelTimesheetLineNotificationRepository(TimesheetLineNotificationRepos
         self.db.commit()
         return True
 
+    def get_by_timesheet_ids(
+        self, timesheet_line_ids: list[int]
+    ) -> list[TimesheetLineNotification]:
+        raise NotImplementedError("Not implemented")
+
     def get_by_timesheet_id(
         self, timesheet_line_id: int
     ) -> TimesheetLineNotification | None:
