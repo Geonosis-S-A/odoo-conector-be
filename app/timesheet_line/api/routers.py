@@ -195,12 +195,12 @@ async def list_timesheet_lines(
         )
 
     try:
-        uid = current_user["user_id"]
+        id = current_user["user_id"]  # esto es el employee_id del f
         use_case = ListTimesheetLinesUseCase(
             gateway, employee_gateway, notification_repository
         )
         timesheets = use_case.execute(
-            employee_id, date_from, date_to, project_id, validated, team, uid
+            employee_id, date_from, date_to, project_id, validated, team, id
         )
         return timesheets
     except InvalidEmployeeIdError as e:

@@ -37,7 +37,7 @@ class ListTimesheetLinesUseCase:
         project_id: int | None,
         validated: bool | None,
         team: bool | None,
-        uid: int,
+        id: int | None,
     ) -> List[DetailedTimesheetLine]:
         # Validación de employee_id
         if employee_id is not None and employee_id <= 0:
@@ -49,12 +49,22 @@ class ListTimesheetLinesUseCase:
         ):
             raise EmployeeNotExistsError(employee_id)
 
+        user_id = None
+        if id is not None:
+            user_id = self.employee_gateway.get_user_id_by_employee_id(id)
+            if user_id is None:
+                raise EmployeeNotExistsError(
+                    id
+                )  # lanzar error correctamente, este no xd
+
+        print(user_id)
+
         # Validación de rango de fechas
         if date_from is not None and date_to is not None and date_from > date_to:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
 
         timesheets = self.timesheet_line_gateway.all(
-            employee_id, date_from, date_to, project_id, validated, team, uid
+            employee_id, date_from, date_to, project_id, validated, team, user_id
         )
 
         employees = self.employee_gateway.all()

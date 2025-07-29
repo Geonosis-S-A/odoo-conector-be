@@ -20,6 +20,9 @@ class EmployeeGateway(ABC):
     @abstractmethod
     def get_by_id(self, id: int) -> Employee | None: ...
 
+    @abstractmethod
+    def get_user_id_by_employee_id(self, employee_id: int) -> int | None: ...
+
 
 class UserRepository(ABC):
     @abstractmethod

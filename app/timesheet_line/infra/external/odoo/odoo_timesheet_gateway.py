@@ -127,24 +127,11 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         project_id: Optional[int] = None,
         validated: Optional[bool] = None,
         team: Optional[bool] = None,
-        uid: Optional[int] = None,
+        user_id: Optional[int] = None,
     ) -> List[DetailedTimesheetLine]:
-        """Obtiene todas las líneas de hoja de tiempo de Odoo.
-
-        Args:
-            employee_id: ID del empleado para filtrar (opcional)
-            date_from: Fecha de inicio del rango (opcional)
-            date_to: Fecha de fin del rango (opcional)
-            project_id: ID del proyecto para filtrar (opcional)
-            validated: Estado de validación para filtrar (opcional)
-
-        Returns:
-            List[DetailedTimesheetLine]: Lista de líneas de hoja de tiempo transformadas
-        """
-        domain = []
-        if employee_id is not None:
-            domain.append(("employee_id", "=", employee_id))
-
+        """Obtiene todas las líneas de hoja de tiempo de Odoo."""
+        domain: list[tuple[str, str, Any]] = [("is_timesheet", "=", True)]
+        # Condición base
         if date_from is not None:
             domain.append(("date", ">=", date_from.isoformat()))
 
@@ -156,17 +143,19 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         if validated is not None:
             domain.append(("validated", "=", validated))
+        if employee_id is not None:
+            domain.append(("employee_id", "=", employee_id))
 
-        if team:
-            domain.extend(
-                [
-                    "|",
-                    ("employee_id.timesheet_manager_id", "=", uid),
-                    "|",
-                    ("employee_id.parent_id.user_id", "=", uid),
-                    ("employee_id.is_subordinate", "=", True),
-                ]
-            )
+        if team and user_id is not None:
+            # Aquí aplicamos el filtro de equipo como se ve en la petición web
+            team_domain = [
+                "|",
+                "|",
+                ("employee_id.timesheet_manager_id", "=", user_id),
+                ("employee_id.parent_id.user_id", "=", user_id),
+                ("employee_id.is_subordinate", "=", True),
+            ]
+            domain.extend(team_domain)
 
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
@@ -174,9 +163,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 self.odoo_client["ODOO_DB"],
                 self.odoo_client["uid"],
                 self.odoo_client["ODOO_PASSWORD"],
-                "account.analytic.line",  # Modelo de las líneas de hojas de tiempo
-                "search_read",  # Método para buscar y leer registros
-                [domain],  # Sin filtros (obtiene todas las líneas)
+                "account.analytic.line",
+                "search_read",
+                [domain],
                 {
                     "fields": [
                         "name",
