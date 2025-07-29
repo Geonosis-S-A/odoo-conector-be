@@ -104,8 +104,10 @@ class TestListTimesheetLinesUseCase:
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
         uid = 1
+        user_id = 123  # ID del usuario obtenido desde el employee_id
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = sample_timesheet_lines
         mock_notification_repository.get_by_timesheet_id.return_value = None
@@ -117,9 +119,10 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, user_id
         )
         # Verificar que se buscó notificación para cada timesheet
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
@@ -144,8 +147,10 @@ class TestListTimesheetLinesUseCase:
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
         uid = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = []  # Sin resultados
 
@@ -159,9 +164,10 @@ class TestListTimesheetLinesUseCase:
         assert isinstance(result, list)
         assert len(result) == 0
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, user_id
         )
         # No se debe llamar get_by_timesheet_id si no hay resultados
         mock_notification_repository.get_by_timesheet_id.assert_not_called()
@@ -182,7 +188,10 @@ class TestListTimesheetLinesUseCase:
         date_to = date(2024, 1, 16)
         uid = 1
 
+        user_id = 123
+
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = [
             sample_timesheet_lines[0]
@@ -196,9 +205,10 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, user_id
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(1)
         assert len(result) == 1
@@ -305,7 +315,10 @@ class TestListTimesheetLinesUseCase:
         date_to = date(2024, 1, 22)
         uid = 1
 
+        user_id = 123
+
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = [
             sample_timesheet_lines[1]
@@ -319,9 +332,10 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, user_id
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(2)
         assert len(result) == 1
@@ -343,7 +357,10 @@ class TestListTimesheetLinesUseCase:
         date_to = date(2024, 12, 31)
         uid = 1
 
+        user_id = 123
+
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = sample_timesheet_lines
         mock_notification_repository.get_by_timesheet_id.return_value = None
@@ -355,9 +372,10 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, user_id
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             sample_timesheet_lines
@@ -382,7 +400,10 @@ class TestListTimesheetLinesUseCase:
         project_id = 1
         uid = 1
 
+        user_id = 123
+
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         # Solo devolver timesheets del proyecto 1
         filtered_timesheets = [
@@ -398,9 +419,10 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, None, False, uid
+            employee_id, date_from, date_to, project_id, None, False, user_id
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             filtered_timesheets
@@ -426,7 +448,10 @@ class TestListTimesheetLinesUseCase:
         project_id = 0
         uid = 1
 
+        user_id = 123
+
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = []
 
@@ -437,9 +462,10 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, None, False, uid
+            employee_id, date_from, date_to, project_id, None, False, user_id
         )
         mock_notification_repository.get_by_timesheet_id.assert_not_called()
         assert result == []
@@ -459,9 +485,11 @@ class TestListTimesheetLinesUseCase:
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
         validated = True
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         # Crear timesheets validados
         validated_timesheets = [
@@ -481,14 +509,15 @@ class TestListTimesheetLinesUseCase:
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, validated, False, uid
+            employee_id, date_from, date_to, None, validated, False, id
         )
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, validated, False, uid
+            employee_id, date_from, date_to, None, validated, False, user_id
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(1)
         assert result == validated_timesheets
@@ -511,9 +540,11 @@ class TestListTimesheetLinesUseCase:
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
         validated = False
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         # Los sample_timesheet_lines ya tienen validated=False
         mock_gateway.all.return_value = sample_timesheet_lines
@@ -521,14 +552,15 @@ class TestListTimesheetLinesUseCase:
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, validated, False, uid
+            employee_id, date_from, date_to, None, validated, False, id
         )
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, validated, False, uid
+            employee_id, date_from, date_to, None, validated, False, user_id
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             sample_timesheet_lines
@@ -554,9 +586,11 @@ class TestListTimesheetLinesUseCase:
         date_to = date(2024, 1, 22)
         project_id = 1
         validated = True
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         # Timesheet que cumple todos los criterios
         specific_timesheet = [
@@ -576,14 +610,15 @@ class TestListTimesheetLinesUseCase:
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, project_id, validated, False, uid
+            employee_id, date_from, date_to, project_id, validated, False, id
         )
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, validated, False, uid
+            employee_id, date_from, date_to, project_id, validated, False, user_id
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(1)
         assert result == specific_timesheet
@@ -603,9 +638,11 @@ class TestListTimesheetLinesUseCase:
         date_to = date(2024, 1, 22)
         project_id = 2
         validated = False
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         # Timesheet del proyecto 2, no validado
         filtered_timesheet = [
@@ -625,14 +662,15 @@ class TestListTimesheetLinesUseCase:
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, project_id, validated, False, uid
+            employee_id, date_from, date_to, project_id, validated, False, id
         )
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, validated, False, uid
+            employee_id, date_from, date_to, project_id, validated, False, user_id
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(2)
         assert result == filtered_timesheet
@@ -654,24 +692,27 @@ class TestListTimesheetLinesUseCase:
         date_to = date(2024, 1, 22)
         project_id = 1
         validated = False
-        uid = 1
+        id = 1
+        user_id = 123
 
         # No se valida employee_id cuando es None
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = sample_timesheet_lines
         mock_notification_repository.get_by_timesheet_id.return_value = None
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, project_id, validated, False, uid
+            employee_id, date_from, date_to, project_id, validated, False, id
         )
 
         # Assert
         # No debe llamar a exists_by_id cuando employee_id es None
         mock_employee_gateway.exists_by_id.assert_not_called()
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, validated, False, uid
+            employee_id, date_from, date_to, project_id, validated, False, user_id
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             sample_timesheet_lines
@@ -694,7 +735,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
         mock_employee_gateway.all.return_value = sample_employees
@@ -707,7 +748,7 @@ class TestListTimesheetLinesUseCase:
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, id
         )
 
         # Assert
@@ -734,7 +775,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
         mock_employee_gateway.all.return_value = sample_employees
@@ -752,7 +793,7 @@ class TestListTimesheetLinesUseCase:
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, id
         )
 
         # Assert
@@ -777,7 +818,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
 
         # Solo incluir empleados que no incluyan el approver_id de la notificación
         limited_employees = [
@@ -796,7 +837,7 @@ class TestListTimesheetLinesUseCase:
 
         # Act & Assert - Esto debería generar un KeyError cuando trata de acceder al empleado id=2
         with pytest.raises(KeyError):
-            use_case.execute(employee_id, date_from, date_to, None, None, False, uid)
+            use_case.execute(employee_id, date_from, date_to, None, None, False, id)
 
     def test_execute_performance_with_many_timesheets(
         self,
@@ -811,7 +852,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
 
         # Crear varios timesheets
         many_timesheets = []
@@ -835,7 +876,7 @@ class TestListTimesheetLinesUseCase:
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, id
         )
 
         # Assert
@@ -865,21 +906,24 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = None  # Sin fecha de inicio
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = sample_timesheet_lines
         mock_notification_repository.get_by_timesheet_id.return_value = None
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, id
         )
 
         # Assert - No debe lanzar excepción
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_gateway.all.assert_called_once_with(
-            employee_id, None, date_to, None, None, False, uid
+            employee_id, None, date_to, None, None, False, user_id
         )
         assert result == sample_timesheet_lines
 
@@ -897,21 +941,24 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = None  # Sin fecha de fin
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = sample_timesheet_lines
         mock_notification_repository.get_by_timesheet_id.return_value = None
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, id
         )
 
         # Assert - No debe lanzar excepción
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, None, None, None, False, uid
+            employee_id, date_from, None, None, None, False, user_id
         )
         assert result == sample_timesheet_lines
 
@@ -926,19 +973,23 @@ class TestListTimesheetLinesUseCase:
     ):
         """Test que verifica el comportamiento cuando todos los parámetros son None (vista admin completa)."""
         # Arrange - Todos los filtros en None
-        uid = 1
+        id = 1
+        user_id = 123
+
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = sample_timesheet_lines
         mock_notification_repository.get_by_timesheet_id.return_value = None
 
         # Act
-        result = use_case.execute(None, None, None, None, None, False, uid)
+        result = use_case.execute(None, None, None, None, None, False, id)
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_not_called()  # No valida employee_id cuando es None
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            None, None, None, None, None, False, uid
+            None, None, None, None, None, False, user_id
         )
         assert result == sample_timesheet_lines
 
@@ -956,21 +1007,24 @@ class TestListTimesheetLinesUseCase:
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
         project_id = -1  # Proyecto negativo
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = []  # Gateway maneja el filtro
         mock_notification_repository.get_by_timesheet_id.return_value = None
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, project_id, None, False, uid
+            employee_id, date_from, date_to, project_id, None, False, id
         )
 
         # Assert - Debe pasar la validación al gateway (no es responsabilidad del use case validar project_id)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, None, False, uid
+            employee_id, date_from, date_to, project_id, None, False, user_id
         )
         assert result == []
 
@@ -988,7 +1042,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
         mock_employee_gateway.all.return_value = []  # Lista vacía de empleados
@@ -999,7 +1053,7 @@ class TestListTimesheetLinesUseCase:
 
         # Act & Assert - Debe fallar cuando trata de acceder a employees_dict[notification.approver_id]
         with pytest.raises(KeyError):
-            use_case.execute(employee_id, date_from, date_to, None, None, False, uid)
+            use_case.execute(employee_id, date_from, date_to, None, None, False, id)
 
     def test_execute_with_future_dates(
         self,
@@ -1014,21 +1068,24 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2025, 1, 1)  # Fecha futura
         date_to = date(2025, 12, 31)
-        uid = 1
+        id = 1
+        user_id = 123
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = []  # Sin timesheets en el futuro
         mock_notification_repository.get_by_timesheet_id.return_value = None
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, id
         )
 
         # Assert
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, user_id
         )
         assert result == []
 
@@ -1046,7 +1103,8 @@ class TestListTimesheetLinesUseCase:
         same_date = date(2024, 1, 15)
         date_from = same_date
         date_to = same_date
-        uid = 1
+        id = 1
+        user_id = 123
 
         # Crear timesheet para esa fecha específica
         same_date_timesheet = [
@@ -1063,18 +1121,20 @@ class TestListTimesheetLinesUseCase:
         ]
 
         mock_employee_gateway.exists_by_id.return_value = True
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = user_id
         mock_employee_gateway.all.return_value = sample_employees
         mock_gateway.all.return_value = same_date_timesheet
         mock_notification_repository.get_by_timesheet_id.return_value = None
 
         # Act
         result = use_case.execute(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, id
         )
 
         # Assert - No debe lanzar excepción
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(id)
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, uid
+            employee_id, date_from, date_to, None, None, False, user_id
         )
         assert result == same_date_timesheet
         assert len(result) == 1
@@ -1093,7 +1153,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
         mock_employee_gateway.all.return_value = sample_employees
@@ -1102,7 +1162,7 @@ class TestListTimesheetLinesUseCase:
 
         # Act & Assert
         with pytest.raises(TimesheetListError) as exc_info:
-            use_case.execute(employee_id, date_from, date_to, None, None, False, uid)
+            use_case.execute(employee_id, date_from, date_to, None, None, False, id)
 
         assert "Database connection failed" in str(exc_info.value)
 
@@ -1120,7 +1180,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 14)
         date_to = date(2024, 1, 22)
-        uid = 1
+        id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
         mock_employee_gateway.all.return_value = sample_employees
@@ -1132,6 +1192,6 @@ class TestListTimesheetLinesUseCase:
 
         # Act & Assert
         with pytest.raises(Exception) as exc_info:
-            use_case.execute(employee_id, date_from, date_to, None, None, False, uid)
+            use_case.execute(employee_id, date_from, date_to, None, None, False, id)
 
         assert "Notification DB error" in str(exc_info.value)

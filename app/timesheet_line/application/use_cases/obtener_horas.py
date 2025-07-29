@@ -57,8 +57,6 @@ class ListTimesheetLinesUseCase:
                     id
                 )  # lanzar error correctamente, este no xd
 
-        print(user_id)
-
         # Validación de rango de fechas
         if date_from is not None and date_to is not None and date_from > date_to:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
