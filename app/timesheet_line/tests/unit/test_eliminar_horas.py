@@ -300,6 +300,7 @@ class TestListTimesheetLinesUseCase:
         employee_id = 1
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
+        uid = 1
 
         # Mock: el empleado existe
         mock_employee_gateway.exists_by_id.return_value = True
@@ -310,7 +311,9 @@ class TestListTimesheetLinesUseCase:
         mock_timesheet_gateway.all.return_value = []
 
         # Act
-        result = use_case.execute(employee_id, date_from, date_to, None, None)
+        result = use_case.execute(
+            employee_id, date_from, date_to, None, None, False, uid
+        )
 
         # Assert
         assert result == []
@@ -321,7 +324,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_employee_gateway.all.assert_called_once()
         mock_timesheet_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None
+            employee_id, date_from, date_to, None, None, False, uid
         )
         # No se debe llamar get_by_timesheet_id si no hay timesheets
         mock_notification_repository.get_by_timesheet_id.assert_not_called()
