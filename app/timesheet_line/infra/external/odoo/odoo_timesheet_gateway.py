@@ -126,6 +126,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         date_to: Optional[date] = None,
         project_id: Optional[int] = None,
         validated: Optional[bool] = None,
+        team: Optional[bool] = None,
+        uid: Optional[int] = None,
     ) -> List[DetailedTimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo.
 
@@ -154,6 +156,17 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         if validated is not None:
             domain.append(("validated", "=", validated))
+
+        if team:
+            domain.extend(
+                [
+                    "|",
+                    ("employee_id.timesheet_manager_id", "=", uid),
+                    "|",
+                    ("employee_id.parent_id.user_id", "=", uid),
+                    ("employee_id.is_subordinate", "=", True),
+                ]
+            )
 
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
