@@ -167,6 +167,7 @@ async def list_timesheet_lines(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
+    team: bool | None = Query(None, description="Filtrar por equipo"),
 ):
     """
     Lista todas las líneas de timesheet con filtros obligatorios.
@@ -184,7 +185,6 @@ async def list_timesheet_lines(
         List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
     """
     roles: list[int] = current_user["roles"]
-    print(roles)
     is_admin = 30 in roles
     if (
         (employee_id is not None and current_user["user_id"] != employee_id)
@@ -195,11 +195,12 @@ async def list_timesheet_lines(
         )
 
     try:
+        id = current_user["user_id"]  # esto es el employee_id del f
         use_case = ListTimesheetLinesUseCase(
             gateway, employee_gateway, notification_repository
         )
         timesheets = use_case.execute(
-            employee_id, date_from, date_to, project_id, validated
+            employee_id, date_from, date_to, project_id, validated, team, id
         )
         return timesheets
     except InvalidEmployeeIdError as e:

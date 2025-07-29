@@ -433,3 +433,44 @@ class OdooEmployeeGateway(EmployeeGateway):
         except Exception as e:
             print(f"Error al obtener empleado {employee_id}: {e}")
             return None
+
+    def get_user_id_by_employee_id(self, employee_id: int) -> int | None:
+        """
+        Obtiene el user_id asociado a un employee_id en Odoo.
+
+        Args:
+            employee_id: ID del empleado en Odoo
+
+        Returns:
+            int: user_id asociado al empleado, o None si no se encuentra o no tiene usuario asociado
+        """
+        try:
+            # Buscar el empleado por ID y obtener solo el campo user_id
+            employee_data = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "hr.employee",
+                    "read",
+                    [[employee_id]],
+                    {"fields": ["user_id"]},
+                ),
+            )
+            print(employee_data)
+            if not employee_data:
+                return None
+
+            employee = employee_data[0]
+            user_id = employee.get("user_id")
+
+            # user_id viene como [id, nombre] de Odoo o False si no tiene usuario asociado
+            if user_id and isinstance(user_id, (list, tuple)) and len(user_id) > 0:
+                actual_user_id = user_id[0] if isinstance(user_id[0], int) else None
+                return actual_user_id
+
+            return None
+
+        except Exception as e:
+            return None
