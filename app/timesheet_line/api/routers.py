@@ -200,7 +200,13 @@ async def list_timesheet_lines(
             gateway, employee_gateway, notification_repository
         )
         timesheets = use_case.execute(
-            employee_id, date_from, date_to, project_id, validated, team, id
+            employee_id,
+            date_from,
+            date_to,
+            project_id,
+            validated,
+            team,
+            id,
         )
         return timesheets
     except InvalidEmployeeIdError as e:

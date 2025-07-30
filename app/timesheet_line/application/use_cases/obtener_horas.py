@@ -51,7 +51,7 @@ class ListTimesheetLinesUseCase:
             raise EmployeeNotExistsError(employee_id)
 
         user_id = None
-        if id is not None:
+        if id is not None and team:
             user_id = self.employee_gateway.get_user_id_by_employee_id(id)
             if user_id is None:
                 raise EmployeeNotHasUserError(id)
