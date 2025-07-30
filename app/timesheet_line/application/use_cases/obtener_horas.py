@@ -13,6 +13,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     InvalidDateRangeError,
     InvalidEmployeeIdError,
     EmployeeNotExistsError,
+    EmployeeNotHasUserError,
 )
 
 
@@ -53,9 +54,7 @@ class ListTimesheetLinesUseCase:
         if id is not None:
             user_id = self.employee_gateway.get_user_id_by_employee_id(id)
             if user_id is None:
-                raise EmployeeNotExistsError(
-                    id
-                )  # lanzar error correctamente, este no xd
+                raise EmployeeNotHasUserError(id)
 
         # Validación de rango de fechas
         if date_from is not None and date_to is not None and date_from > date_to:
