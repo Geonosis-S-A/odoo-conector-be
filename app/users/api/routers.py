@@ -5,6 +5,7 @@ from app.auth.infra.auth_service import JWTPayload
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import Roles, user_has_role
 from app.users.application.use_cases.sync_users import SyncUsersUseCase
 from app.users.application.use_cases.sync_single_user_changes import (
     SyncSingleUserChangesUseCase,
@@ -34,7 +35,7 @@ async def sync_users(
     - Mantiene el estado de activación e is_superuser de usuarios existentes
     """
     roles: list[int] = current_user["roles"]
-    is_admin = 30 in roles
+    is_admin = user_has_role(roles, Roles.approver)
     if not is_admin:
         raise HTTPException(
             status_code=403,
@@ -83,7 +84,6 @@ async def sync_user_changes(
     Si no tiene usuario asociado: retorna mensaje informativo.
     Mantiene el estado de activación e is_superuser del usuario.
     """
-
 
     try:
         # Inicializar dependencias

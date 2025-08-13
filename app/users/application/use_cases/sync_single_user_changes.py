@@ -61,7 +61,7 @@ class SyncSingleUserChangesUseCase:
             has_changes = (
                 local_employee.email != odoo_email
                 or local_employee.full_name != odoo_name
-                or local_employee.roles != odoo_roles
+                or set(local_employee.roles or []) != set(odoo_roles or [])
             )
 
             changes_detail = {
