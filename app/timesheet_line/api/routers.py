@@ -10,6 +10,7 @@ from app.email.api.schemas import ReviewMailRequest
 from app.email.infra.email_service import CommonResendEmailService
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import Roles, user_has_role
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
     DetailedTimesheetLineResponse,
@@ -185,7 +186,7 @@ async def list_timesheet_lines(
         List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
     """
     roles: list[int] = current_user["roles"]
-    is_admin = 30 in roles
+    is_admin = user_has_role(roles, Roles.approver)
     if (
         (employee_id is not None and current_user["user_id"] != employee_id)
         or (employee_id is None)
@@ -282,7 +283,7 @@ def edit_timesheet(
         HTTPException: Si hay un error al editar la línea
     """
     roles: list[int] = current_user["roles"]
-    is_admin = 30 in roles
+    is_admin = user_has_role(roles, Roles.approver)
 
     if req.validated and not is_admin:
         raise HTTPException(
@@ -334,7 +335,7 @@ async def validate_timesheet_lines(
     """
 
     roles: list[int] = current_user["roles"]
-    is_admin = 30 in roles
+    is_admin = user_has_role(roles, Roles.approver)
     if not is_admin:
         raise HTTPException(
             status_code=403,
@@ -371,7 +372,8 @@ async def review_mail(
     ),
 ):
     roles: list[int] = current_user["roles"]
-    is_admin = 30 in roles
+    # permiso para enviar correo de revisión
+    is_admin = user_has_role(roles, Roles.approver)
     if not is_admin:
         raise HTTPException(
             status_code=403,

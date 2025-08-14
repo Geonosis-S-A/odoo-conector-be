@@ -412,18 +412,19 @@ class OdooEmployeeGateway(EmployeeGateway):
                             "res.users",
                             "read",
                             [[actual_user_id]],
-                            {"fields": ["id", "login", "group_ids"]},
+                            {"fields": ["id", "login", "groups_id"]},
                         ),
                     )
 
+                    print("user_data: ", user_data)
                     if user_data:
                         user = user_data[0]
                         result.update(
                             {
                                 "user_id": actual_user_id,
                                 "has_user": True,
-                                "roles": user.get("group_ids", [])
-                                if isinstance(user.get("group_ids"), list)
+                                "roles": user.get("groups_id", [])
+                                if isinstance(user.get("groups_id"), list)
                                 else [],
                             }
                         )
