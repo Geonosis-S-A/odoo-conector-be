@@ -1,11 +1,11 @@
 from app.auth.application.services.crypt_service import BcryptPasswordService
-from app.auth.infra.email_service import EmailService, get_email_service
+from app.auth.infra.email_service import AuthEmailService, get_auth_email_service
 from app.auth.infra.password_service import PasswordService
 
 
-def get_email_service_dependency() -> EmailService:
+def get_auth_email_service_dependency() -> AuthEmailService:
     """Dependencia para obtener el servicio de email"""
-    return get_email_service()
+    return get_auth_email_service()
 
 
 def get_password_service() -> PasswordService:

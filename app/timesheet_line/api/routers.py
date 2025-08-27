@@ -3,13 +3,20 @@ from typing import List, Dict
 from datetime import date
 import xmlrpc.client
 
+from sqlmodel import Session
 
+from app.email.api.dependencies import get_common_email_service
+from app.email.api.schemas import ReviewMailRequest
+from app.email.infra.email_service import CommonResendEmailService
+from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import Roles, user_has_role
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
     DetailedTimesheetLineResponse,
     EditTimesheetRequest,
     DeleteTimesheetRequest,
+    ValidateTimesheetRequest,
 )
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.application.use_cases.delete_timesheet import (
@@ -19,10 +26,20 @@ from app.timesheet_line.application.use_cases.edit_timesheet import EditTimeshee
 from app.timesheet_line.application.use_cases.obtener_horas import (
     ListTimesheetLinesUseCase,
 )
-from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.timesheet_line.application.use_cases.validar_timesheet import (
+    ValidateTimesheetUseCase,
+)
+from app.timesheet_line.domain.models import CreateTimesheetLineNotification
+from app.timesheet_line.domain.repositories import (
+    TimesheetLineGateway,
+    TimesheetLineNotificationRepository,
+)
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
+)
+from app.timesheet_line.infra.db.repositories import (
+    SQLModelTimesheetLineNotificationRepository,
 )
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
@@ -43,6 +60,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetDeleteError,
     OdooValidationError,
     OdooConnectionError,
+    TimesheetValidateError,
 )
 
 
@@ -67,6 +85,12 @@ def get_employee_gateway(
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de empleados"
         )
+
+
+def get_notification_repository(
+    db: Session = Depends(get_db),
+) -> TimesheetLineNotificationRepository:
+    return SQLModelTimesheetLineNotificationRepository(db)
 
 
 @router.post("/", response_model=list[DetailedTimesheetLineResponse])
@@ -129,10 +153,22 @@ async def create_timesheet_line(
 async def list_timesheet_lines(
     gateway: OdooTimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
-    employee_id: int = Query(..., description="ID del empleado para filtrar"),
-    date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
-    date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    employee_id: int | None = Query(None, description="ID del empleado para filtrar"),
+    date_from: date | None = Query(
+        None, description="Fecha de inicio del rango (YYYY-MM-DD)"
+    ),
+    date_to: date | None = Query(
+        None, description="Fecha de fin del rango (YYYY-MM-DD)"
+    ),
+    project_id: int | None = Query(None, description="ID del proyecto para filtrar"),
+    validated: bool | None = Query(
+        None, description="Filtrar por estado de validación"
+    ),
     current_user: dict = Depends(get_current_user),
+    notification_repository: TimesheetLineNotificationRepository = Depends(
+        get_notification_repository
+    ),
+    team: bool | None = Query(None, description="Filtrar por equipo"),
 ):
     """
     Lista todas las líneas de timesheet con filtros obligatorios.
@@ -143,13 +179,36 @@ async def list_timesheet_lines(
         employee_id: ID del empleado para filtrar (obligatorio)
         date_from: Fecha de inicio del rango para filtrar (obligatorio)
         date_to: Fecha de fin del rango para filtrar (obligatorio)
+        project_id: ID del proyecto para filtrar (opcional)
+        validated: Filtrar por estado de validación (opcional)
 
     Returns:
         List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
     """
+    roles: list[int] = current_user["roles"]
+    is_admin = user_has_role(roles, Roles.approver)
+    if (
+        (employee_id is not None and current_user["user_id"] != employee_id)
+        or (employee_id is None)
+    ) and (not is_admin):
+        raise HTTPException(
+            status_code=403, detail="No tienes permisos para ver esta información"
+        )
+
     try:
-        use_case = ListTimesheetLinesUseCase(gateway, employee_gateway)
-        timesheets = use_case.execute(employee_id, date_from, date_to)
+        id = current_user["user_id"]  # esto es el employee_id del f
+        use_case = ListTimesheetLinesUseCase(
+            gateway, employee_gateway, notification_repository
+        )
+        timesheets = use_case.execute(
+            employee_id,
+            date_from,
+            date_to,
+            project_id,
+            validated,
+            team,
+            id,
+        )
         return timesheets
     except InvalidEmployeeIdError as e:
         raise HTTPException(status_code=400, detail=e.message)
@@ -223,6 +282,15 @@ def edit_timesheet(
     Raises:
         HTTPException: Si hay un error al editar la línea
     """
+    roles: list[int] = current_user["roles"]
+    is_admin = user_has_role(roles, Roles.approver)
+
+    if req.validated and not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para editar las líneas de timesheet si ya fueron validadas",
+        )
+
     try:
         # Asegurar que el ID en la URL coincide con el ID en el body
         if timesheet_id != req.id:
@@ -247,3 +315,112 @@ def edit_timesheet(
             status_code=500,
             detail="Error interno del servidor al editar la línea de timesheet",
         )
+
+
+@router.post("/validate", response_model=Dict[str, bool])
+async def validate_timesheet_lines(
+    request: ValidateTimesheetRequest,
+    gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Valida múltiples líneas de timesheet (marca validated=True).
+
+    Args:
+        request: Objeto con lista de IDs de las líneas de timesheet a validar
+        gateway: Gateway de timesheet (inyectado)
+
+    Returns:
+        Dict[str, bool]: Resultado de la validación
+    """
+
+    roles: list[int] = current_user["roles"]
+    is_admin = user_has_role(roles, Roles.approver)
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para validar las líneas de timesheet",
+        )
+
+    try:
+        use_case = ValidateTimesheetUseCase(gateway)
+        success = use_case.execute(request.timesheetline_ids)
+        return {"success": success}
+    except TimesheetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetValidateError as e:
+        raise HTTPException(status_code=422, detail=e.message)
+    except TimesheetDomainError as e:
+        # Captura cualquier otra excepción del dominio
+        raise HTTPException(status_code=400, detail=e.message)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Error interno del servidor al validar las líneas de timesheet",
+        )
+
+
+@router.post("/review")
+async def review_mail(
+    request: ReviewMailRequest,
+    email_service: CommonResendEmailService = Depends(get_common_email_service),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
+    notification_repository: TimesheetLineNotificationRepository = Depends(
+        get_notification_repository
+    ),
+):
+    roles: list[int] = current_user["roles"]
+    # permiso para enviar correo de revisión
+    is_admin = user_has_role(roles, Roles.approver)
+    if not is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para enviar correos de revisión",
+        )
+
+    approver = employee_gateway.get_by_email(request.approver_mail)
+    if approver is None:
+        raise HTTPException(
+            status_code=404,
+            detail="El empleado que intenta enviar el correo de revisión no existe",
+        )
+    approver_id = approver.id
+
+    timesheet_lines = timesheet_gateway.get_by_ids(request.timesheetline_ids)
+
+    employees_bucket = {}
+    for timesheet_line in timesheet_lines:
+        employee = employee_gateway.get_by_id(timesheet_line.employee_id)
+        if employee is None:
+            continue
+        if employee.email not in employees_bucket:
+            employees_bucket[employee.email] = {
+                "timesheets": [],
+                "employee_id": None,
+            }
+        employees_bucket[employee.email]["timesheets"].append(timesheet_line)
+        employees_bucket[employee.email]["employee_id"] = employee.id
+
+    # El receiver es la key y los timesheet_lines son los valores.
+    try:
+        for receiver_mail, employee_data in employees_bucket.items():
+            await email_service.send_review_mail(
+                receiver_mail,
+                request.approver_mail,
+                employee_data["timesheets"],
+                request.body,
+            )
+            for timesheet_line in employee_data["timesheets"]:
+                notification_repository.create(
+                    CreateTimesheetLineNotification(
+                        timesheet_line_id=timesheet_line.id,
+                        approver_id=approver_id,
+                        receiver_id=employee_data["employee_id"],
+                    )
+                )
+
+        return {"message": "Emails enviados correctamente!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

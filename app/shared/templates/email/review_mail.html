@@ -1,0 +1,131 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="es">
+
+<head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <!--$-->
+</head>
+
+<body style="background-color:#F5F5F5;color:#212121">
+    <!-- Preview text oculto para clientes de email -->
+    <div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0"
+        data-skip-in-text="true">
+        Un registro de horas cargado por ti se ha enviado a revisión.
+    </div>
+
+    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation"
+        style="max-width:37.5em;padding:20px;margin:0 auto;background-color:#F5F5F5">
+        <tbody>
+            <tr style="width:100%">
+                <td>
+                    <!-- Tarjeta principal blanca -->
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation"
+                        style="background-color:#FFFFFF;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.1);">
+                        <tbody>
+                            <tr>
+                                <td>
+                                    <!-- Header con isologotipo y fondo naranja Geonosis -->
+                                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0"
+                                        role="presentation"
+                                        style="background-color:#FF9517;display:flex;padding:30px 0;align-items:center;justify-content:center;border-radius:8px 8px 0 0;">
+                                        <tbody>
+                                            <tr>
+                                                <td align="center">
+                                                    <img alt="Geonosis - We know how" height="40"
+                                                        src="data:image/png;base64,{{ISOLOGOTIPO_BASE64}}"
+                                                        style="display:block;outline:none;border:none;text-decoration:none;max-height:40px;height:auto;width:auto;"
+                                                        width="auto" />
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+
+                                    <!-- Contenido principal -->
+                                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0"
+                                        role="presentation" style="padding:35px 40px">
+                                        <tbody>
+                                            <tr>
+                                                <td>
+
+                                                    <p
+                                                        style="font-size:16px;line-height:24px;color:#333333;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:24px 0;margin-bottom:24px;margin-top:0;">
+                                                        Hola,
+                                                    </p>
+
+                                                    <p
+                                                        style="font-size:16px;line-height:24px;color:#333333;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:24px 0;margin-bottom:24px;margin-top:0;">
+                                                        Te informamos que {{TIMESHEET_MESSAGE}} para su revisión.
+                                                    </p>
+
+                                                    <!-- Detalles de los registros -->
+                                                    {{TIMESHEET_RECORDS}}
+
+                                                    {{#if_SHOW_BODY_SECTION_true}}
+                                                    <!-- Motivo de la revisión -->
+                                                    <table align="center" width="100%" border="0" cellpadding="0"
+                                                        cellspacing="0" role="presentation"
+                                                        style="background-color:#F8F9FA;border-radius:8px;border:1px solid #E9ECEF;margin:24px 0;">
+                                                        <tbody>
+                                                            <tr>
+                                                                <td style="padding:20px;">
+                                                                    <h3
+                                                                        style="color:#333333;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont,'Segoe UI','Roboto','Oxygen','Ubuntu','Cantarell','Fira Sans','Droid Sans','Helvetica Neue',sans-serif;font-size:14px;font-weight:600;margin:0 0 12px 0;text-transform:uppercase;letter-spacing:0.5px;color:#666666;">
+                                                                        Motivo de la Revisión
+                                                                    </h3>
+                                                                    <p
+                                                                        style="font-size:15px;line-height:22px;color:#333333;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:0;white-space:pre-wrap;">
+                                                                        {{BODY}}</p>
+                                                                </td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                    {{/if_SHOW_BODY_SECTION_true}}
+
+                                                    <!-- Mensaje de cierre -->
+                                                    <p
+                                                        style="font-size:14px;line-height:20px;color:#666666;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:24px 0 0 0;">
+                                                        Por favor, revisa el registro de horas y confirma o corrige los
+                                                        datos si es necesario.
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+
+                                    <!-- Separador -->
+                                    <hr style="width:100%;border:none;border-top:1px solid #F5F5F5;margin:0;" />
+
+
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Footer corporativo -->
+                    <p
+                        style="font-size:12px;line-height:18px;color:#666666;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:24px 0;padding:0 20px;text-align:center;">
+                        Este mensaje fue generado automáticamente por el sistema de Geonosis. © 2025
+                        Geonosis. Todos los
+                        derechos reservados.
+                        <a href="#"
+                            style="color:#0000FF;text-decoration:none;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;font-size:12px;">
+                            Política de Privacidad
+                        </a> |
+                        <a href="#"
+                            style="color:#0000FF;text-decoration:none;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;font-size:12px;">
+                            Términos de Servicio
+                        </a>
+                    </p>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <!--/$-->
+</body>
+
+</html>

@@ -6,6 +6,7 @@ from sqlmodel import SQLModel
 from alembic import context
 
 from app.users.infra.db.models import UserModel
+from app.timesheet_line.infra.db.models import TimesheetLineNotificationModel
 from app.auth.infra.db.models import (
     RefreshTokenModel,
     OTPModel,
@@ -21,6 +22,8 @@ config = context.config
 migration_url = settings.MIGRATION_DATABASE_URL
 if not migration_url:
     raise ValueError("No se encontró la URL para las migraciones")
+
+print(f"URL de migración: {migration_url}")
 
 config.set_main_option("sqlalchemy.url", migration_url)
 

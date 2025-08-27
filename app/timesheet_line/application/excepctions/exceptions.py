@@ -118,6 +118,14 @@ class EmployeeNotExistsError(TimesheetDomainError):
         super().__init__(message)
 
 
+class EmployeeNotHasUserError(TimesheetDomainError):
+    """Error cuando un empleado no tiene usuario asignado en odoo."""
+
+    def __init__(self, employee_id: int):
+        message = f"El empleado con ID {employee_id} no tiene usuario asignado en odoo"
+        super().__init__(message)
+
+
 class TimesheetIdMismatchError(TimesheetDomainError):
     """Error cuando el ID en la URL no coincide con el ID en el body."""
 
@@ -143,6 +151,16 @@ class TimesheetDeleteError(TimesheetDomainError):
 
     def __init__(self, timesheet_ids: list[int], details: str = ""):
         message = f"Error al eliminar la línea de timesheet con ID {timesheet_ids}"
+        if details:
+            message += f": {details}"
+        super().__init__(message)
+
+
+class TimesheetValidateError(TimesheetDomainError):
+    """Error al validar una línea de timesheet."""
+
+    def __init__(self, timesheet_ids: list[int], details: str = ""):
+        message = f"Error al validar las líneas de timesheet con IDs {timesheet_ids}"
         if details:
             message += f": {details}"
         super().__init__(message)

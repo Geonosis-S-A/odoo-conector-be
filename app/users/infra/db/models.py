@@ -1,8 +1,8 @@
 from datetime import datetime, UTC
 from typing import Optional, List, TYPE_CHECKING
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, Column
 from pydantic import EmailStr
-from sqlalchemy import event
+from sqlalchemy import event, JSON
 
 # Importación condicional para evitar circular imports
 if TYPE_CHECKING:
@@ -16,6 +16,7 @@ class UserBaseModel(SQLModel):
     full_name: str
     is_active: bool = Field(default=True)
     is_superuser: bool = Field(default=False)
+    roles: Optional[List[int]] = Field(default=None, sa_column=Column(JSON))
 
 
 class UserModel(UserBaseModel, table=True):

@@ -6,13 +6,14 @@ from typing import Optional
 
 from app.project.domain.models import Project
 from app.task.domain.models import Task
+from app.timesheet_line.api.schemas import TimesheetLineNotificationResponse
 
 
 # Ejemplo. Hay que ver si le damos uso.
 @dataclass
 class TimesheetLine:
     id: int | None
-    name: str
+    name: str | None
     employee_id: int
     project_id: int
     hours: float
@@ -23,7 +24,7 @@ class TimesheetLine:
     def from_request(
         cls,
         id: int | None,
-        name: str,
+        name: str | None,
         employee_id: int,
         project_id: int,
         hours: float,
@@ -50,4 +51,22 @@ class DetailedTimesheetLine:
     task: Task | None
     hours: float
     date: date_t
+    validated: bool
     create_date: Optional[datetime] = None
+    notification: Optional[TimesheetLineNotificationResponse] = None
+
+
+@dataclass
+class CreateTimesheetLineNotification:
+    timesheet_line_id: int
+    approver_id: int
+    receiver_id: int
+
+
+@dataclass
+class TimesheetLineNotification:
+    id: int
+    timesheet_line_id: int
+    approver_id: int
+    receiver_id: int
+    created_at: datetime

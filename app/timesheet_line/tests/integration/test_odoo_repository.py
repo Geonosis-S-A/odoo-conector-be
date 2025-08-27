@@ -49,7 +49,7 @@ class TestOdooTimesheetLineGateway:
                 employee_id=1,
                 project_id=1,
                 hours=1,
-                date=date(2021, 1, 1),
+                date=date(2025, 8, 1),  # Cambio: fecha futura
                 name="Test Timesheet Line",
             )
         ]
@@ -71,7 +71,7 @@ class TestOdooTimesheetLineGateway:
         assert created_line.employee_id == 1
         assert created_line.project.id == 1
         assert created_line.hours == 1
-        assert created_line.date == date(2021, 1, 1)
+        assert created_line.date == date(2025, 8, 1)
         assert created_line.name == "Test Timesheet Line"
 
     def test_delete_timesheet_line(self):
@@ -83,7 +83,7 @@ class TestOdooTimesheetLineGateway:
                 employee_id=1,
                 project_id=1,
                 hours=1,
-                date=date(2021, 1, 1),
+                date=date(2025, 8, 1),  # Cambio: fecha futura
                 name="Test Timesheet Line",
             )
         ]
@@ -110,7 +110,7 @@ class TestOdooTimesheetLineGateway:
                 employee_id=1,
                 project_id=1,
                 hours=1,
-                date=date(2021, 1, 1),
+                date=date(2025, 8, 1),  # Cambio: fecha futura
                 name="Test Timesheet Line 1",
             ),
             TimesheetLine(
@@ -118,7 +118,7 @@ class TestOdooTimesheetLineGateway:
                 employee_id=1,
                 project_id=1,
                 hours=2,
-                date=date(2021, 1, 2),
+                date=date(2025, 8, 2),  # Cambio: fecha futura
                 name="Test Timesheet Line 2",
             ),
         ]
@@ -146,7 +146,7 @@ class TestOdooTimesheetLineGateway:
                 employee_id=1,
                 project_id=1,
                 hours=1,
-                date=date(2021, 1, 1),
+                date=date(2025, 8, 1),  # Cambio: fecha futura
                 name="Test Timesheet Line",
             )
         ]
@@ -160,7 +160,7 @@ class TestOdooTimesheetLineGateway:
             employee_id=1,
             project_id=1,
             hours=2,  # Cambiamos las horas
-            date=date(2021, 1, 1),
+            date=date(2025, 8, 1),  # Cambio: fecha futura
             name="Test Timesheet Line Updated",  # Cambiamos el nombre
         )
         update_result = self.gateway.update(updated_timesheet)
@@ -177,7 +177,7 @@ class TestOdooTimesheetLineGateway:
         assert updated_line.name == "Test Timesheet Line Updated"
         assert updated_line.employee_id == 1
         assert updated_line.project.id == 1
-        assert updated_line.date == date(2021, 1, 1)
+        assert updated_line.date == date(2025, 8, 1)
 
     def test_filter_by_employee_id(self):
         """Test que verifica el filtrado por employee_id."""
@@ -188,7 +188,7 @@ class TestOdooTimesheetLineGateway:
                 employee_id=1,
                 project_id=1,
                 hours=1,
-                date=date(2021, 1, 1),
+                date=date(2025, 8, 1),  # Cambio: fecha futura
                 name="Test Timesheet Line",
             )
         ]
@@ -208,9 +208,9 @@ class TestOdooTimesheetLineGateway:
     def test_filter_by_date_range(self):
         """Test que verifica el filtrado por rango de fechas."""
         # Arrange
-        test_date_1 = date(2024, 1, 15)
-        test_date_2 = date(2024, 1, 20)
-        test_date_3 = date(2024, 1, 25)
+        test_date_1 = date(2025, 8, 15)  # Cambio: fecha futura
+        test_date_2 = date(2025, 8, 20)  # Cambio: fecha futura
+        test_date_3 = date(2025, 8, 25)  # Cambio: fecha futura
 
         timesheet_lines_1 = [
             TimesheetLine(
@@ -258,7 +258,8 @@ class TestOdooTimesheetLineGateway:
 
         # Act - Filtrar por rango que incluye solo las dos primeras
         lines_in_range = self.gateway.all(
-            date_from=date(2024, 1, 14), date_to=date(2024, 1, 22)
+            date_from=date(2025, 8, 14),
+            date_to=date(2025, 8, 22),  # Cambio: fechas futuras
         )
 
         # Assert
@@ -273,13 +274,13 @@ class TestOdooTimesheetLineGateway:
 
         # Verificar que todas las fechas están en el rango
         for line in lines_in_range:
-            assert date(2024, 1, 14) <= line.date <= date(2024, 1, 22)
+            assert date(2025, 8, 14) <= line.date <= date(2025, 8, 22)
 
     def test_filter_by_date_from_only(self):
         """Test que verifica el filtrado solo con fecha de inicio."""
         # Arrange
-        test_date_old = date(2024, 1, 10)
-        test_date_new = date(2024, 1, 20)
+        test_date_old = date(2025, 8, 10)  # Cambio: fecha futura
+        test_date_new = date(2025, 8, 20)  # Cambio: fecha futura
 
         timesheet_lines_old = [
             TimesheetLine(
@@ -310,7 +311,9 @@ class TestOdooTimesheetLineGateway:
         created_id_new = created_ids_new[0]
 
         # Act
-        lines_from_date = self.gateway.all(date_from=date(2024, 1, 15))
+        lines_from_date = self.gateway.all(
+            date_from=date(2025, 8, 15)
+        )  # Cambio: fecha futura
 
         # Assert
         created_ids_from_date = [
@@ -324,8 +327,8 @@ class TestOdooTimesheetLineGateway:
     def test_filter_by_date_to_only(self):
         """Test que verifica el filtrado solo con fecha de fin."""
         # Arrange
-        test_date_old = date(2024, 1, 10)
-        test_date_new = date(2024, 1, 20)
+        test_date_old = date(2025, 8, 10)  # Cambio: fecha futura
+        test_date_new = date(2025, 8, 20)  # Cambio: fecha futura
 
         timesheet_lines_old = [
             TimesheetLine(
@@ -356,7 +359,9 @@ class TestOdooTimesheetLineGateway:
         created_id_new = created_ids_new[0]
 
         # Act
-        lines_to_date = self.gateway.all(date_to=date(2024, 1, 15))
+        lines_to_date = self.gateway.all(
+            date_to=date(2025, 8, 15)
+        )  # Cambio: fecha futura
 
         # Assert
         created_ids_to_date = [
@@ -370,7 +375,7 @@ class TestOdooTimesheetLineGateway:
     def test_filter_combined_employee_and_date_range(self):
         """Test que verifica el filtrado combinado por empleado y rango de fechas."""
         # Arrange
-        test_date = date(2024, 1, 15)
+        test_date = date(2025, 8, 15)  # Cambio: fecha futura
 
         timesheet_lines_emp1 = [
             TimesheetLine(
@@ -389,7 +394,9 @@ class TestOdooTimesheetLineGateway:
                 employee_id=1,
                 project_id=1,
                 hours=1,
-                date=date(2024, 1, 10),  # Fecha fuera del rango de filtro
+                date=date(
+                    2025, 8, 10
+                ),  # Cambio: fecha futura, fuera del rango de filtro
                 name="Test Timesheet Line Emp1 Old",
             )
         ]
@@ -403,7 +410,9 @@ class TestOdooTimesheetLineGateway:
 
         # Act
         lines_filtered = self.gateway.all(
-            employee_id=1, date_from=date(2024, 1, 14), date_to=date(2024, 1, 16)
+            employee_id=1,
+            date_from=date(2025, 8, 14),
+            date_to=date(2025, 8, 16),  # Cambio: fechas futuras
         )
 
         # Assert
@@ -420,7 +429,7 @@ class TestOdooTimesheetLineGateway:
         # Verificar que todos los resultados son del empleado correcto y en el rango de fechas
         for line in lines_filtered:
             assert line.employee_id == 1
-            assert date(2024, 1, 14) <= line.date <= date(2024, 1, 16)
+            assert date(2025, 8, 14) <= line.date <= date(2025, 8, 16)
 
     def test_get_by_id_not_found(self):
         """Test que verifica que get_by_id devuelve None cuando no encuentra el timesheet."""
@@ -439,3 +448,90 @@ class TestOdooTimesheetLineGateway:
 
         # Verificar que es el tipo de error esperado de Odoo
         assert "Record does not exist" in str(exc_info.value)
+
+    def test_validate_timesheet_line(self):
+        """Test que verifica la validación de una línea de timesheet."""
+        # Arrange
+        timesheet_lines = [
+            TimesheetLine(
+                id=None,
+                employee_id=1,
+                project_id=1,
+                hours=1,
+                date=date(2025, 8, 1),  # Cambio: fecha futura
+                name="Test Timesheet Line for Validation",
+            )
+        ]
+        created_ids = self.gateway.create(timesheet_lines)
+        assert created_ids is not None
+        created_id = created_ids[0]
+
+        # Act
+        validate_result = self.gateway.validate([created_id])
+
+        # Assert
+        assert validate_result is True
+
+        # Verificar que la línea aún existe (validate no debe eliminar)
+        updated_line = self.gateway.get_by_id(created_id)
+        assert updated_line is not None
+        assert updated_line.id == created_id
+
+    def test_validate_multiple_timesheet_lines(self):
+        """Test que verifica la validación de múltiples líneas de timesheet."""
+        # Arrange
+        timesheet_lines = [
+            TimesheetLine(
+                id=None,
+                employee_id=1,
+                project_id=1,
+                hours=1,
+                date=date(2025, 8, 1),  # Cambio: fecha futura
+                name="Test Timesheet Line 1 for Validation",
+            ),
+            TimesheetLine(
+                id=None,
+                employee_id=1,
+                project_id=1,
+                hours=2,
+                date=date(2025, 8, 2),  # Cambio: fecha futura
+                name="Test Timesheet Line 2 for Validation",
+            ),
+        ]
+        created_ids = self.gateway.create(timesheet_lines)
+        assert created_ids is not None
+        assert len(created_ids) == 2
+
+        # Act
+        validate_result = self.gateway.validate(created_ids)
+
+        # Assert
+        assert validate_result is True
+
+        # Verificar que las líneas aún existen
+        for created_id in created_ids:
+            updated_line = self.gateway.get_by_id(created_id)
+            assert updated_line is not None
+            assert updated_line.id == created_id
+
+    def test_validate_empty_list(self):
+        """Test que verifica la validación con lista vacía de IDs."""
+        # Act
+        validate_result = self.gateway.validate([])
+
+        # Assert
+        assert validate_result is True
+
+    def test_validate_timesheet_not_found(self):
+        """Test que verifica el comportamiento de validate cuando el timesheet no existe."""
+        # Act & Assert
+        # En Odoo, validate con un ID inexistente puede lanzar una excepción o devolver False
+        # Dependiendo de la implementación exacta de Odoo
+        with pytest.raises(Exception) as exc_info:
+            self.gateway.validate([99999])  # ID que no existe
+
+        # Verificar que es el tipo de error esperado de Odoo
+        assert (
+            "Record does not exist" in str(exc_info.value)
+            or "not found" in str(exc_info.value).lower()
+        )

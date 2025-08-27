@@ -1,5 +1,5 @@
 from jose import jwt, JWTError
-from typing import Literal, Optional
+from typing import Literal, Optional, TypedDict, List
 from sqlalchemy import true
 from app.auth.application.use_cases.exceptions.exceptions import (
     TokenNotFound,
@@ -25,7 +25,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class Settings:
     # Database Settings (from .env)
-    DATABASE_URL: str = "postgresql://user:pass@localhost/db"
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
     DIRECT_URL: Optional[str] = None
 
     # JWT Settings
@@ -48,52 +48,58 @@ class Settings:
 settings = Settings()
 
 
+class JWTPayload(TypedDict):
+    user_id: int
+    user_email: str
+    user_name: str
+    roles: List[int]  # IDs de roles
+    exp: int  # timestamp de expiración
+
+
 class TokenService:
     def create_access_token(
         self, token_data: TokenData, expires_delta: Optional[timedelta] = None
     ) -> str:
-        to_encode = {
-            "user_id": token_data.user_id,
-            "user_email": token_data.user_email,
-            "user_name": token_data.user_name,
-            "roles": token_data.roles,
-        }
         if expires_delta:
             expire = datetime.now(timezone.utc) + expires_delta
         else:
             expire = datetime.now(timezone.utc) + timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
             )
-
-        to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(
-            to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-        )
-        return encoded_jwt
-
-    def create_refresh_token(self, token_data: TokenData) -> str:
-        to_encode = {
+        to_encode: JWTPayload = {
             "user_id": token_data.user_id,
             "user_email": token_data.user_email,
             "user_name": token_data.user_name,
             "roles": token_data.roles,
+            "exp": int(expire.timestamp()),
         }
-
-        expire = datetime.now(timezone.utc) + timedelta(
-            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
-        )
-        to_encode.update({"exp": expire})
         encoded_jwt = jwt.encode(
-            to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+            dict(to_encode), settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
         )
         return encoded_jwt
 
-    def verify_token(self, token: str) -> dict:
+    def create_refresh_token(self, token_data: TokenData) -> str:
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+        to_encode: JWTPayload = {
+            "user_id": token_data.user_id,
+            "user_email": token_data.user_email,
+            "user_name": token_data.user_name,
+            "roles": token_data.roles,
+            "exp": int(expire.timestamp()),
+        }
+        encoded_jwt = jwt.encode(
+            dict(to_encode), settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+        )
+        return encoded_jwt
+
+    def verify_token(self, token: str) -> JWTPayload:
         try:
             payload = jwt.decode(
                 token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
             )
-            return payload
+            return payload  # type: ignore
         except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -117,16 +123,19 @@ class TokenService:
 
         # Se decodea el el token para ver si es valido
         payload = self.verify_token(refresh_token)
-        token_data = TokenData(
-            user_id=payload["user_id"],
-            user_email=payload["user_email"],
-            user_name=payload["user_name"],
-            roles=payload["roles"],
-        )
+
         # Con el payload, se verifica que el usuario siga existiendo en base de datos
-        user = user_repository.get_user_credentials(token_data.user_email)
+        user = user_repository.get_user_credentials(payload["user_email"])
         if not user:
             raise UserNotFound("User not found")
+
+        # Crear TokenData con los datos actuales del usuario (incluyendo roles actualizados)
+        token_data = TokenData(
+            user_id=user.id,
+            user_email=user.email,
+            user_name=user.name,
+            roles=user.roles or [],
+        )
 
         # Se crea el nuevo access token
         access_token = self.create_access_token(token_data)
