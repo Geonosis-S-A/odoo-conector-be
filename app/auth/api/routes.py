@@ -102,6 +102,7 @@ async def login(
         auth_service, user_credentials_repository, token_repository
     )
     try:
+        login_data.email = login_data.email.lower()
         tokens = login_use_case.execute(login_data.email, login_data.password)
     except UserNotFound as e:
         raise HTTPException(status_code=401, detail=str(e))
@@ -219,6 +220,7 @@ async def request_otp(
     ),
 ):
     try:
+        dto.email = dto.email.lower()
         await password_recovery_use_case.request_otp(dto)
         return {"message": "OTP sent successfully"}
     except UserNotFound as e:
@@ -238,6 +240,7 @@ async def request_otp_for_register(
     ),
 ):
     try:
+        dto.email = dto.email.lower()
         await request_otp_for_register_use_case.execute(dto.email)
         return {"message": "OTP sent successfully"}
     except EmployeeNotFound as e:
@@ -256,6 +259,7 @@ async def verify_otp(
     ),
 ):
     try:
+        dto.email = dto.email.lower()
         await password_recovery_use_case.verify_otp(dto)
         return {"message": "OTP verified successfully"}
     except UserNotFound as e:
