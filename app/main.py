@@ -76,11 +76,11 @@ elif ENV == "STAGING":
     ]
 elif ENV == "PROD":
     allowed_origins = [
-        "https://odoo-conector-fe-production-3736.up.railway.app",
+        "https://geo-timesheet.soportegeonosis.com.ar",
     ]
 else:
     allowed_origins = [
-        "https://odoo-conector-fe-production-3736.up.railway.app",
+        "http://localhost:8080",
     ]
 
 app.add_middleware(
