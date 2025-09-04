@@ -41,23 +41,3 @@ class ObtenerTareasUseCase:
         if tasks is None:
             return []
         return tasks
-
-    def execute_by_user(self, user_id: int) -> list[Task]:
-        """Ejecuta el caso de uso para obtener tareas por usuario.
-
-        Args:
-            user_id (int): ID del usuario del cual obtener las tareas.
-
-        Returns:
-            list[Task]: Lista de tareas asignadas al usuario.
-        """
-        # TODO molo: Validar que el usuario exista en Odoo (cuando feli implemente el get_user_by_id en el user gateway)
-
-        user = self.odoo_employee_gateway.exists_by_id(user_id)
-        if not user:
-            raise UserNotFound(f"El usuario {user_id} no existe en Odoo")
-
-        tasks = self.task_gateway.all_by_user(user_id)
-        if not tasks:
-            raise TasksNotFound_userId(user_id)
-        return tasks
