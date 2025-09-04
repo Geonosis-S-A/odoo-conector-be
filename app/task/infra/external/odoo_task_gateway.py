@@ -17,7 +17,7 @@ class OdooTaskGateway(TaskGateway):
             "project.task",
             "search_read",
             [domain],
-            {"fields": ["id", "name", "project_id"]},
+            {"fields": ["id", "name", "project_id", "state"]},
         )
 
         if not tasks:
@@ -29,6 +29,7 @@ class OdooTaskGateway(TaskGateway):
                 name=task["name"],
                 project_id=task["project_id"][0],
                 project_name=task["project_id"][1],
+                state=task["state"],
             )
             for task in tasks
         ]

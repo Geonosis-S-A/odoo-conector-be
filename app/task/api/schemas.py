@@ -6,3 +6,4 @@ class TaskResponse(BaseModel):
     name: str
     project_id: int
     project_name: str
+    state: str

@@ -71,6 +71,7 @@ async def get_tasks(
                 name=task.name,
                 project_id=task.project_id,
                 project_name=task.project_name,
+                state=task.state,
             )
             for task in tasks
         ]
@@ -113,6 +114,7 @@ async def get_tasks_by_user(
                 name=task.name,
                 project_id=task.project_id,
                 project_name=task.project_name,
+                state=task.state,
             )
             for task in tasks
         ]
