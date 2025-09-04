@@ -1,14 +1,8 @@
 from app.task.domain.gateway import TaskGateway
 from app.task.domain.models import Task
-from app.task.application.Exeptions import (
-    ProjectNotFound,
-    TasksNotFound_userId,
-)
+from app.task.application.Exeptions import ProjectNotFound
 from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
-from app.auth.application.use_cases.exceptions.exceptions import (
-    UserNotFound,
-)
 
 
 class ObtenerTareasUseCase:

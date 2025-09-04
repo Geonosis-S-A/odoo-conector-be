@@ -6,7 +6,6 @@ from app.task.api.schemas import TaskResponse
 from app.task.application.Exeptions import (
     ProjectNotFound,
     TasksNotFound_projectId,
-    TasksNotFound_userId,
 )
 from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
 from app.task.domain.gateway import TaskGateway
