@@ -1,5 +1,7 @@
 {
   "python.analysis.typeCheckingMode": "standard",
   "python.analysis.autoImportCompletions": true,
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "cursorpyright.analysis.autoImportCompletions": true,
+  "cursorpyright.analysis.typeCheckingMode": "standard"
 }
