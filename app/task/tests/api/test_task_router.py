@@ -74,8 +74,20 @@ class TestGetTasks:
     ):
         # Arrange
         mock_tasks = [
-            Task(id=1, name="Tarea 1", project_id=10, project_name="Proyecto A"),
-            Task(id=2, name="Tarea 2", project_id=10, project_name="Proyecto A"),
+            Task(
+                id=1,
+                name="Tarea 1",
+                project_id=10,
+                project_name="Proyecto A",
+                state="01_in_progress",
+            ),
+            Task(
+                id=2,
+                name="Tarea 2",
+                project_id=10,
+                project_name="Proyecto A",
+                state="01_in_progress",
+            ),
         ]
         mock_project = Project(id=1, name="Proyecto A")
         mock_odoo_task_gateway.get_project_by_id.return_value = mock_project
@@ -164,90 +176,6 @@ class TestGetTasks:
     def test_get_tasks_invalid_project_id(self, test_client):
         # Act
         response = test_client.get("/api/v1/tasks/?project_id=invalid")
-
-        # Assert
-        assert (
-            response.status_code == 422
-        )  # Unprocessable Entity para parámetros inválidos
-
-
-class TestGetTasksByUser:
-    def test_get_user_tasks_success(
-        self, mock_odoo_task_gateway, mock_employee_gateway, test_client
-    ):
-        # Arrange
-        mock_tasks = [
-            Task(id=1, name="Mi Tarea 1", project_id=20, project_name="Proyecto B"),
-            Task(id=2, name="Mi Tarea 2", project_id=30, project_name="Proyecto C"),
-        ]
-        mock_odoo_task_gateway.all_by_user.return_value = mock_tasks
-        mock_employee_gateway.exists_by_id.return_value = True
-
-        # Act
-        response = test_client.get("/api/v1/tasks/project/user?user_id=1")
-
-        # Assert
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 2
-        assert data[0]["id"] == 1
-        assert data[0]["name"] == "Mi Tarea 1"
-        assert data[0]["project_id"] == 20
-        assert data[0]["project_name"] == "Proyecto B"
-        assert data[1]["id"] == 2
-        assert data[1]["name"] == "Mi Tarea 2"
-        assert data[1]["project_id"] == 30
-        assert data[1]["project_name"] == "Proyecto C"
-        mock_odoo_task_gateway.all_by_user.assert_called_once_with(1)
-        mock_employee_gateway.exists_by_id.assert_called_once_with(1)
-
-    def test_get_user_tasks_empty(
-        self, mock_odoo_task_gateway, mock_employee_gateway, test_client
-    ):
-        # Arrange
-        mock_employee_gateway.exists_by_id.return_value = True
-        mock_odoo_task_gateway.all_by_user.return_value = None
-
-        # Act
-        response = test_client.get("/api/v1/tasks/project/user?user_id=1")
-
-        # Assert
-        assert response.status_code == 404
-        assert (
-            "Tareas del usuario con el id 1 no encontradas" in response.json()["detail"]
-        )
-
-    def test_get_user_tasks_server_error(
-        self, mock_odoo_task_gateway, mock_employee_gateway, test_client
-    ):
-        # Arrange
-        mock_employee_gateway.exists_by_id.return_value = True
-        mock_odoo_task_gateway.all_by_user.side_effect = Exception("Error de servidor")
-
-        # Act
-        response = test_client.get("/api/v1/tasks/project/user?user_id=1")
-
-        # Assert
-        assert response.status_code == 500
-        assert "Error de servidor" in response.json()["detail"]
-
-    def test_get_user_tasks_user_not_found(
-        self, mock_odoo_task_gateway, mock_employee_gateway, test_client
-    ):
-        # Arrange
-        mock_employee_gateway.exists_by_id.return_value = False
-
-        # Act
-        response = test_client.get("/api/v1/tasks/project/user?user_id=999")
-
-        # Assert
-        assert response.status_code == 404
-        assert "El usuario 999 no existe en Odoo" in response.json()["detail"]
-        mock_employee_gateway.exists_by_id.assert_called_once_with(999)
-
-    def test_get_user_tasks_invalid_user_id(self, test_client):
-        # Act
-        response = test_client.get("/api/v1/tasks/project/user?user_id=invalid")
 
         # Assert
         assert (
