@@ -64,16 +64,17 @@ async def get_tasks(
         )
         tasks = use_case.execute(project_id)
 
-        return [
-            TaskResponse(
+        def get_task_response(task):
+            return TaskResponse(
                 id=task.id,
                 name=task.name,
                 project_id=task.project_id,
                 project_name=task.project_name,
                 state=task.state,
+                subtask=[get_task_response(subtask) for subtask in task.subtask],
             )
-            for task in tasks
-        ]
+
+        return [get_task_response(task) for task in tasks]
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=e.message)
     except TasksNotFound_projectId as e:

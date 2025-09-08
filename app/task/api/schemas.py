@@ -1,3 +1,5 @@
+from typing import List
+from app.task.domain.models import Task
 from pydantic import BaseModel
 
 
@@ -10,3 +12,4 @@ class TaskInfoResponse(BaseModel):
 
 class TaskResponse(TaskInfoResponse):
     state: str
+    subtask: List["TaskResponse"]

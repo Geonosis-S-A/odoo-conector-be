@@ -11,18 +11,7 @@ class Task:
     project_id: int
     project_name: str
     state: str
-
-    @classmethod
-    def from_request(
-        cls, id: int, name: str, project_id: int, project_name: str, state: str
-    ):
-        return cls(
-            id=id,
-            name=name,
-            project_id=project_id,
-            project_name=project_name,
-            state=state,
-        )
+    subtask: list["Task"]
 
 
 @dataclass
