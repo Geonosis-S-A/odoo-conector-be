@@ -27,6 +27,7 @@ class TestOdooTaskGateway:
         assert all(hasattr(task, "name") for task in tasks)
         assert all(hasattr(task, "project_id") for task in tasks)
         assert all(hasattr(task, "project_name") for task in tasks)
+        assert all(hasattr(task, "subtask") for task in tasks)
         assert all(isinstance(task.id, int) for task in tasks)
         assert all(isinstance(task.name, str) for task in tasks)
         assert all(isinstance(task.project_id, int) for task in tasks)
