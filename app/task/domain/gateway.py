@@ -11,9 +11,5 @@ class TaskGateway(ABC):
         pass
 
     @abstractmethod
-    def all_by_user(self, user_id: int) -> list[Task] | None:
-        pass
-
-    @abstractmethod
     def get_project_by_id(self, project_id: int) -> Project | None:
         pass

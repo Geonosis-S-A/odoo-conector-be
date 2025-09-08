@@ -5,7 +5,7 @@ from datetime import date as date_t, datetime
 from typing import Optional
 
 from app.project.domain.models import Project
-from app.task.domain.models import Task
+from app.task.domain.models import TaskInfo
 from app.timesheet_line.api.schemas import TimesheetLineNotificationResponse
 
 
@@ -48,7 +48,7 @@ class DetailedTimesheetLine:
     name: str
     employee_id: int
     project: Project
-    task: Task | None
+    task: TaskInfo | None
     hours: float
     date: date_t
     validated: bool

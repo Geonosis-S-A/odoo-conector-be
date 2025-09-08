@@ -221,11 +221,6 @@ async def list_timesheet_lines(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al listar las líneas de timesheet",
-        )
 
 
 @router.delete("/", response_model=Dict[str, str])

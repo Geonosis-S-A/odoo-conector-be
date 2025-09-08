@@ -17,49 +17,34 @@ class OdooTaskGateway(TaskGateway):
             "project.task",
             "search_read",
             [domain],
-            {"fields": ["id", "name", "project_id"]},
+            {"fields": ["id", "name", "project_id", "state", "child_ids", "parent_id"]},
         )
 
         if not tasks:
             return None
 
-        return [
-            Task(
+        main_tasks = []
+        for task in tasks:
+            if not task["parent_id"]:
+                main_tasks.append(task)
+
+        tasks_by_id = {task["id"]: task for task in tasks}
+
+        def get_task_with_subtasks(task):
+            return Task(
                 id=task["id"],
                 name=task["name"],
+                state=task["state"],
                 project_id=task["project_id"][0],
                 project_name=task["project_id"][1],
+                subtask=[
+                    get_task_with_subtasks(tasks_by_id[sub_id])
+                    for sub_id in task["child_ids"]
+                ],
             )
-            for task in tasks
-        ]
 
-    def all_by_user(self, user_id: int) -> list[Task] | None:
-        # En Odoo 16+ user_ids es Many2many, en versiones anteriores era user_id Many2one
-        # Usamos user_ids para compatibilidad con versiones recientes
-        domain = [("user_ids", "in", [user_id])]
-
-        tasks = self.odoo_client["models"].execute_kw(
-            self.odoo_client["ODOO_DB"],
-            self.odoo_client["uid"],
-            self.odoo_client["ODOO_PASSWORD"],
-            "project.task",
-            "search_read",
-            [domain],
-            {"fields": ["id", "name", "project_id"]},
-        )
-
-        if not tasks:
-            return None
-
-        return [
-            Task(
-                id=task["id"],
-                name=task["name"],
-                project_id=task["project_id"][0],
-                project_name=task["project_id"][1],
-            )
-            for task in tasks
-        ]
+        tasks = [get_task_with_subtasks(task) for task in main_tasks]
+        return tasks
 
     def get_project_by_id(self, project_id: int) -> Project | None:
         domain = [("id", "=", project_id)]
