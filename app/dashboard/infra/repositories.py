@@ -81,8 +81,7 @@ class OdooDashboardDataGateway(DashboardDataGateway):
         try:
             # Construir dominio para obtener empleados del equipo que estén activos
             domain = [
-                ("user_id", "!=", False),  # Tienen usuario asociado
-                ("active", "=", True),     # Están activos
+                ("active", "=", True),     # Están activos  ---> VALIDAR ESTO
                 "|",
                 "|",
                 ("timesheet_manager_id", "=", user_id),

@@ -30,42 +30,26 @@ class GetDashboardSummaryUseCase:
         Returns:
             DashboardSummary con todos los KPIs y totales calculados
         """
-        print(f"🔄 GetDashboardSummaryUseCase.execute iniciado")
-        print(f"   user_id: {user_id}")
-        print(f"   período: {date_from} a {date_to}")
 
         # 1. Obtener datos de timesheet del equipo
         timesheet_data = self.dashboard_gateway.get_team_timesheet_data(
             user_id, date_from, date_to
         )
-        print(f"📊 Datos de timesheet obtenidos: {len(timesheet_data)} registros")
 
         # 2. Obtener cantidad de usuarios del equipo
         users_count = self.dashboard_gateway.get_active_team_users_count(user_id)
-        print(f"👥 Usuarios en el equipo: {users_count}")
 
-        # 3. Por ahora, crear KPIs dummy para verificar que todo funciona
-        hours_kpi = KPI(total=0.0, average_per_user=0.0)
-        entries_kpi = KPI(total=0.0, average_per_user=0.0)
-        daily_average_kpi = KPI(total=0.0, average_per_user=0.0, unit="hours/day")
+        # 3. Calcular KPIs reales
+        hours_kpi = self._calculate_hours_kpi(timesheet_data, users_count)
+        entries_kpi = self._calculate_entries_kpi(timesheet_data, users_count)
+        daily_average_kpi = self._calculate_daily_average_kpi(timesheet_data, users_count, date_from, date_to)
 
-        # 4. Por ahora, crear listas vacías para los totales
-        by_project: List[ProjectTotal] = []
-        by_task: List[TaskTotal] = []
-        by_employee: List[EmployeeTotal] = []
+        # 4. Calcular totales desagregados
+        by_project = self._calculate_project_totals(timesheet_data)
+        by_task = self._calculate_task_totals(timesheet_data)
+        by_employee = self._calculate_employee_totals(timesheet_data, user_id)
 
-        # 5. Mostrar información de debug sobre los datos recibidos
-        if timesheet_data:
-            print(f"📋 Primeros 3 registros recibidos:")
-            for i, record in enumerate(timesheet_data[:3]):
-                print(f"   {i+1}. Proyecto: {record.project.name}")
-                print(f"      Empleado: {record.employee_id}")
-                print(f"      Horas: {record.hours}")
-                print(f"      Fecha: {record.date}")
-                print(f"      Tarea: {record.task.name if record.task else 'Sin tarea'}")
-                print()
-
-        # 6. Crear y retornar el resumen del dashboard
+        # 5. Crear y retornar el resumen del dashboard
         dashboard_summary = DashboardSummary.create(
             users_count=users_count,
             hours_selected_period=hours_kpi,
@@ -76,5 +60,147 @@ class GetDashboardSummaryUseCase:
             by_employee=by_employee,
         )
 
-        print(f"✅ DashboardSummary creado exitosamente")
         return dashboard_summary
+
+    def _calculate_hours_kpi(self, timesheet_data: List[DetailedTimesheetLine], users_count: int) -> KPI:
+        """Calcula el KPI de horas del período seleccionado."""
+        total_hours = sum(record.hours for record in timesheet_data)
+        average_per_user = total_hours / users_count if users_count > 0 else 0.0
+        
+        return KPI(total=total_hours, average_per_user=average_per_user)
+
+    def _calculate_entries_kpi(self, timesheet_data: List[DetailedTimesheetLine], users_count: int) -> KPI:
+        """Calcula el KPI de entradas del período seleccionado."""
+        total_entries = len(timesheet_data)
+        average_per_user = total_entries / users_count if users_count > 0 else 0.0
+        
+        return KPI(total=float(total_entries), average_per_user=average_per_user)
+
+    def _calculate_daily_average_kpi(
+        self, 
+        timesheet_data: List[DetailedTimesheetLine], 
+        users_count: int, 
+        date_from: date, 
+        date_to: date
+    ) -> KPI:
+        """Calcula el KPI de promedio diario de horas."""
+        total_hours = sum(record.hours for record in timesheet_data)
+        days_in_period = (date_to - date_from).days + 1
+        
+        total_daily_average = total_hours / days_in_period if days_in_period > 0 else 0.0
+        average_per_user = total_daily_average / users_count if users_count > 0 else 0.0
+        
+        return KPI(total=total_daily_average, average_per_user=average_per_user, unit="hours/day")
+
+    def _calculate_project_totals(self, timesheet_data: List[DetailedTimesheetLine]) -> List[ProjectTotal]:
+        """Calcula totales de horas por proyecto."""
+        project_totals = {}
+        
+        for record in timesheet_data:
+            project_id = record.project.id
+            if project_id not in project_totals:
+                project_totals[project_id] = {
+                    "name": record.project.name,
+                    "hours": 0.0
+                }
+            project_totals[project_id]["hours"] += record.hours
+        
+        # Convertir a lista de ProjectTotal ordenada por horas (mayor a menor)
+        project_list = [
+            ProjectTotal(
+                project_id=project_id,
+                project_name=data["name"],
+                hours=data["hours"]
+            )
+            for project_id, data in project_totals.items()
+        ]
+        
+        project_list.sort(key=lambda x: x.hours, reverse=True)
+        
+            
+        return project_list
+
+    def _calculate_task_totals(self, timesheet_data: List[DetailedTimesheetLine]) -> List[TaskTotal]:
+        """Calcula totales de horas por tarea (solo tareas principales, ignora subtareas)."""
+        task_totals = {}
+        
+        for record in timesheet_data:
+            # Solo procesar si tiene tarea
+            if record.task:
+                task_id = record.task.id
+                # Aquí podríamos filtrar subtareas si fuera necesario
+                # Por ahora incluimos todas las tareas
+                if task_id not in task_totals:
+                    task_totals[task_id] = {
+                        "name": record.task.name,
+                        "hours": 0.0
+                    }
+                task_totals[task_id]["hours"] += record.hours
+        
+        # Convertir a lista de TaskTotal ordenada por horas (mayor a menor)
+        task_list = [
+            TaskTotal(
+                task_id=task_id,
+                task_name=data["name"],
+                hours=data["hours"]
+            )
+            for task_id, data in task_totals.items()
+        ]
+        
+        task_list.sort(key=lambda x: x.hours, reverse=True)
+        
+            
+        return task_list
+
+    def _calculate_employee_totals(self, timesheet_data: List[DetailedTimesheetLine], user_id: int) -> List[EmployeeTotal]:
+        """Calcula totales de horas por empleado con nombres obtenidos de Odoo."""
+        employee_totals = {}
+        
+        # Agrupar horas por empleado
+        for record in timesheet_data:
+            employee_id = record.employee_id
+            if employee_id not in employee_totals:
+                employee_totals[employee_id] = 0.0
+            employee_totals[employee_id] += record.hours
+        
+        # Obtener nombres de empleados desde Odoo
+        employee_names = self._get_employee_names(list(employee_totals.keys()))
+        
+        # Crear lista de EmployeeTotal
+        employee_list = [
+            EmployeeTotal(
+                user_id=employee_id,
+                employee_name=employee_names.get(employee_id, f"Empleado {employee_id}"),
+                hours=hours
+            )
+            for employee_id, hours in employee_totals.items()
+        ]
+        
+        employee_list.sort(key=lambda x: x.hours, reverse=True)
+        
+            
+        return employee_list
+
+    def _get_employee_names(self, employee_ids: List[int]) -> dict:
+        """Obtiene los nombres de los empleados desde Odoo."""
+        try:
+            # Usar el gateway para hacer la consulta a Odoo
+            # Por simplicidad, usamos el cliente Odoo directamente aquí
+            # En una implementación más limpia, esto podría estar en el gateway
+            
+            employee_names = {}
+            
+            # Si no hay empleados, retornar diccionario vacío
+            if not employee_ids:
+                return employee_names
+            
+            # TODO: Implementar consulta a Odoo para obtener nombres
+            # Por ahora, retornar nombres genéricos
+            for employee_id in employee_ids:
+                employee_names[employee_id] = f"Empleado {employee_id}"
+            
+            return employee_names
+            
+        except Exception as e:
+            # En caso de error, retornar nombres genéricos
+            return {emp_id: f"Empleado {emp_id}" for emp_id in employee_ids}
