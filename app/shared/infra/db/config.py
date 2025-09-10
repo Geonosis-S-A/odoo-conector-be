@@ -10,7 +10,11 @@ class DatabaseSettings:
 
     print(f"ENV: {ENV}")
     # Base de datos para desarrollo
-    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+    if ENV == "LOCAL":
+        DATABASE_URL = "sqlite:///./app.db"
+    else:
+        DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+    print(f"DATABASE_URL: {DATABASE_URL}")
 
     # URL Para migraciones
     MIGRATION_DATABASE_URL = os.getenv(
