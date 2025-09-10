@@ -10,13 +10,15 @@ from app.dashboard.domain.models import (
 )
 from app.dashboard.domain.repositories import DashboardDataGateway
 from app.timesheet_line.domain.models import DetailedTimesheetLine
+from app.users.domain.repositories import EmployeeGateway
 
 
 class GetDashboardSummaryUseCase:
     """Caso de uso para obtener el resumen del dashboard del equipo."""
 
-    def __init__(self, dashboard_gateway: DashboardDataGateway):
+    def __init__(self, dashboard_gateway: DashboardDataGateway, employee_gateway: EmployeeGateway):
         self.dashboard_gateway = dashboard_gateway
+        self.employee_gateway = employee_gateway
 
     def execute(self, user_id: int, date_from: date, date_to: date) -> DashboardSummary:
         """
@@ -47,7 +49,7 @@ class GetDashboardSummaryUseCase:
         # 4. Calcular totales desagregados
         by_project = self._calculate_project_totals(timesheet_data)
         by_task = self._calculate_task_totals(timesheet_data)
-        by_employee = self._calculate_employee_totals(timesheet_data, user_id)
+        by_employee = self._calculate_employee_totals(timesheet_data)
 
         # 5. Crear y retornar el resumen del dashboard
         dashboard_summary = DashboardSummary.create(
@@ -153,7 +155,7 @@ class GetDashboardSummaryUseCase:
             
         return task_list
 
-    def _calculate_employee_totals(self, timesheet_data: List[DetailedTimesheetLine], user_id: int) -> List[EmployeeTotal]:
+    def _calculate_employee_totals(self, timesheet_data: List[DetailedTimesheetLine]) -> List[EmployeeTotal]:
         """Calcula totales de horas por empleado con nombres obtenidos de Odoo."""
         employee_totals = {}
         
@@ -183,22 +185,22 @@ class GetDashboardSummaryUseCase:
         return employee_list
 
     def _get_employee_names(self, employee_ids: List[int]) -> dict:
-        """Obtiene los nombres de los empleados desde Odoo."""
+        """Obtiene los nombres de los empleados desde Odoo usando el EmployeeGateway."""
         try:
-            # Usar el gateway para hacer la consulta a Odoo
-            # Por simplicidad, usamos el cliente Odoo directamente aquí
-            # En una implementación más limpia, esto podría estar en el gateway
-            
             employee_names = {}
             
             # Si no hay empleados, retornar diccionario vacío
             if not employee_ids:
                 return employee_names
             
-            # TODO: Implementar consulta a Odoo para obtener nombres
-            # Por ahora, retornar nombres genéricos
+            # Obtener información de cada empleado usando el gateway
             for employee_id in employee_ids:
-                employee_names[employee_id] = f"Empleado {employee_id}"
+                employee = self.employee_gateway.get_by_id(employee_id)
+                if employee:
+                    employee_names[employee_id] = employee.full_name
+                else:
+                    # Si no se encuentra el empleado, usar nombre genérico
+                    employee_names[employee_id] = f"Empleado {employee_id}"
             
             return employee_names
             
