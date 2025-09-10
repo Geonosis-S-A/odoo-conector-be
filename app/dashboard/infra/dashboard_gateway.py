@@ -1,11 +1,11 @@
 from datetime import date
-from typing import List, Dict, Any, cast
+from typing import List, Dict, Any, cast, Optional
 import xmlrpc.client
 
 from app.dashboard.domain.repositories import DashboardDataGateway
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.project.domain.models import Project  
-from app.task.domain.models import Task
+from app.task.domain.models import TaskInfo, TaskWithParentInfo
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
 
@@ -19,7 +19,8 @@ class OdooDashboardDataGateway(DashboardDataGateway):
         self, 
         user_id: int, 
         date_from: date, 
-        date_to: date
+        date_to: date,
+        task_gateway
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene datos de timesheet del equipo haciendo consulta directa a Odoo.
@@ -63,9 +64,18 @@ class OdooDashboardDataGateway(DashboardDataGateway):
                 ),
             )
 
+            # Obtener información completa de las tareas para manejar parent_id
+            task_ids = []
+            for line in odoo_timesheet_lines:
+                task_id_info = line.get("task_id")
+                if task_id_info and isinstance(task_id_info, list) and len(task_id_info) > 0:
+                    task_ids.append(task_id_info[0])
+            
+            task_info_map = task_gateway.get_tasks_info_with_parents(task_ids) if task_ids else {}
+
             # Transformar datos de Odoo a nuestro modelo de dominio
             parsed_lines = [
-                self._transform_odoo_to_detailed_domain(line)
+                self._transform_odoo_to_detailed_domain(line, task_info_map)
                 for line in odoo_timesheet_lines
             ]
 
@@ -107,7 +117,8 @@ class OdooDashboardDataGateway(DashboardDataGateway):
         except Exception as e:
             raise Exception(f"Error al obtener cantidad de usuarios del equipo: {str(e)}")
 
-    def _transform_odoo_to_detailed_domain(self, odoo_line: Dict[str, Any]) -> DetailedTimesheetLine:
+
+    def _transform_odoo_to_detailed_domain(self, odoo_line: Dict[str, Any], task_info_map: Optional[Dict[int, TaskWithParentInfo]] = None) -> DetailedTimesheetLine:
         """
         Transforma una línea de Odoo al modelo de dominio DetailedTimesheetLine.
         """
@@ -125,9 +136,17 @@ class OdooDashboardDataGateway(DashboardDataGateway):
         task_info = odoo_line.get("task_id") 
         task = None
         if task_info and isinstance(task_info, list) and len(task_info) >= 2:
-            task = Task(
-                id=task_info[0],
-                name=task_info[1],
+            task_id = task_info[0]
+            task_name = task_info[1]
+            
+            # Si tenemos información completa de la tarea, usar nombre con concatenación si aplica
+            if task_info_map and task_id in task_info_map:
+                task_with_parent = task_info_map[task_id]
+                task_name = task_with_parent.get_display_name()
+            
+            task = TaskInfo(
+                id=task_id,
+                name=task_name,
                 project_id=project.id,
                 project_name=project.name,
             )
