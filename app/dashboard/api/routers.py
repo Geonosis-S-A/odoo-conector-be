@@ -1,6 +1,5 @@
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
-from calendar import monthrange
 
 from app.dashboard.api.schemas import (
     DashboardSummaryResponse,
@@ -39,17 +38,17 @@ def get_dashboard_data_gateway(
 
 @router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
-    year: int = Query(..., description="Año del período (ej: 2025)"),
-    month: int = Query(..., description="Mes del período (1-12)"),
+    date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
+    date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
     dashboard_gateway: DashboardDataGateway = Depends(get_dashboard_data_gateway),
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Obtiene el resumen del dashboard para el equipo del usuario en un mes específico.
+    Obtiene el resumen del dashboard para el equipo del usuario en un período específico.
     
     Args:
-        year: Año del período
-        month: Mes del período (1-12)
+        date_from: Fecha de inicio del período (YYYY-MM-DD)
+        date_to: Fecha de fin del período (YYYY-MM-DD)
         dashboard_gateway: Gateway de datos de dashboard (inyectado)
         current_user: Usuario autenticado (inyectado)
         
@@ -57,17 +56,12 @@ async def get_dashboard_summary(
         DashboardSummaryResponse: Resumen completo con KPIs y totales
     """
     try:
-        # Validar mes
-        if month < 1 or month > 12:
+        # Validar que date_from no sea posterior a date_to
+        if date_from > date_to:
             raise HTTPException(
                 status_code=400, 
-                detail="El mes debe estar entre 1 y 12"
+                detail="La fecha de inicio no puede ser posterior a la fecha de fin"
             )
-        
-        # Calcular fechas del mes completo
-        date_from = date(year, month, 1)
-        last_day = monthrange(year, month)[1]
-        date_to = date(year, month, last_day)
         
         # Obtener user_id del usuario autenticado
         user_id = current_user["user_id"]
