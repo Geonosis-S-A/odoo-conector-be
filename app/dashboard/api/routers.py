@@ -11,7 +11,9 @@ from app.dashboard.api.schemas import (
     TaskTotalResponse,
     EmployeeTotalResponse,
 )
-from app.dashboard.application.use_cases.get_dashboard_summary import GetDashboardSummaryUseCase
+from app.dashboard.application.use_cases.get_dashboard_summary import (
+    GetDashboardSummaryUseCase,
+)
 from app.dashboard.domain.repositories import DashboardDataService
 from app.dashboard.infra.dashboard_service import OdooDashboardDataService
 from app.shared.infra.external.odoo.odoo_client import (
@@ -24,9 +26,7 @@ from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.task.domain.gateway import TaskGateway
 from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
-from app.timesheet_line.domain.repositories import (
-    TimesheetLineGateway
-)
+from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
@@ -67,7 +67,6 @@ def get_timesheet_gateway(
         raise HTTPException(status_code=500, detail="Error al conectar con el gateway")
 
 
-
 def get_task_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
 ) -> TaskGateway:
@@ -92,13 +91,13 @@ async def get_dashboard_summary(
 ):
     """
     Obtiene el resumen del dashboard para el equipo del usuario en un período específico.
-    
+
     Args:
         date_from: Fecha de inicio del período (YYYY-MM-DD)
         date_to: Fecha de fin del período (YYYY-MM-DD)
         dashboard_gateway: Gateway de datos de dashboard (inyectado)
         current_user: Usuario autenticado (inyectado)
-        
+
     Returns:
         DashboardSummaryResponse: Resumen completo con KPIs y totales
     """
@@ -107,33 +106,33 @@ async def get_dashboard_summary(
     is_approver = user_has_role(roles, Roles.approver)
     if not is_approver:
         raise HTTPException(
-            status_code=403,
-            detail="No tienes permisos para ver el dashboard"
+            status_code=403, detail="No tienes permisos para ver el dashboard"
         )
     try:
         # Validar que date_from no sea posterior a date_to
         if date_from > date_to:
             raise HTTPException(
-                status_code=400, 
-                detail="La fecha de inicio no puede ser posterior a la fecha de fin"
+                status_code=400,
+                detail="La fecha de inicio no puede ser posterior a la fecha de fin",
             )
-        
+
         # Obtener user_id del usuario autenticado
 
+        user_id = employee_gateway.get_user_id_by_employee_id(current_user["user_id"])
+        if not user_id:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
-        current_user_data = employee_gateway.get_employee_with_user_data(current_user["user_id"])
-        print("current_user_data", current_user_data)
-        user_id = current_user["id"]
-        
         # Crear y ejecutar caso de uso
-        use_case = GetDashboardSummaryUseCase(dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway)
+        use_case = GetDashboardSummaryUseCase(
+            dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
+        )
         dashboard_summary = use_case.execute(user_id, date_from, date_to)
-        
+
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema(dashboard_summary)
-        
+
         return response
-        
+
     except HTTPException:
         # Re-lanzar HTTPExceptions tal como están
         raise
@@ -141,26 +140,32 @@ async def get_dashboard_summary(
 
 def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:
     """Transforma el modelo de dominio al esquema de respuesta de la API."""
-    
+
     # Transformar KPIs
     summary_response = DashboardSummaryKPIsResponse(
         hours_selected_period=KPIResponse(
             total=dashboard_summary.summary["hours_selected_period"].total,
-            average_per_user=dashboard_summary.summary["hours_selected_period"].average_per_user,
+            average_per_user=dashboard_summary.summary[
+                "hours_selected_period"
+            ].average_per_user,
             unit=dashboard_summary.summary["hours_selected_period"].unit,
         ),
         entries_selected_period=KPIResponse(
             total=dashboard_summary.summary["entries_selected_period"].total,
-            average_per_user=dashboard_summary.summary["entries_selected_period"].average_per_user,
+            average_per_user=dashboard_summary.summary[
+                "entries_selected_period"
+            ].average_per_user,
             unit=dashboard_summary.summary["entries_selected_period"].unit,
         ),
         daily_average_hours=KPIResponse(
             total=dashboard_summary.summary["daily_average_hours"].total,
-            average_per_user=dashboard_summary.summary["daily_average_hours"].average_per_user,
+            average_per_user=dashboard_summary.summary[
+                "daily_average_hours"
+            ].average_per_user,
             unit=dashboard_summary.summary["daily_average_hours"].unit,
         ),
     )
-    
+
     # Transformar totales
     totals_response = DashboardSummaryTotalsResponse(
         by_project=[
@@ -189,7 +194,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
             for employee in dashboard_summary.totals["by_employee"]
         ],
     )
-    
+
     # Crear respuesta completa
     return DashboardSummaryResponse(
         meta=DashboardSummaryMetaResponse(
