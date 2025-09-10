@@ -26,6 +26,7 @@ class TaskTotal:
     task_id: int
     task_name: str
     hours: float
+    project_id: int
 
 
 @dataclass

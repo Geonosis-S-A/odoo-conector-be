@@ -161,6 +161,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
                 task_id=task.task_id,
                 task_name=task.task_name,
                 hours=task.hours,
+                project_id=task.project_id,
             )
             for task in dashboard_summary.totals["by_task"]
         ],

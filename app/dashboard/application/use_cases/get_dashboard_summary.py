@@ -64,6 +64,7 @@ class GetDashboardSummaryUseCase:
             by_employee=by_employee,
         )
 
+
         return dashboard_summary
 
     def _calculate_hours_kpi(self, timesheet_data: List[DetailedTimesheetLine], users_count: int) -> KPI:
@@ -137,7 +138,8 @@ class GetDashboardSummaryUseCase:
                 if task_id not in task_totals:
                     task_totals[task_id] = {
                         "name": record.task.name,
-                        "hours": 0.0
+                        "hours": 0.0,
+                        "project_id": record.task.project_id
                     }
                 task_totals[task_id]["hours"] += record.hours
         
@@ -146,7 +148,8 @@ class GetDashboardSummaryUseCase:
             TaskTotal(
                 task_id=task_id,
                 task_name=data["name"],
-                hours=data["hours"]
+                hours=data["hours"],
+                project_id=data["project_id"]
             )
             for task_id, data in task_totals.items()
         ]
