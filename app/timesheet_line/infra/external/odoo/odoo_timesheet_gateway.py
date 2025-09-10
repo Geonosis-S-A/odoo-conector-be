@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Optional, cast
 from datetime import datetime, date
 from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
-from app.task.domain.models import Task
+from app.task.domain.models import TaskInfo
 from app.project.domain.models import Project
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
@@ -23,7 +23,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         date_obj: date = datetime.strptime(date_str, "%Y-%m-%d").date()
 
         # Odoo devuelve los IDs como tuplas [id, nombre] o False si está vacío
-        task: Task | None = None
+        task: TaskInfo | None = None
         raw_task_id = odoo_data.get("task_id")
         if raw_task_id is None or raw_task_id is False:
             task = None
@@ -36,7 +36,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 project_id = raw_project_id[0]
                 project_name = raw_project_id[1]
 
-            task = Task(
+            task = TaskInfo(
                 id=raw_task_id[0],
                 name=raw_task_id[1],
                 project_id=project_id,
@@ -61,9 +61,15 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         elif isinstance(raw_project_id, (int, str)):
             project_id = int(raw_project_id)
 
+        if odoo_data.get("id") is None:
+            raise ValueError("El ID de la línea de hoja de tiempo es requerido")
+
+        if odoo_data.get("name") is None:
+            raise ValueError("El nombre de la línea de hoja de tiempo es requerido")
+
         return DetailedTimesheetLine(
-            id=odoo_data.get("id", None),
-            name=odoo_data.get("name", None),
+            id=odoo_data.get("id"),
+            name=odoo_data.get("name"),
             employee_id=employee_id,
             project=Project(
                 id=project_id,

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from datetime import date, datetime
 
 from app.project.api.schemas import ProjectResponse
-from app.task.api.schemas import TaskResponse
+from app.task.api.schemas import TaskInfoResponse
 
 
 class CargarHorasRequest(BaseModel):
@@ -26,7 +26,7 @@ class DetailedTimesheetLineResponse(BaseModel):
     name: str
     employee_id: int
     project: ProjectResponse
-    task: Optional[TaskResponse]
+    task: Optional[TaskInfoResponse]
     hours: float
     date: date
     create_date: Optional[datetime] = None

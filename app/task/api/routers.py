@@ -6,7 +6,6 @@ from app.task.api.schemas import TaskResponse
 from app.task.application.Exeptions import (
     ProjectNotFound,
     TasksNotFound_projectId,
-    TasksNotFound_userId,
 )
 from app.task.application.use_cases.obtener_tareas import ObtenerTareasUseCase
 from app.task.domain.gateway import TaskGateway
@@ -65,58 +64,20 @@ async def get_tasks(
         )
         tasks = use_case.execute(project_id)
 
-        return [
-            TaskResponse(
+        def get_task_response(task):
+            return TaskResponse(
                 id=task.id,
                 name=task.name,
                 project_id=task.project_id,
                 project_name=task.project_name,
+                state=task.state,
+                subtask=[get_task_response(subtask) for subtask in task.subtask],
             )
-            for task in tasks
-        ]
+
+        return [get_task_response(task) for task in tasks]
     except ProjectNotFound as e:
         raise HTTPException(status_code=404, detail=e.message)
     except TasksNotFound_projectId as e:
-        raise HTTPException(status_code=404, detail=e.message)
-    except UserNotFound as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/project/user", response_model=List[TaskResponse])
-async def get_tasks_by_user(
-    user_id: int,
-    gateway: TaskGateway = Depends(get_task_gateway),
-    odoo_task_gateway: OdooTaskGateway = Depends(get_task_gateway),
-    odoo_employee_gateway: OdooEmployeeGateway = Depends(get_employee_gateway),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Obtiene las tareas asignadas al usuario autenticado.
-
-    Args:
-        gateway: Gateway de tareas (inyectado)
-        current_user: Usuario autenticado (inyectado)
-
-    Returns:
-        List[TaskResponse]: Lista de tareas asignadas al usuario
-    """
-    try:
-        use_case = ObtenerTareasUseCase(
-            gateway, odoo_task_gateway, odoo_employee_gateway
-        )
-        tasks = use_case.execute_by_user(user_id)
-        return [
-            TaskResponse(
-                id=task.id,
-                name=task.name,
-                project_id=task.project_id,
-                project_name=task.project_name,
-            )
-            for task in tasks
-        ]
-    except TasksNotFound_userId as e:
         raise HTTPException(status_code=404, detail=e.message)
     except UserNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
