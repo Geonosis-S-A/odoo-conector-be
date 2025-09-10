@@ -1,0 +1,63 @@
+from typing import List, Optional
+from pydantic import BaseModel
+
+
+class KPIResponse(BaseModel):
+    """Schema de respuesta para un KPI individual."""
+    total: float
+    average_per_user: float
+    unit: Optional[str] = None
+
+
+class ProjectTotalResponse(BaseModel):
+    """Schema de respuesta para totales por proyecto."""
+    project_id: int
+    project_name: str
+    hours: float
+
+
+class TaskTotalResponse(BaseModel):
+    """Schema de respuesta para totales por tarea."""
+    task_id: int
+    task_name: str
+    hours: float
+
+
+class EmployeeTotalResponse(BaseModel):
+    """Schema de respuesta para totales por empleado."""
+    user_id: int
+    employee_name: str
+    hours: float
+
+
+class DashboardSummaryMetaResponse(BaseModel):
+    """Schema de respuesta para metadatos del dashboard."""
+    users_count: int
+
+
+class DashboardSummaryKPIsResponse(BaseModel):
+    """Schema de respuesta para los KPIs del dashboard."""
+    hours_selected_period: KPIResponse
+    entries_selected_period: KPIResponse
+    daily_average_hours: KPIResponse
+
+
+class DashboardSummaryTotalsResponse(BaseModel):
+    """Schema de respuesta para los totales desagregados."""
+    by_project: List[ProjectTotalResponse]
+    by_task: List[TaskTotalResponse]
+    by_employee: List[EmployeeTotalResponse]
+
+
+class DashboardSummaryResponse(BaseModel):
+    """Schema de respuesta completo para el resumen del dashboard."""
+    meta: DashboardSummaryMetaResponse
+    summary: DashboardSummaryKPIsResponse
+    totals: DashboardSummaryTotalsResponse
+
+    class Config:
+        """Configuración del modelo Pydantic."""
+        from_attributes = True
+        json_encoders = {
+            float: lambda v: round(v, 2) if v is not None else None
+        }

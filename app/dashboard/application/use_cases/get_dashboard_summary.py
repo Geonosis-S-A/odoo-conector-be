@@ -60,6 +60,7 @@ class GetDashboardSummaryUseCase:
             by_employee=by_employee,
         )
 
+        print(f"✅ DashboardSummary creado exitosamente: {dashboard_summary}")
         return dashboard_summary
 
     def _calculate_hours_kpi(self, timesheet_data: List[DetailedTimesheetLine], users_count: int) -> KPI:

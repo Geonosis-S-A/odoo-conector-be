@@ -1,0 +1,151 @@
+from datetime import date
+from fastapi import APIRouter, Depends, HTTPException, Query
+from calendar import monthrange
+
+from app.dashboard.api.schemas import (
+    DashboardSummaryResponse,
+    DashboardSummaryMetaResponse,
+    DashboardSummaryKPIsResponse,
+    DashboardSummaryTotalsResponse,
+    KPIResponse,
+    ProjectTotalResponse,
+    TaskTotalResponse,
+    EmployeeTotalResponse,
+)
+from app.dashboard.application.use_cases.get_dashboard_summary import GetDashboardSummaryUseCase
+from app.dashboard.domain.repositories import DashboardDataGateway
+from app.dashboard.infra.repositories import OdooDashboardDataGateway
+from app.shared.infra.external.odoo.odoo_client import (
+    get_odoo_connection_dependency,
+    OdooConnection,
+)
+from app.shared.security.dependencies import get_current_user
+
+
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+def get_dashboard_data_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> DashboardDataGateway:
+    """Dependencia para obtener el gateway de datos de dashboard."""
+    try:
+        return OdooDashboardDataGateway(odoo_connection)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail="Error al conectar con el gateway de dashboard"
+        )
+
+
+@router.get("/summary", response_model=DashboardSummaryResponse)
+async def get_dashboard_summary(
+    year: int = Query(..., description="Año del período (ej: 2025)"),
+    month: int = Query(..., description="Mes del período (1-12)"),
+    dashboard_gateway: DashboardDataGateway = Depends(get_dashboard_data_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Obtiene el resumen del dashboard para el equipo del usuario en un mes específico.
+    
+    Args:
+        year: Año del período
+        month: Mes del período (1-12)
+        dashboard_gateway: Gateway de datos de dashboard (inyectado)
+        current_user: Usuario autenticado (inyectado)
+        
+    Returns:
+        DashboardSummaryResponse: Resumen completo con KPIs y totales
+    """
+    try:
+        # Validar mes
+        if month < 1 or month > 12:
+            raise HTTPException(
+                status_code=400, 
+                detail="El mes debe estar entre 1 y 12"
+            )
+        
+        # Calcular fechas del mes completo
+        date_from = date(year, month, 1)
+        last_day = monthrange(year, month)[1]
+        date_to = date(year, month, last_day)
+        
+        # Obtener user_id del usuario autenticado
+        user_id = current_user["user_id"]
+        
+        # Crear y ejecutar caso de uso
+        use_case = GetDashboardSummaryUseCase(dashboard_gateway)
+        dashboard_summary = use_case.execute(user_id, date_from, date_to)
+        
+        # Transformar modelo de dominio a esquema de respuesta
+        response = _transform_to_response_schema(dashboard_summary)
+        
+        return response
+        
+    except HTTPException:
+        # Re-lanzar HTTPExceptions tal como están
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno al obtener resumen del dashboard: {str(e)}"
+        )
+
+
+def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:
+    """Transforma el modelo de dominio al esquema de respuesta de la API."""
+    
+    # Transformar KPIs
+    summary_response = DashboardSummaryKPIsResponse(
+        hours_selected_period=KPIResponse(
+            total=dashboard_summary.summary["hours_selected_period"].total,
+            average_per_user=dashboard_summary.summary["hours_selected_period"].average_per_user,
+            unit=dashboard_summary.summary["hours_selected_period"].unit,
+        ),
+        entries_selected_period=KPIResponse(
+            total=dashboard_summary.summary["entries_selected_period"].total,
+            average_per_user=dashboard_summary.summary["entries_selected_period"].average_per_user,
+            unit=dashboard_summary.summary["entries_selected_period"].unit,
+        ),
+        daily_average_hours=KPIResponse(
+            total=dashboard_summary.summary["daily_average_hours"].total,
+            average_per_user=dashboard_summary.summary["daily_average_hours"].average_per_user,
+            unit=dashboard_summary.summary["daily_average_hours"].unit,
+        ),
+    )
+    
+    # Transformar totales
+    totals_response = DashboardSummaryTotalsResponse(
+        by_project=[
+            ProjectTotalResponse(
+                project_id=project.project_id,
+                project_name=project.project_name,
+                hours=project.hours,
+            )
+            for project in dashboard_summary.totals["by_project"]
+        ],
+        by_task=[
+            TaskTotalResponse(
+                task_id=task.task_id,
+                task_name=task.task_name,
+                hours=task.hours,
+            )
+            for task in dashboard_summary.totals["by_task"]
+        ],
+        by_employee=[
+            EmployeeTotalResponse(
+                user_id=employee.user_id,
+                employee_name=employee.employee_name,
+                hours=employee.hours,
+            )
+            for employee in dashboard_summary.totals["by_employee"]
+        ],
+    )
+    
+    # Crear respuesta completa
+    return DashboardSummaryResponse(
+        meta=DashboardSummaryMetaResponse(
+            users_count=dashboard_summary.meta["users_count"]
+        ),
+        summary=summary_response,
+        totals=totals_response,
+    )

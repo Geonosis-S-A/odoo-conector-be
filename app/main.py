@@ -12,6 +12,7 @@ from app.project.api.routers import router as project_router
 from app.task.api.routers import router as task_router
 from app.auth.api.routes import router as auth_router
 from app.email.api.routes import router as email_router
+from app.dashboard.api.routers import router as dashboard_router
 import logging
 
 ENV = os.getenv("ENV", "LOCAL")  # Por defecto, local
@@ -116,6 +117,7 @@ app.include_router(project_router, prefix=API_PREFIX)
 app.include_router(task_router, prefix=API_PREFIX + "/tasks")
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(email_router, prefix=API_PREFIX)
+app.include_router(dashboard_router, prefix=API_PREFIX)
 
 
 @app.get("/")
