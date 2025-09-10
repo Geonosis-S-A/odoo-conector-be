@@ -19,6 +19,7 @@ from app.shared.infra.external.odoo.odoo_client import (
     OdooConnection,
 )
 from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import user_has_role, Roles
 from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -85,6 +86,14 @@ async def get_dashboard_summary(
     Returns:
         DashboardSummaryResponse: Resumen completo con KPIs y totales
     """
+
+    roles: list[int] = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    if not is_approver:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver el dashboard"
+        )
     try:
         # Validar que date_from no sea posterior a date_to
         if date_from > date_to:
