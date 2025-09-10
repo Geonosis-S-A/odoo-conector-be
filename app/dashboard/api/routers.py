@@ -13,7 +13,7 @@ from app.dashboard.api.schemas import (
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import GetDashboardSummaryUseCase
 from app.dashboard.domain.repositories import DashboardDataService
-from app.dashboard.infra.dashboard_gateway import OdooDashboardDataService
+from app.dashboard.infra.dashboard_service import OdooDashboardDataService
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
