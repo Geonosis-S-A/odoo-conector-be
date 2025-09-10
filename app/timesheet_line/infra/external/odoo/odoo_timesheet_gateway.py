@@ -362,3 +362,79 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         )
 
         return bool(response)
+
+    def get_timesheet_data_by_team(self, user_id: int, date_from: date, date_to: date) -> List[Dict[str, Any]]:
+        """Obtiene datos de timesheet del equipo."""
+        domain = [
+                ("is_timesheet", "=", True),
+                ("date", ">=", date_from.isoformat()),
+                ("date", "<=", date_to.isoformat()),
+                # Filtro de equipo
+                "|",
+                "|", 
+                ("employee_id.timesheet_manager_id", "=", user_id),
+                ("employee_id.parent_id.user_id", "=", user_id),
+                ("employee_id.is_subordinate", "=", True),
+            ]
+
+        # Ejecutar consulta a Odoo
+        response = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "search_read",
+            [domain],
+            {
+                "fields": [
+                    "name",
+                    "date", 
+                    "unit_amount",
+                    "employee_id",
+                    "project_id",
+                    "task_id",
+                    "create_date",
+                    "validated",
+                ],
+            },
+        ))
+        return response
+
+    def get_active_team_users_count(self, user_id: int) -> int:
+        """
+        Obtiene la cantidad de usuarios activos en el equipo consultando directamente a Odoo.
+        """
+        try:
+            # Construir dominio para obtener empleados del equipo que estén activos
+            domain = [
+                ("active", "=", True),     # Están activos  ---> VALIDAR ESTO
+                "|",
+                "|",
+                ("timesheet_manager_id", "=", user_id),
+                ("parent_id.user_id", "=", user_id),
+                ("is_subordinate", "=", True),
+            ]
+
+            # Contar empleados que cumplen el criterio
+            employee_count = cast(
+                int,
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "hr.employee",
+                    "search_count",
+                    [domain],
+                ),
+            )
+
+            return employee_count
+
+        except Exception as e:
+            raise Exception(f"Error al obtener cantidad de usuarios del equipo: {str(e)}")
+    
+
+
+

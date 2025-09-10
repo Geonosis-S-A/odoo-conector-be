@@ -1,15 +1,15 @@
 from datetime import date
-from typing import List, Dict, Any, cast, Optional
-import xmlrpc.client
-
-from app.dashboard.domain.repositories import DashboardDataGateway
+from typing import List, Dict, Any, cast, Optional 
+from app.dashboard.domain.repositories import DashboardDataService
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.project.domain.models import Project  
 from app.task.domain.models import TaskInfo, TaskWithParentInfo
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
+from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.task.domain.gateway import TaskGateway
 
 
-class OdooDashboardDataGateway(DashboardDataGateway):
+class OdooDashboardDataService(DashboardDataService):
     """Implementación concreta del gateway de datos para dashboard usando Odoo directamente."""
 
     def __init__(self, odoo_client: OdooConnection):
@@ -20,50 +20,15 @@ class OdooDashboardDataGateway(DashboardDataGateway):
         user_id: int, 
         date_from: date, 
         date_to: date,
-        task_gateway
+        task_gateway: TaskGateway,
+        timesheet_line_gateway: TimesheetLineGateway
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene datos de timesheet del equipo haciendo consulta directa a Odoo.
         """
         try:
-            # Construir dominio para filtrar por equipo (copiado de TimesheetLineGateway)
-            domain = [
-                ("is_timesheet", "=", True),
-                ("date", ">=", date_from.isoformat()),
-                ("date", "<=", date_to.isoformat()),
-                # Filtro de equipo
-                "|",
-                "|", 
-                ("employee_id.timesheet_manager_id", "=", user_id),
-                ("employee_id.parent_id.user_id", "=", user_id),
-                ("employee_id.is_subordinate", "=", True),
-            ]
-
-            # Ejecutar consulta a Odoo
-            odoo_timesheet_lines = cast(
-                List[Dict[str, Any]],
-                self.odoo_client["models"].execute_kw(
-                    self.odoo_client["ODOO_DB"],
-                    self.odoo_client["uid"],
-                    self.odoo_client["ODOO_PASSWORD"],
-                    "account.analytic.line",
-                    "search_read",
-                    [domain],
-                    {
-                        "fields": [
-                            "name",
-                            "date", 
-                            "unit_amount",
-                            "employee_id",
-                            "project_id",
-                            "task_id",
-                            "create_date",
-                            "validated",
-                        ],
-                    },
-                ),
-            )
-
+            # Construir dominio para filtrar por equipo
+            odoo_timesheet_lines = timesheet_line_gateway.get_timesheet_data_by_team(user_id, date_from, date_to)
             # Obtener información completa de las tareas para manejar parent_id
             task_ids = []
             for line in odoo_timesheet_lines:
@@ -84,38 +49,7 @@ class OdooDashboardDataGateway(DashboardDataGateway):
         except Exception as e:
             raise Exception(f"Error al obtener datos de timesheet del equipo: {str(e)}")
 
-    def get_active_team_users_count(self, user_id: int) -> int:
-        """
-        Obtiene la cantidad de usuarios activos en el equipo consultando directamente a Odoo.
-        """
-        try:
-            # Construir dominio para obtener empleados del equipo que estén activos
-            domain = [
-                ("active", "=", True),     # Están activos  ---> VALIDAR ESTO
-                "|",
-                "|",
-                ("timesheet_manager_id", "=", user_id),
-                ("parent_id.user_id", "=", user_id),
-                ("is_subordinate", "=", True),
-            ]
 
-            # Contar empleados que cumplen el criterio
-            employee_count = cast(
-                int,
-                self.odoo_client["models"].execute_kw(
-                    self.odoo_client["ODOO_DB"],
-                    self.odoo_client["uid"],
-                    self.odoo_client["ODOO_PASSWORD"],
-                    "hr.employee",
-                    "search_count",
-                    [domain],
-                ),
-            )
-
-            return employee_count
-
-        except Exception as e:
-            raise Exception(f"Error al obtener cantidad de usuarios del equipo: {str(e)}")
 
 
     def _transform_odoo_to_detailed_domain(self, odoo_line: Dict[str, Any], task_info_map: Optional[Dict[int, TaskWithParentInfo]] = None) -> DetailedTimesheetLine:

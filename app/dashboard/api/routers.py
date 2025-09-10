@@ -12,8 +12,8 @@ from app.dashboard.api.schemas import (
     EmployeeTotalResponse,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import GetDashboardSummaryUseCase
-from app.dashboard.domain.repositories import DashboardDataGateway
-from app.dashboard.infra.dashboard_gateway import OdooDashboardDataGateway
+from app.dashboard.domain.repositories import DashboardDataService
+from app.dashboard.infra.dashboard_gateway import OdooDashboardDataService
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
@@ -24,17 +24,22 @@ from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.task.domain.gateway import TaskGateway
 from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
-
+from app.timesheet_line.domain.repositories import (
+    TimesheetLineGateway
+)
+from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
+    OdooTimesheetLineGateway,
+)
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 def get_dashboard_data_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
-) -> DashboardDataGateway:
+) -> DashboardDataService:
     """Dependencia para obtener el gateway de datos de dashboard."""
     try:
-        return OdooDashboardDataGateway(odoo_connection)
+        return OdooDashboardDataService(odoo_connection)
     except Exception as e:
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de dashboard"
@@ -53,6 +58,16 @@ def get_employee_gateway(
         )
 
 
+def get_timesheet_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> TimesheetLineGateway:
+    try:
+        return OdooTimesheetLineGateway(odoo_connection)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Error al conectar con el gateway")
+
+
+
 def get_task_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
 ) -> TaskGateway:
@@ -69,9 +84,10 @@ def get_task_gateway(
 async def get_dashboard_summary(
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
-    dashboard_gateway: DashboardDataGateway = Depends(get_dashboard_data_gateway),
+    dashboard_gateway: DashboardDataService = Depends(get_dashboard_data_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     task_gateway: TaskGateway = Depends(get_task_gateway),
+    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -106,7 +122,7 @@ async def get_dashboard_summary(
         user_id = current_user["user_id"]
         
         # Crear y ejecutar caso de uso
-        use_case = GetDashboardSummaryUseCase(dashboard_gateway, employee_gateway, task_gateway)
+        use_case = GetDashboardSummaryUseCase(dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway)
         dashboard_summary = use_case.execute(user_id, date_from, date_to)
         
         # Transformar modelo de dominio a esquema de respuesta

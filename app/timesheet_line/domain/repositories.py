@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from app.timesheet_line.domain.models import (
     CreateTimesheetLineNotification,
     DetailedTimesheetLine,
@@ -41,6 +41,12 @@ class TimesheetLineGateway(ABC):
 
     @abstractmethod
     def validate(self, timesheet_line_ids: list[int]) -> bool: ...
+
+    @abstractmethod
+    def get_timesheet_data_by_team(self, user_id: int, date_from: date, date_to: date) -> List[Dict[str, Any]]: ...
+
+    @abstractmethod
+    def get_active_team_users_count(self, user_id: int) -> int: ...
 
 
 class TimesheetLineNotificationRepository(ABC):

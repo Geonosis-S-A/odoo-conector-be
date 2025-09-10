@@ -8,19 +8,21 @@ from app.dashboard.domain.models import (
     TaskTotal,
     EmployeeTotal,
 )
-from app.dashboard.domain.repositories import DashboardDataGateway
+from app.dashboard.domain.repositories import DashboardDataService
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
+from app.timesheet_line.domain.repositories import TimesheetLineGateway
 
 
 class GetDashboardSummaryUseCase:
     """Caso de uso para obtener el resumen del dashboard del equipo."""
 
-    def __init__(self, dashboard_gateway: DashboardDataGateway, employee_gateway: EmployeeGateway, task_gateway: TaskGateway):
+    def __init__(self, dashboard_gateway: DashboardDataService, employee_gateway: EmployeeGateway, task_gateway: TaskGateway, timesheet_line_gateway: TimesheetLineGateway):
         self.dashboard_gateway = dashboard_gateway
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
+        self.timesheet_line_gateway = timesheet_line_gateway
 
     def execute(self, user_id: int, date_from: date, date_to: date) -> DashboardSummary:
         """
@@ -37,11 +39,11 @@ class GetDashboardSummaryUseCase:
 
         # 1. Obtener datos de timesheet del equipo
         timesheet_data = self.dashboard_gateway.get_team_timesheet_data(
-            user_id, date_from, date_to, self.task_gateway
+            user_id, date_from, date_to, self.task_gateway, self.timesheet_line_gateway
         )
 
         # 2. Obtener cantidad de usuarios del equipo
-        users_count = self.dashboard_gateway.get_active_team_users_count(user_id)
+        users_count = self.timesheet_line_gateway.get_active_team_users_count(user_id)
 
         # 3. Calcular KPIs reales
         hours_kpi = self._calculate_hours_kpi(timesheet_data, users_count)
