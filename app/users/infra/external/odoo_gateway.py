@@ -431,7 +431,6 @@ class OdooEmployeeGateway(EmployeeGateway):
                         )
                         field_name = "group_ids"
 
-                    print("user_data: ", user_data)
                     if user_data:
                         user = user_data[0]
                         result.update(

@@ -119,7 +119,11 @@ async def get_dashboard_summary(
             )
         
         # Obtener user_id del usuario autenticado
-        user_id = current_user["user_id"]
+
+
+        current_user_data = employee_gateway.get_employee_with_user_data(current_user["user_id"])
+        print("current_user_data", current_user_data)
+        user_id = current_user["id"]
         
         # Crear y ejecutar caso de uso
         use_case = GetDashboardSummaryUseCase(dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway)
@@ -133,11 +137,6 @@ async def get_dashboard_summary(
     except HTTPException:
         # Re-lanzar HTTPExceptions tal como están
         raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error interno al obtener resumen del dashboard: {str(e)}"
-        )
 
 
 def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:

@@ -409,7 +409,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         try:
             # Construir dominio para obtener empleados del equipo que estén activos
             domain = [
-                ("active", "=", True),     # Están activos  ---> VALIDAR ESTO
                 "|",
                 "|",
                 ("timesheet_manager_id", "=", user_id),
@@ -417,6 +416,11 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 ("is_subordinate", "=", True),
             ]
 
+            domain_d=[
+                "|", ("timesheet_manager_id", "=", user_id), "|", ("parent_id.user_id", "=", user_id), ("is_subordinate", "=", True)
+            ]
+
+            print("domain_d", domain_d)
             # Contar empleados que cumplen el criterio
             employee_count = cast(
                 int,
@@ -426,7 +430,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                     self.odoo_client["ODOO_PASSWORD"],
                     "hr.employee",
                     "search_count",
-                    [domain],
+                    [domain_d],
                 ),
             )
 
