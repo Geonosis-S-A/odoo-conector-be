@@ -236,11 +236,12 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
     from app.shared.security.dependencies import get_current_user
 
     async def mock_admin_user():
+        from app.shared.security.role_enums.dev import Roles
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user

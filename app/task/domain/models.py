@@ -56,5 +56,5 @@ class TaskWithParentInfo:
             str: "nombre_padre -> nombre_hijo" si tiene padre, solo "nombre" si no.
         """
         if self.parent_name:
-            return f"{self.parent_name} -> {self.name}"
+            return f"{self.parent_name} → {self.name}"
         return self.name

@@ -403,18 +403,33 @@ class OdooEmployeeGateway(EmployeeGateway):
 
                 if actual_user_id:
                     # Obtener datos del usuario incluyendo roles del res.users
-                    user_data = cast(
-                        List[Dict[str, Any]],
-                        self.odoo_client["models"].execute_kw(
-                            self.odoo_client["ODOO_DB"],
-                            self.odoo_client["uid"],
-                            self.odoo_client["ODOO_PASSWORD"],
-                            "res.users",
-                            "read",
-                            [[actual_user_id]],
-                            {"fields": ["id", "login", "groups_id"]},
-                        ),
-                    )
+                    try:
+                        user_data = cast(
+                            List[Dict[str, Any]],
+                            self.odoo_client["models"].execute_kw(
+                                self.odoo_client["ODOO_DB"],
+                                self.odoo_client["uid"],
+                                self.odoo_client["ODOO_PASSWORD"],
+                                "res.users",
+                                "read",
+                                [[actual_user_id]],
+                                {"fields": ["id", "login", "groups_id"]},
+                            ),
+                        )
+                    except Exception as e:
+                        user_data = cast(
+                            List[Dict[str, Any]],
+                            self.odoo_client["models"].execute_kw(
+                                self.odoo_client["ODOO_DB"],
+                                self.odoo_client["uid"],
+                                self.odoo_client["ODOO_PASSWORD"],
+                                "res.users",
+                                "read",
+                                [[actual_user_id]],  # Solo el primer usuario encontrado
+                                {"fields": ["group_ids"]},
+                            ),
+                        )
+                        field_name = "group_ids"
 
                     print("user_data: ", user_data)
                     if user_data:
