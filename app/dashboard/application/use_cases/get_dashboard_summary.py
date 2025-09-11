@@ -56,7 +56,9 @@ class GetDashboardSummaryUseCase:
         )
 
         # 2. Obtener cantidad de usuarios del equipo
-        users_count = self.timesheet_line_gateway.get_active_team_users_count(user_id)
+        users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
+
+        users_count = len(users)
 
         # 3. Calcular KPIs reales
         hours_kpi = self._calculate_hours_kpi(timesheet_data, users_count)

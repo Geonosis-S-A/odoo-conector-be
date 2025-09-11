@@ -48,7 +48,9 @@ class TimesheetLineGateway(ABC):
     ) -> List[Dict[str, Any]]: ...
 
     @abstractmethod
-    def get_active_team_users_count(self, user_id: int) -> int: ...
+    def get_team_users(
+        self, user_id: int, employee_id: int
+    ) -> list[Dict[str, Any]]: ...
 
 
 class TimesheetLineNotificationRepository(ABC):

@@ -372,7 +372,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
     ) -> List[Dict[str, Any]]:
         """Obtiene datos de timesheet del equipo."""
         domain = [
-            ("is_timesheet", "=", True),
             ("date", ">=", date_from.isoformat()),
             ("date", "<=", date_to.isoformat()),
             # --- Condición para excluirte ---
@@ -410,36 +409,47 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 },
             ),
         )
+
+        print("response", response)
         return response
 
-    def get_active_team_users_count(self, user_id: int) -> int:
+    def get_team_users(self, user_id: int, employee_id: int) -> list[Dict[str, Any]]:
         """
         Obtiene la cantidad de usuarios activos en el equipo consultando directamente a Odoo.
         """
         try:
             # Construir dominio para obtener empleados del equipo que estén activos
-            domain = [
+            subordinates_domain = [
+                # Condición 1: El empleado NO debo ser yo
+                ("id", "!=", employee_id),
+                # Condición 2: Y debe cumplir la lógica de equipo
                 "|",
                 ("timesheet_manager_id", "=", user_id),
-                "|",
-                ("parent_id.user_id", "=", user_id),
-                ("is_subordinate", "=", True),
+                ("id", "child_of", employee_id),
             ]
 
             # Contar empleados que cumplen el criterio
-            employee_count = cast(
-                int,
-                self.odoo_client["models"].execute_kw(
-                    self.odoo_client["ODOO_DB"],
-                    self.odoo_client["uid"],
-                    self.odoo_client["ODOO_PASSWORD"],
-                    "hr.employee",
-                    "search_count",
-                    [domain],
-                ),
+            subordinates_data = self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",  # Estamos buscando en el modelo de empleados
+                "search_read",  # El método que busca Y lee los datos
+                [subordinates_domain],  # El filtro se pasa como una lista de argumentos
+                {
+                    # El diccionario de opciones donde especificamos qué queremos
+                    "fields": [
+                        "id",  # El ID del empleado (el "employee_id" que buscas)
+                        "name",  # El nombre completo del empleado
+                        "work_email",
+                    ],
+                    # "limit": 100 # Opcional: para limitar el número de resultados
+                },
             )
 
-            return employee_count
+            print("subordinates_data", subordinates_data)
+
+            return subordinates_data
 
         except Exception as e:
             raise Exception(
