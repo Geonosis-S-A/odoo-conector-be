@@ -10,6 +10,8 @@ from app.dashboard.api.schemas import (
     ProjectTotalResponse,
     TaskTotalResponse,
     EmployeeTotalResponse,
+    DashboardSummaryResponseByEmployee,
+    DashboardSummaryMetaResponseByEmployee,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -143,7 +145,7 @@ async def get_dashboard_summary(
         raise
 
 
-@router.get("/summary/{employee_id}", response_model=DashboardSummaryResponse)
+@router.get("/summary/{employee_id}", response_model=DashboardSummaryResponseByEmployee)
 async def get_dashboard_summary_by_employee(
     employee_id: int = Path(..., description="ID del empleado para filtrar"),
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
@@ -191,7 +193,7 @@ async def get_dashboard_summary_by_employee(
         dashboard_summary = use_case.execute(employee_id, date_from, date_to)
 
         # Transformar modelo de dominio a esquema de respuesta
-        response = _transform_to_response_schema(dashboard_summary)
+        response = _transform_to_response_schema_by_employee(dashboard_summary)
 
         return response
 
@@ -261,6 +263,74 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
     return DashboardSummaryResponse(
         meta=DashboardSummaryMetaResponse(
             users_count=dashboard_summary.meta["users_count"]
+        ),
+        summary=summary_response,
+        totals=totals_response,
+    )
+
+
+def _transform_to_response_schema_by_employee(dashboard_summary) -> DashboardSummaryResponseByEmployee:
+    """Transforma el modelo de dominio al esquema de respuesta de la API."""
+
+    # Transformar KPIs
+    summary_response = DashboardSummaryKPIsResponse(
+        hours_selected_period=KPIResponse(
+            total=dashboard_summary.summary["hours_selected_period"].total,
+            average_per_user=dashboard_summary.summary[
+                "hours_selected_period"
+            ].average_per_user,
+            unit=dashboard_summary.summary["hours_selected_period"].unit,
+        ),
+        entries_selected_period=KPIResponse(
+            total=dashboard_summary.summary["entries_selected_period"].total,
+            average_per_user=dashboard_summary.summary[
+                "entries_selected_period"
+            ].average_per_user,
+            unit=dashboard_summary.summary["entries_selected_period"].unit,
+        ),
+        daily_average_hours=KPIResponse(
+            total=dashboard_summary.summary["daily_average_hours"].total,
+            average_per_user=dashboard_summary.summary[
+                "daily_average_hours"
+            ].average_per_user,
+            unit=dashboard_summary.summary["daily_average_hours"].unit,
+        ),
+    )
+
+    # Transformar totales
+    totals_response = DashboardSummaryTotalsResponse(
+        by_project=[
+            ProjectTotalResponse(
+                project_id=project.project_id,
+                project_name=project.project_name,
+                hours=project.hours,
+            )
+            for project in dashboard_summary.totals["by_project"]
+        ],
+        by_task=[
+            TaskTotalResponse(
+                task_id=task.task_id,
+                task_name=task.task_name,
+                hours=task.hours,
+                project_id=task.project_id,
+            )
+            for task in dashboard_summary.totals["by_task"]
+        ],
+        by_employee=[
+            EmployeeTotalResponse(
+                user_id=employee.user_id,
+                employee_name=employee.employee_name,
+                hours=employee.hours,
+            )
+            for employee in dashboard_summary.totals["by_employee"]
+        ],
+    )
+
+    # Crear respuesta completa
+    return DashboardSummaryResponseByEmployee(
+        meta=DashboardSummaryMetaResponseByEmployee(
+            users_count=dashboard_summary.meta["users_count"],
+            worked_days=dashboard_summary.worked_days,
         ),
         summary=summary_response,
         totals=totals_response,

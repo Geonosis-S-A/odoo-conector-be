@@ -69,3 +69,39 @@ class DashboardSummary:
                 "by_employee": by_employee,
             },
         )
+
+@dataclass
+class DashboardSummaryByEmployee:
+    """Modelo principal que contiene toda la información del dashboard."""
+    meta: Dict[str, Any]  # {"users_count": int}
+    worked_days: int
+    summary: Dict[str, KPI]  # KPIs principales
+    totals: Dict[str, List[Any]]  # Totales desagregados
+
+    @classmethod
+    def create(
+        cls,
+        users_count: int,
+        worked_days: int,
+        hours_selected_period: KPI,
+        entries_selected_period: KPI,
+        daily_average_hours: KPI,
+        by_project: List[ProjectTotal],
+        by_task: List[TaskTotal],
+        by_employee: List[EmployeeTotal],
+    ) -> "DashboardSummaryByEmployee":
+        """Factory method para crear un DashboardSummary completo."""
+        return cls(
+            meta={"users_count": users_count},
+            worked_days=worked_days,
+            summary={
+                "hours_selected_period": hours_selected_period,
+                "entries_selected_period": entries_selected_period,
+                "daily_average_hours": daily_average_hours,
+            },
+            totals={
+                "by_project": by_project,
+                "by_task": by_task,
+                "by_employee": by_employee,
+            },
+        )

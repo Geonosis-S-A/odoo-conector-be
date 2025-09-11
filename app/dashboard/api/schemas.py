@@ -35,6 +35,10 @@ class DashboardSummaryMetaResponse(BaseModel):
     """Schema de respuesta para metadatos del dashboard."""
     users_count: int
 
+class DashboardSummaryMetaResponseByEmployee(DashboardSummaryMetaResponse):
+    """Schema de respuesta para metadatos del dashboard."""
+    worked_days: int
+
 
 class DashboardSummaryKPIsResponse(BaseModel):
     """Schema de respuesta para los KPIs del dashboard."""
@@ -53,6 +57,19 @@ class DashboardSummaryTotalsResponse(BaseModel):
 class DashboardSummaryResponse(BaseModel):
     """Schema de respuesta completo para el resumen del dashboard."""
     meta: DashboardSummaryMetaResponse
+    summary: DashboardSummaryKPIsResponse
+    totals: DashboardSummaryTotalsResponse
+
+    class Config:
+        """Configuración del modelo Pydantic."""
+        from_attributes = True
+        json_encoders = {
+            float: lambda v: round(v, 2) if v is not None else None
+        }
+
+class DashboardSummaryResponseByEmployee(BaseModel):
+    """Schema de respuesta completo para el resumen del dashboard."""
+    meta: DashboardSummaryMetaResponseByEmployee
     summary: DashboardSummaryKPIsResponse
     totals: DashboardSummaryTotalsResponse
 
