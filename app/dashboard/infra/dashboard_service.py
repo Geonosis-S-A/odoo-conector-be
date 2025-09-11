@@ -1,8 +1,8 @@
 from datetime import date
-from typing import List, Dict, Any, cast, Optional 
+from typing import List, Dict, Any, cast, Optional
 from app.dashboard.domain.repositories import DashboardDataService
 from app.timesheet_line.domain.models import DetailedTimesheetLine
-from app.project.domain.models import Project  
+from app.project.domain.models import Project
 from app.task.domain.models import TaskInfo, TaskWithParentInfo
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
@@ -16,27 +16,36 @@ class OdooDashboardDataService(DashboardDataService):
         self.odoo_client = odoo_client
 
     def get_team_timesheet_data(
-        self, 
-        user_id: int, 
-        date_from: date, 
+        self,
+        user_id: int,
+        employee_id: int,
+        date_from: date,
         date_to: date,
         task_gateway: TaskGateway,
-        timesheet_line_gateway: TimesheetLineGateway
+        timesheet_line_gateway: TimesheetLineGateway,
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene datos de timesheet del equipo haciendo consulta directa a Odoo.
         """
         try:
             # Construir dominio para filtrar por equipo
-            odoo_timesheet_lines = timesheet_line_gateway.get_timesheet_data_by_team(user_id, date_from, date_to)
+            odoo_timesheet_lines = timesheet_line_gateway.get_timesheet_data_by_team(
+                user_id, employee_id, date_from, date_to
+            )
             # Obtener información completa de las tareas para manejar parent_id
             task_ids = []
             for line in odoo_timesheet_lines:
                 task_id_info = line.get("task_id")
-                if task_id_info and isinstance(task_id_info, list) and len(task_id_info) > 0:
+                if (
+                    task_id_info
+                    and isinstance(task_id_info, list)
+                    and len(task_id_info) > 0
+                ):
                     task_ids.append(task_id_info[0])
-            
-            task_info_map = task_gateway.get_tasks_info_with_parents(task_ids) if task_ids else {}
+
+            task_info_map = (
+                task_gateway.get_tasks_info_with_parents(task_ids) if task_ids else {}
+            )
 
             # Transformar datos de Odoo a nuestro modelo de dominio
             parsed_lines = [
@@ -49,10 +58,11 @@ class OdooDashboardDataService(DashboardDataService):
         except Exception as e:
             raise Exception(f"Error al obtener datos de timesheet del equipo: {str(e)}")
 
-
-
-
-    def _transform_odoo_to_detailed_domain(self, odoo_line: Dict[str, Any], task_info_map: Optional[Dict[int, TaskWithParentInfo]] = None) -> DetailedTimesheetLine:
+    def _transform_odoo_to_detailed_domain(
+        self,
+        odoo_line: Dict[str, Any],
+        task_info_map: Optional[Dict[int, TaskWithParentInfo]] = None,
+    ) -> DetailedTimesheetLine:
         """
         Transforma una línea de Odoo al modelo de dominio DetailedTimesheetLine.
         """
@@ -67,17 +77,17 @@ class OdooDashboardDataService(DashboardDataService):
             project = Project(id=0, name="Sin proyecto")
 
         # Extraer información de la tarea
-        task_info = odoo_line.get("task_id") 
+        task_info = odoo_line.get("task_id")
         task = None
         if task_info and isinstance(task_info, list) and len(task_info) >= 2:
             task_id = task_info[0]
             task_name = task_info[1]
-            
+
             # Si tenemos información completa de la tarea, usar nombre con concatenación si aplica
             if task_info_map and task_id in task_info_map:
                 task_with_parent = task_info_map[task_id]
                 task_name = task_with_parent.get_display_name()
-            
+
             task = TaskInfo(
                 id=task_id,
                 name=task_name,
@@ -87,13 +97,17 @@ class OdooDashboardDataService(DashboardDataService):
 
         # Extraer información del empleado
         employee_info = odoo_line.get("employee_id")
-        employee_id = employee_info[0] if employee_info and isinstance(employee_info, list) else 0
+        employee_id = (
+            employee_info[0] if employee_info and isinstance(employee_info, list) else 0
+        )
 
         # Parsear fecha de creación
         create_date = None
         if odoo_line.get("create_date"):
             try:
-                create_date = datetime.fromisoformat(odoo_line["create_date"].replace("Z", "+00:00"))
+                create_date = datetime.fromisoformat(
+                    odoo_line["create_date"].replace("Z", "+00:00")
+                )
             except:
                 create_date = None
 

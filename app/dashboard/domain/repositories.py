@@ -12,16 +12,17 @@ class DashboardDataService(ABC):
 
     @abstractmethod
     def get_team_timesheet_data(
-        self, 
-        user_id: int, 
-        date_from: date, 
+        self,
+        user_id: int,
+        employee_id: int,
+        date_from: date,
         date_to: date,
         task_gateway: TaskGateway,
-        timesheet_line_gateway: TimesheetLineGateway
+        timesheet_line_gateway: TimesheetLineGateway,
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene datos de timesheet del equipo para el período especificado.
-        
+
         Args:
             user_id: ID del usuario que solicita el dashboard (para filtro de equipo)
             date_from: Fecha de inicio del período
@@ -32,4 +33,3 @@ class DashboardDataService(ABC):
             Lista de DetailedTimesheetLine del equipo en el período
         """
         pass
-    

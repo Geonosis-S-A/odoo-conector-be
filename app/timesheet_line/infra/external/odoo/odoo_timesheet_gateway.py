@@ -363,43 +363,53 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         return bool(response)
 
-    def get_timesheet_data_by_team(self, user_id: int, date_from: date, date_to: date) -> List[Dict[str, Any]]:
+    def get_timesheet_data_by_team(
+        self,
+        user_id: int,
+        employee_id: int,
+        date_from: date,
+        date_to: date,
+    ) -> List[Dict[str, Any]]:
         """Obtiene datos de timesheet del equipo."""
         domain = [
-                ("is_timesheet", "=", True),
-                ("date", ">=", date_from.isoformat()),
-                ("date", "<=", date_to.isoformat()),
-                # Filtro de equipo
-                "|",
-                "|", 
-                ("employee_id.timesheet_manager_id", "=", user_id),
-                ("employee_id.parent_id.user_id", "=", user_id),
-                ("employee_id.is_subordinate", "=", True),
-            ]
+            ("is_timesheet", "=", True),
+            ("date", ">=", date_from.isoformat()),
+            ("date", "<=", date_to.isoformat()),
+            # --- Condición para excluirte ---
+            # El operador AND es implícito al agregar una nueva tupla
+            ("employee_id", "!=", employee_id),
+            # Filtro de equipo:
+            #  - El timesheet manager del empleado soy yo
+            #  - O el empleado está por debajo de mí en el organigrama
+            "|",
+            ("employee_id.timesheet_manager_id", "=", user_id),
+            ("employee_id", "child_of", employee_id),
+        ]
 
         # Ejecutar consulta a Odoo
         response = cast(
             List[Dict[str, Any]],
             self.odoo_client["models"].execute_kw(
-            self.odoo_client["ODOO_DB"],
-            self.odoo_client["uid"],
-            self.odoo_client["ODOO_PASSWORD"],
-            "account.analytic.line",
-            "search_read",
-            [domain],
-            {
-                "fields": [
-                    "name",
-                    "date", 
-                    "unit_amount",
-                    "employee_id",
-                    "project_id",
-                    "task_id",
-                    "create_date",
-                    "validated",
-                ],
-            },
-        ))
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "account.analytic.line",
+                "search_read",
+                [domain],
+                {
+                    "fields": [
+                        "name",
+                        "date",
+                        "unit_amount",
+                        "employee_id",
+                        "project_id",
+                        "task_id",
+                        "create_date",
+                        "validated",
+                    ],
+                },
+            ),
+        )
         return response
 
     def get_active_team_users_count(self, user_id: int) -> int:
@@ -410,17 +420,12 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             # Construir dominio para obtener empleados del equipo que estén activos
             domain = [
                 "|",
-                "|",
                 ("timesheet_manager_id", "=", user_id),
+                "|",
                 ("parent_id.user_id", "=", user_id),
                 ("is_subordinate", "=", True),
             ]
 
-            domain_d=[
-                "|", ("timesheet_manager_id", "=", user_id), "|", ("parent_id.user_id", "=", user_id), ("is_subordinate", "=", True)
-            ]
-
-            print("domain_d", domain_d)
             # Contar empleados que cumplen el criterio
             employee_count = cast(
                 int,
@@ -430,15 +435,13 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                     self.odoo_client["ODOO_PASSWORD"],
                     "hr.employee",
                     "search_count",
-                    [domain_d],
+                    [domain],
                 ),
             )
 
             return employee_count
 
         except Exception as e:
-            raise Exception(f"Error al obtener cantidad de usuarios del equipo: {str(e)}")
-    
-
-
-
+            raise Exception(
+                f"Error al obtener cantidad de usuarios del equipo: {str(e)}"
+            )

@@ -117,8 +117,8 @@ async def get_dashboard_summary(
             )
 
         # Obtener user_id del usuario autenticado
-
-        user_id = employee_gateway.get_user_id_by_employee_id(current_user["user_id"])
+        employee_id = current_user["user_id"]
+        user_id = employee_gateway.get_user_id_by_employee_id(employee_id)
         if not user_id:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -126,7 +126,7 @@ async def get_dashboard_summary(
         use_case = GetDashboardSummaryUseCase(
             dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
         )
-        dashboard_summary = use_case.execute(user_id, date_from, date_to)
+        dashboard_summary = use_case.execute(user_id, employee_id, date_from, date_to)
 
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema(dashboard_summary)
