@@ -1,5 +1,5 @@
 from datetime import date
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
 from app.dashboard.api.schemas import (
     DashboardSummaryResponse,
@@ -13,6 +13,9 @@ from app.dashboard.api.schemas import (
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
+)
+from app.dashboard.application.use_cases.get_dashboard_summary_by_employee import (
+    GetDashboardSummaryByEmployeeUseCase,
 )
 from app.dashboard.domain.repositories import DashboardDataService
 from app.dashboard.infra.dashboard_service import OdooDashboardDataService
@@ -32,18 +35,6 @@ from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
 )
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
-
-
-def get_dashboard_data_gateway(
-    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
-) -> DashboardDataService:
-    """Dependencia para obtener el gateway de datos de dashboard."""
-    try:
-        return OdooDashboardDataService(odoo_connection)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail="Error al conectar con el gateway de dashboard"
-        )
 
 
 def get_employee_gateway(
@@ -76,6 +67,20 @@ def get_task_gateway(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de tareas"
+        )
+
+def get_dashboard_data_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    task_gateway: TaskGateway = Depends(get_task_gateway),
+    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+) -> DashboardDataService:
+    """Dependencia para obtener el gateway de datos de dashboard."""
+    try:
+        return OdooDashboardDataService(odoo_connection, employee_gateway, task_gateway, timesheet_line_gateway)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail="Error al conectar con el gateway de dashboard"
         )
 
 
@@ -117,8 +122,8 @@ async def get_dashboard_summary(
             )
 
         # Obtener user_id del usuario autenticado
-        employee_id = current_user["user_id"]
-        user_id = employee_gateway.get_user_id_by_employee_id(employee_id)
+        requester_employee_id = current_user["user_id"]
+        user_id = employee_gateway.get_user_id_by_employee_id(requester_employee_id)
         if not user_id:
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
@@ -126,7 +131,64 @@ async def get_dashboard_summary(
         use_case = GetDashboardSummaryUseCase(
             dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
         )
-        dashboard_summary = use_case.execute(user_id, employee_id, date_from, date_to)
+        dashboard_summary = use_case.execute(user_id, requester_employee_id, date_from, date_to)
+
+        # Transformar modelo de dominio a esquema de respuesta
+        response = _transform_to_response_schema(dashboard_summary)
+
+        return response
+
+    except HTTPException:
+        # Re-lanzar HTTPExceptions tal como están
+        raise
+
+
+@router.get("/summary/{employee_id}", response_model=DashboardSummaryResponse)
+async def get_dashboard_summary_by_employee(
+    employee_id: int = Path(..., description="ID del empleado para filtrar"),
+    date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
+    date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    dashboard_gateway: DashboardDataService = Depends(get_dashboard_data_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    task_gateway: TaskGateway = Depends(get_task_gateway),
+    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Obtiene el resumen del dashboard para el equipo del usuario en un período específico.
+
+    Args:
+        date_from: Fecha de inicio del período (YYYY-MM-DD)
+        date_to: Fecha de fin del período (YYYY-MM-DD)
+        dashboard_gateway: Gateway de datos de dashboard (inyectado)
+        current_user: Usuario autenticado (inyectado)
+
+    Returns:
+        DashboardSummaryResponse: Resumen completo con KPIs y totales
+    """
+
+    roles: list[int] = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    if (
+        (employee_id is not None and current_user["user_id"] != employee_id)
+        or (employee_id is None)
+    ) and (not is_approver):
+        raise HTTPException(
+            status_code=403, detail="No tienes permisos para ver esta información"
+        )
+    try:
+        # Validar que date_from no sea posterior a date_to
+        if date_from > date_to:
+            raise HTTPException(
+                status_code=400,
+                detail="La fecha de inicio no puede ser posterior a la fecha de fin",
+            )
+
+        # Crear y ejecutar caso de uso
+        use_case = GetDashboardSummaryByEmployeeUseCase(
+            dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
+        )
+        dashboard_summary = use_case.execute(employee_id, date_from, date_to)
 
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema(dashboard_summary)

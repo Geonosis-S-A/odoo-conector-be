@@ -15,7 +15,7 @@ from app.task.domain.gateway import TaskGateway
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 
 
-class GetDashboardSummaryUseCase:
+class GetDashboardSummaryByEmployeeUseCase:
     """Caso de uso para obtener el resumen del dashboard del equipo."""
 
     def __init__(
@@ -31,7 +31,7 @@ class GetDashboardSummaryUseCase:
         self.timesheet_line_gateway = timesheet_line_gateway
 
     def execute(
-        self, user_id: int, employee_id: int, date_from: date, date_to: date
+        self, employee_id: int, date_from: date, date_to: date
     ) -> DashboardSummary:
         """
         Ejecuta el caso de uso para obtener el resumen del dashboard.
@@ -45,14 +45,9 @@ class GetDashboardSummaryUseCase:
             DashboardSummary con todos los KPIs y totales calculados
         """
 
-        users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
-
-        users_count = len(users)
-
-        ids = [user["id"] for user in users]
 
         timesheet_data = self.dashboard_gateway.get_timesheet_summary(
-            ids,
+            [employee_id],
             date_from,
             date_to,
             self.task_gateway,
@@ -60,20 +55,20 @@ class GetDashboardSummaryUseCase:
         )
 
         # 3. Calcular KPIs reales
-        hours_kpi = self.dashboard_gateway.calculate_hours_kpi(timesheet_data, users_count)
-        entries_kpi = self.dashboard_gateway.calculate_entries_kpi(timesheet_data, users_count)
+        hours_kpi = self.dashboard_gateway.calculate_hours_kpi(timesheet_data, 1)
+        entries_kpi = self.dashboard_gateway.calculate_entries_kpi(timesheet_data, 1)
         daily_average_kpi = self.dashboard_gateway.calculate_daily_average_kpi(
-            timesheet_data, users_count, date_from, date_to
+            timesheet_data, 1, date_from, date_to
         )
 
         # 4. Calcular totales desagregados
         by_project = self.dashboard_gateway.calculate_project_totals(timesheet_data)
         by_task = self.dashboard_gateway.calculate_task_totals(timesheet_data)
-        by_employee = self.dashboard_gateway.calculate_employee_totals(timesheet_data, users)
+        by_employee = self.dashboard_gateway.calculate_employee_totals(timesheet_data, [{"id": employee_id}])
 
         # 5. Crear y retornar el resumen del dashboard
         dashboard_summary = DashboardSummary.create(
-            users_count=users_count,
+            users_count=1,
             hours_selected_period=hours_kpi,
             entries_selected_period=entries_kpi,
             daily_average_hours=daily_average_kpi,
@@ -84,4 +79,4 @@ class GetDashboardSummaryUseCase:
 
         return dashboard_summary
 
-   
+    
