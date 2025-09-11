@@ -14,7 +14,7 @@ from app.dashboard.domain.models import (
     TaskTotal,
     EmployeeTotal,
 )
-
+import uuid
 
 class OdooDashboardDataService(DashboardDataService):
     """Implementación concreta del gateway de datos para dashboard usando Odoo directamente."""
@@ -236,6 +236,60 @@ class OdooDashboardDataService(DashboardDataService):
         except Exception as e:
             # En caso de error, retornar nombres genéricos
             return {emp_id: f"Empleado {emp_id}" for emp_id in employee_ids}
+
+    def calculate_project_without_task_totals(
+        self, 
+        project_totals: List[ProjectTotal], 
+        task_totals: List[TaskTotal]
+    ) -> List[TaskTotal]:
+        """
+        Calcula las horas cargadas directamente a proyectos sin tarea específica.
+        
+        Compara los totales por proyecto con los totales por tarea para determinar
+        qué horas fueron cargadas directamente al proyecto sin asignar a una tarea.
+        
+        Args:
+            project_totals: Lista de totales por proyecto
+            task_totals: Lista de totales por tarea
+            
+        Returns:
+            Lista de ProjectWithoutTaskTotal con las horas cargadas sin tarea
+        """
+        # Crear un diccionario para sumar las horas por proyecto desde las tareas
+        task_hours_by_project = {}
+        
+        for task in task_totals:
+            project_id = task.project_id
+            if project_id not in task_hours_by_project:
+                task_hours_by_project[project_id] = 0.0
+            task_hours_by_project[project_id] += task.hours
+        
+        # Calcular las horas sin tarea para cada proyecto
+        project_without_task_list = []
+        
+        for project in project_totals:
+            project_id = project.project_id
+            total_project_hours = project.hours
+            task_hours = task_hours_by_project.get(project_id, 0.0)
+            
+            # Las horas sin tarea son la diferencia entre el total del proyecto y las horas de tareas
+            hours_without_task = total_project_hours - task_hours
+            
+            # Solo incluir proyectos que tienen horas cargadas sin tarea
+            if hours_without_task > 0:
+                project_without_task_list.append(
+                    TaskTotal(
+                        task_id=int(uuid.uuid4()),
+                        project_id=project_id,
+                        task_name="Sin tarea",
+                        hours=hours_without_task
+                    )
+                )
+        
+        # Ordenar por horas sin tarea (mayor a menor)
+        project_without_task_list.sort(key=lambda x: x.hours, reverse=True)
+        
+        return project_without_task_list
 
     def _transform_odoo_to_detailed_domain(
         self,

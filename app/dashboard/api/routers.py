@@ -134,7 +134,6 @@ async def get_dashboard_summary(
             dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
         )
         dashboard_summary = use_case.execute(user_id, requester_employee_id, date_from, date_to)
-
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema(dashboard_summary)
 

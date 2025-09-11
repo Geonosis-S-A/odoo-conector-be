@@ -64,3 +64,21 @@ class DashboardDataService(ABC):
     def calculate_employee_totals(self, timesheet_data: List[DetailedTimesheetLine], team_users: List[dict]) -> List[EmployeeTotal]:
         """Calcula los totales de horas por empleado."""
         pass
+    
+    @abstractmethod
+    def calculate_project_without_task_totals(
+        self, 
+        project_totals: List[ProjectTotal], 
+        task_totals: List[TaskTotal]
+    ) -> List[TaskTotal]:
+        """
+        Calcula las horas cargadas directamente a proyectos sin tarea específica.
+        
+        Args:
+            project_totals: Lista de totales por proyecto
+            task_totals: Lista de totales por tarea
+            
+        Returns:
+            Lista de ProjectWithoutTaskTotal con las horas cargadas sin tarea
+        """
+        pass

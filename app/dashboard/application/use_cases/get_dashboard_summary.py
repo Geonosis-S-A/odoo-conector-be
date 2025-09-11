@@ -70,8 +70,16 @@ class GetDashboardSummaryUseCase:
         by_project = self.dashboard_gateway.calculate_project_totals(timesheet_data)
         by_task = self.dashboard_gateway.calculate_task_totals(timesheet_data)
         by_employee = self.dashboard_gateway.calculate_employee_totals(timesheet_data, users)
+        
+        # 5. Calcular horas cargadas a proyectos sin tarea específica
+        by_project_without_task = self.dashboard_gateway.calculate_project_without_task_totals(
+            by_project, by_task
+        )
 
-        # 5. Crear y retornar el resumen del dashboard
+        "append de by_project_without_task a by_task"
+        by_task.extend(by_project_without_task)
+
+        # 6. Crear y retornar el resumen del dashboard
         dashboard_summary = DashboardSummary.create(
             users_count=users_count,
             hours_selected_period=hours_kpi,
