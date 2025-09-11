@@ -45,9 +45,6 @@ class GetDashboardSummaryUseCase:
             DashboardSummary con todos los KPIs y totales calculados
         """
 
-        # 1. Obtener datos de timesheet del equipo
-
-        # 2. Obtener cantidad de usuarios del equipo
         users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
 
         users_count = len(users)

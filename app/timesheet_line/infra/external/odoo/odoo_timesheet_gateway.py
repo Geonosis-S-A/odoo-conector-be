@@ -134,6 +134,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         validated: Optional[bool] = None,
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
+        team_members_ids: Optional[list[int]] = None,
     ) -> List[DetailedTimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo."""
         domain: list[tuple[str, str, Any]] = [("is_timesheet", "=", True)]
@@ -149,19 +150,16 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         if validated is not None:
             domain.append(("validated", "=", validated))
-        if employee_id is not None:
+        if employee_id is not None and team is None:
             domain.append(("employee_id", "=", employee_id))
 
         if team and user_id is not None:
             # Aquí aplicamos el filtro de equipo como se ve en la petición web
             team_domain = [
-                "|",
-                "|",
-                ("employee_id.timesheet_manager_id", "=", user_id),
-                ("employee_id.parent_id.user_id", "=", user_id),
-                ("employee_id.is_subordinate", "=", True),
+                ("employee_id", "in", team_members_ids),
             ]
             domain.extend(team_domain)
+
 
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
@@ -186,6 +184,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 },
             ),
         )
+
+        print("odoo_timesheet_lines", odoo_timesheet_lines)
         parsed_lines = [
             self._transform_odoo_to_detailed_domain(line)
             for line in odoo_timesheet_lines

@@ -23,6 +23,7 @@ class TimesheetLineGateway(ABC):
         validated: Optional[bool] = None,
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
+        team_members_ids: Optional[list[int]] = None,
     ) -> list[DetailedTimesheetLine]: ...
 
     @abstractmethod
