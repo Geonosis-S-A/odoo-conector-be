@@ -47,10 +47,6 @@ class TimesheetLineGateway(ABC):
     @abstractmethod
     def validate(self, timesheet_line_ids: list[int]) -> bool: ...
 
-    @abstractmethod
-    def get_timesheet_data_by_team(
-        self, user_id: int, employee_id: int, date_from: date, date_to: date
-    ) -> List[Dict[str, Any]]: ...
 
     @abstractmethod
     def get_team_users(

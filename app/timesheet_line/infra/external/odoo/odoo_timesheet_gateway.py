@@ -400,55 +400,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         return bool(response)
 
-    def get_timesheet_data_by_team(
-        self,
-        user_id: int,
-        employee_id: int,
-        date_from: date,
-        date_to: date,
-    ) -> List[Dict[str, Any]]:
-        """Obtiene datos de timesheet del equipo."""
-        domain = [
-            ("date", ">=", date_from.isoformat()),
-            ("date", "<=", date_to.isoformat()),
-            # --- Condición para excluirte ---
-            # El operador AND es implícito al agregar una nueva tupla
-            ("employee_id", "!=", employee_id),
-            # Filtro de equipo:
-            #  - El timesheet manager del empleado soy yo
-            #  - O el empleado está por debajo de mí en el organigrama
-            "|",
-            ("employee_id.timesheet_manager_id", "=", user_id),
-            ("employee_id", "child_of", employee_id),
-        ]
-
-        # Ejecutar consulta a Odoo
-        response = cast(
-            List[Dict[str, Any]],
-            self.odoo_client["models"].execute_kw(
-                self.odoo_client["ODOO_DB"],
-                self.odoo_client["uid"],
-                self.odoo_client["ODOO_PASSWORD"],
-                "account.analytic.line",
-                "search_read",
-                [domain],
-                {
-                    "fields": [
-                        "name",
-                        "date",
-                        "unit_amount",
-                        "employee_id",
-                        "project_id",
-                        "task_id",
-                        "create_date",
-                        "validated",
-                    ],
-                },
-            ),
-        )
-
-        print("response", response)
-        return response
 
     def get_team_users(self, user_id: int, employee_id: int) -> list[Dict[str, Any]]:
         """
