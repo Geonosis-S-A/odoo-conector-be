@@ -15,6 +15,7 @@ class DashboardDataService(ABC):
         self,
         user_id: int,
         employee_id: int,
+        ids: list[int],
         date_from: date,
         date_to: date,
         task_gateway: TaskGateway,

@@ -192,6 +192,34 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         ]
         return parsed_lines
 
+    def all_by_employees(self, employee_ids: list[int]) -> List[Dict[str, Any]]:
+        """Obtiene todas las líneas de hoja de tiempo de Odoo por empleados."""
+        domain = [("employee_id", "in", employee_ids)]
+        odoo_timesheet_lines = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "account.analytic.line",
+                "search_read",
+                [domain],
+                {
+                    "fields": [
+                        "name",
+                        "date",
+                        "unit_amount",
+                        "employee_id",
+                        "project_id",
+                        "task_id",
+                        "create_date",
+                        "validated",
+                    ],
+                },
+            ),
+        )
+        return odoo_timesheet_lines
+
     def delete(self, timesheet_lines_ids: list[int]) -> bool:
         """Elimina líneas de hoja de tiempo de Odoo.
 

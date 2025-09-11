@@ -19,6 +19,7 @@ class OdooDashboardDataService(DashboardDataService):
         self,
         user_id: int,
         employee_id: int,
+        ids: list[int],
         date_from: date,
         date_to: date,
         task_gateway: TaskGateway,
@@ -29,9 +30,9 @@ class OdooDashboardDataService(DashboardDataService):
         """
         try:
             # Construir dominio para filtrar por equipo
-            odoo_timesheet_lines = timesheet_line_gateway.get_timesheet_data_by_team(
-                user_id, employee_id, date_from, date_to
-            )
+            odoo_timesheet_lines = timesheet_line_gateway.all_by_employees(ids)
+
+            print("odoo_timesheet_lines", odoo_timesheet_lines)
             # Obtener información completa de las tareas para manejar parent_id
             task_ids = []
             for line in odoo_timesheet_lines:

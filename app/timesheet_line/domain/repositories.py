@@ -26,6 +26,9 @@ class TimesheetLineGateway(ABC):
     ) -> list[DetailedTimesheetLine]: ...
 
     @abstractmethod
+    def all_by_employees(self, employee_ids: list[int]) -> list[Dict[str, Any]]: ...
+
+    @abstractmethod
     def delete(self, timesheet_lines_ids: list[int]) -> bool: ...
 
     @abstractmethod

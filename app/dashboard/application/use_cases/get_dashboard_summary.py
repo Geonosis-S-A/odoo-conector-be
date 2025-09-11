@@ -46,19 +46,23 @@ class GetDashboardSummaryUseCase:
         """
 
         # 1. Obtener datos de timesheet del equipo
-        timesheet_data = self.dashboard_gateway.get_team_timesheet_data(
-            user_id,
-            employee_id,
-            date_from,
-            date_to,
-            self.task_gateway,
-            self.timesheet_line_gateway,
-        )
 
         # 2. Obtener cantidad de usuarios del equipo
         users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
 
         users_count = len(users)
+
+        ids = [user["id"] for user in users]
+
+        timesheet_data = self.dashboard_gateway.get_team_timesheet_data(
+            user_id,
+            employee_id,
+            ids,
+            date_from,
+            date_to,
+            self.task_gateway,
+            self.timesheet_line_gateway,
+        )
 
         # 3. Calcular KPIs reales
         hours_kpi = self._calculate_hours_kpi(timesheet_data, users_count)
