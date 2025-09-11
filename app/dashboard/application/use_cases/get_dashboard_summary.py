@@ -74,7 +74,7 @@ class GetDashboardSummaryUseCase:
         # 4. Calcular totales desagregados
         by_project = self._calculate_project_totals(timesheet_data)
         by_task = self._calculate_task_totals(timesheet_data)
-        by_employee = self._calculate_employee_totals(timesheet_data)
+        by_employee = self._calculate_employee_totals(timesheet_data, users)
 
         # 5. Crear y retornar el resumen del dashboard
         dashboard_summary = DashboardSummary.create(
@@ -189,17 +189,24 @@ class GetDashboardSummaryUseCase:
         return task_list
 
     def _calculate_employee_totals(
-        self, timesheet_data: List[DetailedTimesheetLine]
+        self, timesheet_data: List[DetailedTimesheetLine], team_users: List[dict]
     ) -> List[EmployeeTotal]:
-        """Calcula totales de horas por empleado con nombres obtenidos de Odoo."""
-        employee_totals = {}
+        """Calcula totales de horas por empleado con nombres obtenidos de Odoo.
 
-        # Agrupar horas por empleado
+        Incluye todos los empleados del equipo, mostrando 0 horas para aquellos
+        que no registraron tiempo en el período seleccionado.
+        """
+        # Inicializar todos los empleados del equipo con 0 horas
+        employee_totals = {}
+        for user in team_users:
+            employee_id = user["id"]
+            employee_totals[employee_id] = 0.0
+
+        # Agrupar horas por empleado (solo para los que tienen registros)
         for record in timesheet_data:
             employee_id = record.employee_id
-            if employee_id not in employee_totals:
-                employee_totals[employee_id] = 0.0
-            employee_totals[employee_id] += record.hours
+            if employee_id in employee_totals:
+                employee_totals[employee_id] += record.hours
 
         # Obtener nombres de empleados desde Odoo
         employee_names = self._get_employee_names(list(employee_totals.keys()))
