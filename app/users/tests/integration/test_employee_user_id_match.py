@@ -20,11 +20,14 @@ def admin_test_client(local_db_session):
 
     # Override para un usuario administrador
     async def override_get_current_user():
+        # levantar el rol approver del dev.py
+        from app.shared.security.role_enums.dev import Roles
+
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Rol de administrador
+            "roles": [Roles.approver],  # Rol de administrador
         }
 
     app.dependency_overrides[get_db] = override_get_db

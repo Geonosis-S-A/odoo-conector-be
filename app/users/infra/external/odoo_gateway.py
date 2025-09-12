@@ -383,6 +383,7 @@ class OdooEmployeeGateway(EmployeeGateway):
             if not employee_data:
                 return None
 
+            print("EMPLEADO TRAIDA DE ODOO", employee_data)
             employee = employee_data[0]
 
             # 2. Preparar datos básicos del empleado (nombre y email del hr.employee)
@@ -403,6 +404,11 @@ class OdooEmployeeGateway(EmployeeGateway):
 
                 if actual_user_id:
                     # Obtener datos del usuario incluyendo roles del res.users
+                    # Intentar con ambos nombres de campo posibles según el entorno de Odoo
+                    user_data = None
+                    groups_field = None
+
+                    # Primero intentar con 'groups_id'
                     try:
                         user_data = cast(
                             List[Dict[str, Any]],
@@ -416,30 +422,36 @@ class OdooEmployeeGateway(EmployeeGateway):
                                 {"fields": ["id", "login", "groups_id"]},
                             ),
                         )
-                    except Exception as e:
-                        user_data = cast(
-                            List[Dict[str, Any]],
-                            self.odoo_client["models"].execute_kw(
-                                self.odoo_client["ODOO_DB"],
-                                self.odoo_client["uid"],
-                                self.odoo_client["ODOO_PASSWORD"],
-                                "res.users",
-                                "read",
-                                [[actual_user_id]],  # Solo el primer usuario encontrado
-                                {"fields": ["group_ids"]},
-                            ),
-                        )
-                        field_name = "group_ids"
+                        groups_field = "groups_id"
+                    except Exception:
+                        # Si falla, intentar con 'group_ids'
+                        try:
+                            user_data = cast(
+                                List[Dict[str, Any]],
+                                self.odoo_client["models"].execute_kw(
+                                    self.odoo_client["ODOO_DB"],
+                                    self.odoo_client["uid"],
+                                    self.odoo_client["ODOO_PASSWORD"],
+                                    "res.users",
+                                    "read",
+                                    [[actual_user_id]],
+                                    {"fields": ["id", "login", "group_ids"]},
+                                ),
+                            )
+                            groups_field = "group_ids"
+                        except Exception as e:
+                            print(
+                                f"Error al obtener datos del usuario {actual_user_id}: {e}"
+                            )
 
-                    if user_data:
+                    if user_data and groups_field:
                         user = user_data[0]
+                        groups = user.get(groups_field, [])
                         result.update(
                             {
                                 "user_id": actual_user_id,
                                 "has_user": True,
-                                "roles": user.get("groups_id", [])
-                                if isinstance(user.get("groups_id"), list)
-                                else [],
+                                "roles": groups if isinstance(groups, list) else [],
                             }
                         )
 
