@@ -424,9 +424,15 @@ class OdooDashboardDataService(DashboardDataService):
                         "subtasks": {},
                         "direct_hours": 0.0,  # Horas cargadas directamente a la tarea
                         "parent_id": None,
+                        "is_virtual_parent": False,  # Campo auxiliar: True si es padre invisible
+                        "has_direct_hours": False,  # Campo auxiliar: True si tiene horas registradas directamente
                     }
 
                 projects_data[project_id]["tasks"][task_id]["total_hours"] += line.hours
+                projects_data[project_id]["tasks"][task_id]["direct_hours"] += (
+                    line.hours
+                )
+                projects_data[project_id]["tasks"][task_id]["has_direct_hours"] = True
             else:
                 # Horas cargadas directamente al proyecto sin tarea
                 projects_data[project_id]["direct_hours"] += line.hours
@@ -476,6 +482,8 @@ class OdooDashboardDataService(DashboardDataService):
                             if parent_id not in parent_tasks:
                                 parent_tasks[parent_id] = {}
                             parent_tasks[parent_id][task_id] = task_data
+                            # IMPORTANTE: Marcar para remover de tareas principales
+                            # (se procesará después del loop)
                         else:
                             # El padre no existe, crear tarea padre virtual
                             if parent_id not in orphaned_subtasks:
@@ -485,6 +493,16 @@ class OdooDashboardDataService(DashboardDataService):
                         # Es tarea principal
                         if task_id not in parent_tasks:
                             parent_tasks[task_id] = {}
+
+            # Remover subtareas de las tareas principales (ya están organizadas bajo sus padres)
+            subtasks_to_remove = []
+            for parent_id, subtasks in parent_tasks.items():
+                for subtask_id in subtasks.keys():
+                    if subtask_id in project_data["tasks"] and subtask_id != parent_id:
+                        subtasks_to_remove.append(subtask_id)
+
+            for subtask_id in subtasks_to_remove:
+                del project_data["tasks"][subtask_id]
 
             # Crear tareas padre virtuales para subtareas huérfanas
             for parent_id, subtasks_list in orphaned_subtasks.items():
@@ -500,6 +518,8 @@ class OdooDashboardDataService(DashboardDataService):
                         "subtasks": {},
                         "direct_hours": 0.0,  # Las horas están todas en subtareas
                         "parent_id": None,
+                        "is_virtual_parent": True,  # PADRE INVISIBLE CREADO VIRTUALMENTE
+                        "has_direct_hours": False,  # No tiene horas directas registradas
                     }
 
                     # Agregar subtareas al padre virtual
@@ -540,6 +560,8 @@ class OdooDashboardDataService(DashboardDataService):
                     "subtasks": {},
                     "direct_hours": 0.0,  # Las horas están todas en subtareas
                     "parent_id": None,
+                    "is_virtual_parent": True,  # PADRE INVISIBLE CREADO VIRTUALMENTE
+                    "has_direct_hours": False,  # No tiene horas directas registradas
                 }
 
                 # Agregar subtareas al padre
@@ -561,16 +583,22 @@ class OdooDashboardDataService(DashboardDataService):
                         subtask["total_hours"] for subtask in subtasks.values()
                     )
 
-                    # IMPORTANTE: Las horas directas de la tarea padre son las que ya tiene
-                    # (antes de agregar subtareas), no se calculan restando
-                    original_parent_hours = parent_task_data["total_hours"]
-
-                    parent_task_data["direct_hours"] = original_parent_hours
-
-                    # Actualizar totales para incluir subtareas
-                    parent_task_data["total_hours"] = (
-                        original_parent_hours + subtasks_hours
-                    )
+                    # Lógica simplificada con campos auxiliares
+                    if parent_task_data.get("is_virtual_parent", False):
+                        # PADRE VIRTUAL: Ya está configurado correctamente, no tocar
+                        pass
+                    else:
+                        # PADRE REAL: Necesita recálculo de totales
+                        if parent_task_data.get("has_direct_hours", False):
+                            # Padre real CON horas directas: total = directas + subtareas
+                            direct_hours = parent_task_data["direct_hours"]
+                            parent_task_data["total_hours"] = (
+                                direct_hours + subtasks_hours
+                            )
+                        else:
+                            # Padre real SIN horas directas: total = solo subtareas
+                            parent_task_data["direct_hours"] = 0.0
+                            parent_task_data["total_hours"] = subtasks_hours
 
                     # Almacenar subtareas en la tarea padre
                     parent_task_data["subtasks"] = subtasks
@@ -657,30 +685,16 @@ class OdooDashboardDataService(DashboardDataService):
             is_artificial=False,
         )
 
-        # Agregar subtareas reales (pero como contenedores, no como nodos hoja)
+        # Agregar subtareas reales como nodos hoja directos
         for subtask_id, subtask_data in task_data["subtasks"].items():
             subtask_item = HierarchicalItem(
                 type="task",
                 id=subtask_id,
                 name=subtask_data["name"],
                 total_hours=subtask_data["total_hours"],
-                data=[],
+                data=[],  # Nodo hoja - sin hijos
                 is_artificial=False,
             )
-
-            # CONSISTENCIA: Cada subtarea real debe tener su propia "Sin subtarea" artificial
-            # para mantener la consistencia de que todos los nodos hoja son artificiales
-            sin_subtarea_real_item = HierarchicalItem(
-                type="task",
-                id=artificial_subtask_id_counter,
-                name="Sin subtarea",
-                total_hours=subtask_data["total_hours"],
-                data=[],
-                is_artificial=True,
-            )
-            subtask_item.data.append(sin_subtarea_real_item)
-            artificial_subtask_id_counter -= 1
-
             task_item.data.append(subtask_item)
 
         # Agregar subtarea artificial "Sin subtarea" si hay horas directas a la tarea padre
