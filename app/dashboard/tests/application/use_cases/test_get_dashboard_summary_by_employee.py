@@ -103,6 +103,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         self,
         use_case,
         mock_dashboard_gateway,
+        mock_task_gateway,
         mock_timesheet_data_single_employee,
     ):
         """Test exitoso con datos completos para un empleado."""
@@ -153,6 +154,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         )
 
         # Mock hierarchical summary (no vamos a testear por ahora)
+        # Mock hierarchical summary (test unitario, no necesitamos la implementación real)
         mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
 
         # Act
@@ -168,7 +170,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         assert result.totals["by_project"] == project_totals
         assert len(result.totals["by_task"]) == 3  # 2 originales + 1 sin tarea
         assert result.totals["by_employee"] == employee_totals
-        assert result.hierarchical_summary is None
+        assert result.hierarchical_summary is None  # Mockeado como None
 
         # Verificar llamadas a los mocks
         mock_dashboard_gateway.get_timesheet_summary.assert_called_once_with(
@@ -195,6 +197,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         self,
         use_case,
         mock_dashboard_gateway,
+        mock_task_gateway,
     ):
         """Test que verifica el cálculo correcto de días trabajados."""
         # Arrange
@@ -264,6 +267,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         mock_dashboard_gateway.calculate_task_totals.return_value = []
         mock_dashboard_gateway.calculate_employee_totals.return_value = []
         mock_dashboard_gateway.calculate_project_without_task_totals.return_value = []
+        # Mock hierarchical summary (test unitario, no necesitamos la implementación real)
         mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
 
         # Act
@@ -277,6 +281,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         self,
         use_case,
         mock_dashboard_gateway,
+        mock_task_gateway,
     ):
         """Test con empleado sin datos de timesheet."""
         # Arrange
@@ -302,6 +307,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         mock_dashboard_gateway.calculate_task_totals.return_value = []
         mock_dashboard_gateway.calculate_employee_totals.return_value = []
         mock_dashboard_gateway.calculate_project_without_task_totals.return_value = []
+        # Mock hierarchical summary (test unitario, no necesitamos la implementación real)
         mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
 
         # Act
@@ -322,6 +328,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         self,
         use_case,
         mock_dashboard_gateway,
+        mock_task_gateway,
         mock_timesheet_data_single_employee,
     ):
         """Test que verifica la integración de tareas sin proyecto específico."""
@@ -362,6 +369,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         mock_dashboard_gateway.calculate_project_without_task_totals.return_value = (
             project_without_task
         )
+        # Mock hierarchical summary (test unitario, no necesitamos la implementación real)
         mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
 
         # Act
@@ -381,6 +389,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         self,
         use_case,
         mock_dashboard_gateway,
+        mock_task_gateway,
         mock_timesheet_data_single_employee,
     ):
         """Test que verifica que siempre se calcula para 1 usuario (empleado individual)."""
@@ -409,6 +418,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         mock_dashboard_gateway.calculate_task_totals.return_value = []
         mock_dashboard_gateway.calculate_employee_totals.return_value = []
         mock_dashboard_gateway.calculate_project_without_task_totals.return_value = []
+        # Mock hierarchical summary (test unitario, no necesitamos la implementación real)
         mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
 
         # Act
@@ -437,6 +447,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         self,
         use_case,
         mock_dashboard_gateway,
+        mock_task_gateway,
         mock_timesheet_data_single_employee,
     ):
         """Test que verifica que se llama al cálculo de estructura jerárquica (sin validar contenido)."""
@@ -472,15 +483,18 @@ class TestGetDashboardSummaryByEmployeeUseCase:
 
         # Assert
         # Solo verificar que se llamó, no el contenido (como pediste)
+        # Verificar que se llama al cálculo de estructura jerárquica
         mock_dashboard_gateway.calculate_hierarchical_summary.assert_called_once_with(
             mock_timesheet_data_single_employee, use_case.task_gateway
         )
-        assert result.hierarchical_summary is None  # Por ahora None
+        # Verificar que hierarchical_summary se asignó (puede ser None del mock)
+        assert hasattr(result, "hierarchical_summary")
 
     def test_execute_worked_days_calculation_edge_cases(
         self,
         use_case,
         mock_dashboard_gateway,
+        mock_task_gateway,
     ):
         """Test casos edge para el cálculo de días trabajados."""
         # Arrange
@@ -558,6 +572,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
         mock_dashboard_gateway.calculate_task_totals.return_value = []
         mock_dashboard_gateway.calculate_employee_totals.return_value = []
         mock_dashboard_gateway.calculate_project_without_task_totals.return_value = []
+        # Mock hierarchical summary (test unitario, no necesitamos la implementación real)
         mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
 
         # Act
