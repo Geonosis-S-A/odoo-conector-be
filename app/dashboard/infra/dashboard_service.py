@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Dict, Any, cast, Optional
+from typing import List, Dict, Any, Optional
 from app.dashboard.domain.repositories import DashboardDataService
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.project.domain.models import Project
@@ -13,19 +13,22 @@ from app.dashboard.domain.models import (
     ProjectTotal,
     TaskTotal,
     EmployeeTotal,
+    HierarchicalSummary,
+    HierarchicalItem,
 )
 import uuid
+
 
 class OdooDashboardDataService(DashboardDataService):
     """Implementación concreta del gateway de datos para dashboard usando Odoo directamente."""
 
     def __init__(
-        self, 
+        self,
         odoo_client: OdooConnection,
         employee_gateway: EmployeeGateway,
         task_gateway: TaskGateway,
         timesheet_line_gateway: TimesheetLineGateway,
-        ):
+    ):
         self.odoo_client = odoo_client
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
@@ -73,7 +76,6 @@ class OdooDashboardDataService(DashboardDataService):
 
         except Exception as e:
             raise Exception(f"Error al obtener datos de timesheet del equipo: {str(e)}")
-
 
     def calculate_hours_kpi(
         self, timesheet_data: List[DetailedTimesheetLine], users_count: int
@@ -233,48 +235,46 @@ class OdooDashboardDataService(DashboardDataService):
 
             return employee_names
 
-        except Exception as e:
+        except Exception:
             # En caso de error, retornar nombres genéricos
             return {emp_id: f"Empleado {emp_id}" for emp_id in employee_ids}
 
     def calculate_project_without_task_totals(
-        self, 
-        project_totals: List[ProjectTotal], 
-        task_totals: List[TaskTotal]
+        self, project_totals: List[ProjectTotal], task_totals: List[TaskTotal]
     ) -> List[TaskTotal]:
         """
         Calcula las horas cargadas directamente a proyectos sin tarea específica.
-        
+
         Compara los totales por proyecto con los totales por tarea para determinar
         qué horas fueron cargadas directamente al proyecto sin asignar a una tarea.
-        
+
         Args:
             project_totals: Lista de totales por proyecto
             task_totals: Lista de totales por tarea
-            
+
         Returns:
             Lista de ProjectWithoutTaskTotal con las horas cargadas sin tarea
         """
         # Crear un diccionario para sumar las horas por proyecto desde las tareas
         task_hours_by_project = {}
-        
+
         for task in task_totals:
             project_id = task.project_id
             if project_id not in task_hours_by_project:
                 task_hours_by_project[project_id] = 0.0
             task_hours_by_project[project_id] += task.hours
-        
+
         # Calcular las horas sin tarea para cada proyecto
         project_without_task_list = []
-        
+
         for project in project_totals:
             project_id = project.project_id
             total_project_hours = project.hours
             task_hours = task_hours_by_project.get(project_id, 0.0)
-            
+
             # Las horas sin tarea son la diferencia entre el total del proyecto y las horas de tareas
             hours_without_task = total_project_hours - task_hours
-            
+
             # Solo incluir proyectos que tienen horas cargadas sin tarea
             if hours_without_task > 0:
                 project_without_task_list.append(
@@ -282,13 +282,13 @@ class OdooDashboardDataService(DashboardDataService):
                         task_id=int(uuid.uuid4()),
                         project_id=project_id,
                         task_name="Sin tarea",
-                        hours=hours_without_task
+                        hours=hours_without_task,
                     )
                 )
-        
+
         # Ordenar por horas sin tarea (mayor a menor)
         project_without_task_list.sort(key=lambda x: x.hours, reverse=True)
-        
+
         return project_without_task_list
 
     def _transform_odoo_to_detailed_domain(
@@ -341,7 +341,7 @@ class OdooDashboardDataService(DashboardDataService):
                 create_date = datetime.fromisoformat(
                     odoo_line["create_date"].replace("Z", "+00:00")
                 )
-            except:
+            except (ValueError, AttributeError):
                 create_date = None
 
         # Parsear fecha
@@ -359,3 +359,389 @@ class OdooDashboardDataService(DashboardDataService):
             create_date=create_date,
             notification=None,  # No necesitamos notificaciones para dashboard
         )
+
+    def _get_task_display_name_for_hierarchy(self, task_with_parent_info) -> str:
+        """
+        Obtiene el nombre de la tarea SIN concatenación para la estructura jerárquica.
+        A diferencia de get_display_name(), esto retorna solo el nombre de la tarea.
+        """
+        return task_with_parent_info.name
+
+    def _clean_task_name_for_hierarchy(self, task_name: str) -> str:
+        """
+        Limpia el nombre de una tarea que puede estar concatenado con flecha.
+        Retorna solo la parte después de la flecha (→) si existe, o el nombre completo si no.
+
+        Ejemplos:
+        - "Tarea Padre → Subtarea" -> "Subtarea"
+        - "Tarea Simple" -> "Tarea Simple"
+        """
+        if " → " in task_name:
+            return task_name.split(" → ")[-1].strip()
+        return task_name
+
+    def calculate_hierarchical_summary(
+        self, timesheet_data: List[DetailedTimesheetLine], task_gateway: TaskGateway
+    ) -> HierarchicalSummary:
+        """
+        Calcula la estructura jerárquica de proyectos y tareas con casos borde.
+
+        Esta implementación maneja:
+        1. Horas cargadas directamente a proyectos sin tarea → Tarea artificial "Sin tarea"
+        2. Horas cargadas a tareas padre sin subtareas → Subtarea artificial "Sin subtarea"
+        3. Estructura anidada Proyecto → Tarea → Subtarea
+        """
+        # Diccionario para agrupar por proyecto
+        projects_data = {}
+
+        # Contadores para IDs artificiales (números negativos)
+        artificial_task_id_counter = -1000
+        artificial_subtask_id_counter = -2000
+
+        # Agrupar datos por proyecto
+        for line in timesheet_data:
+            project_id = line.project.id
+            project_name = line.project.name
+
+            if project_id not in projects_data:
+                projects_data[project_id] = {
+                    "name": project_name,
+                    "total_hours": 0.0,
+                    "tasks": {},
+                    "direct_hours": 0.0,  # Horas cargadas directamente al proyecto
+                }
+
+            projects_data[project_id]["total_hours"] += line.hours
+
+            if line.task:
+                task_id = line.task.id
+                task_name = self._clean_task_name_for_hierarchy(line.task.name)
+
+                if task_id not in projects_data[project_id]["tasks"]:
+                    projects_data[project_id]["tasks"][task_id] = {
+                        "name": task_name,
+                        "total_hours": 0.0,
+                        "subtasks": {},
+                        "direct_hours": 0.0,  # Horas cargadas directamente a la tarea
+                        "parent_id": None,
+                    }
+
+                projects_data[project_id]["tasks"][task_id]["total_hours"] += line.hours
+            else:
+                # Horas cargadas directamente al proyecto sin tarea
+                projects_data[project_id]["direct_hours"] += line.hours
+
+        # Obtener información de parent_id para todas las tareas
+        all_task_ids = []
+        for project_data in projects_data.values():
+            all_task_ids.extend(project_data["tasks"].keys())
+
+        # Primera consulta para obtener parent_ids
+        initial_task_info_map = (
+            task_gateway.get_tasks_info_with_parents(all_task_ids)
+            if all_task_ids
+            else {}
+        )
+
+        # Identificar parent_ids que no están en all_task_ids
+        additional_parent_ids = set()
+        for task_info in initial_task_info_map.values():
+            if task_info.parent_id and task_info.parent_id not in all_task_ids:
+                additional_parent_ids.add(task_info.parent_id)
+
+        # Segunda consulta para obtener información de los padres faltantes
+        parent_task_info_map = {}
+        if additional_parent_ids:
+            parent_task_info_map = task_gateway.get_tasks_info_with_parents(
+                list(additional_parent_ids)
+            )
+
+        # Combinar ambos mapas
+        task_info_map = {**initial_task_info_map, **parent_task_info_map}
+
+        # Organizar tareas por parent_id y calcular horas directas vs subtareas
+        for project_id, project_data in projects_data.items():
+            # Identificar tareas padre e hijas
+            parent_tasks = {}
+            orphaned_subtasks = {}  # Subtareas cuyo padre no está registrado
+
+            for task_id, task_data in project_data["tasks"].items():
+                if task_id in task_info_map:
+                    parent_id = task_info_map[task_id].parent_id
+                    if parent_id:
+                        # Es una subtarea
+                        task_data["parent_id"] = parent_id
+                        if parent_id in project_data["tasks"]:
+                            # El padre existe, agregar como subtarea normal
+                            if parent_id not in parent_tasks:
+                                parent_tasks[parent_id] = {}
+                            parent_tasks[parent_id][task_id] = task_data
+                        else:
+                            # El padre no existe, crear tarea padre virtual
+                            if parent_id not in orphaned_subtasks:
+                                orphaned_subtasks[parent_id] = []
+                            orphaned_subtasks[parent_id].append((task_id, task_data))
+                    else:
+                        # Es tarea principal
+                        if task_id not in parent_tasks:
+                            parent_tasks[task_id] = {}
+
+            # Crear tareas padre virtuales para subtareas huérfanas
+            for parent_id, subtasks_list in orphaned_subtasks.items():
+                if parent_id in task_info_map:
+                    parent_info = task_info_map[parent_id]
+                    # Crear tarea padre virtual
+                    total_hours = sum(
+                        subtask_data["total_hours"] for _, subtask_data in subtasks_list
+                    )
+                    parent_task_data = {
+                        "name": self._get_task_display_name_for_hierarchy(parent_info),
+                        "total_hours": total_hours,
+                        "subtasks": {},
+                        "direct_hours": 0.0,  # Las horas están todas en subtareas
+                        "parent_id": None,
+                    }
+
+                    # Agregar subtareas al padre virtual
+                    for subtask_id, subtask_data in subtasks_list:
+                        parent_task_data["subtasks"][subtask_id] = subtask_data
+                        # Remover la subtarea de las tareas principales
+                        if subtask_id in project_data["tasks"]:
+                            del project_data["tasks"][subtask_id]
+
+                    # Agregar padre virtual a las tareas del proyecto
+                    project_data["tasks"][parent_id] = parent_task_data
+                    parent_tasks[parent_id] = parent_task_data["subtasks"]
+
+            # Identificar tareas padre que existen en TaskGateway pero no en project_data
+            # (caso: solo hay subtareas registradas, sin horas en la tarea padre)
+            subtasks_needing_parent = {}
+            for task_id, task_data in list(project_data["tasks"].items()):
+                if task_data.get("parent_id"):
+                    parent_id = task_data["parent_id"]
+                    if (
+                        parent_id not in project_data["tasks"]
+                        and parent_id in task_info_map
+                    ):
+                        # La tarea padre existe en TaskGateway pero no tiene horas registradas
+                        if parent_id not in subtasks_needing_parent:
+                            subtasks_needing_parent[parent_id] = []
+                        subtasks_needing_parent[parent_id].append((task_id, task_data))
+
+            # Crear tareas padre para subtareas que necesitan padre
+            for parent_id, subtasks_list in subtasks_needing_parent.items():
+                parent_info = task_info_map[parent_id]
+                total_hours = sum(
+                    subtask_data["total_hours"] for _, subtask_data in subtasks_list
+                )
+                parent_task_data = {
+                    "name": self._get_task_display_name_for_hierarchy(parent_info),
+                    "total_hours": total_hours,
+                    "subtasks": {},
+                    "direct_hours": 0.0,  # Las horas están todas en subtareas
+                    "parent_id": None,
+                }
+
+                # Agregar subtareas al padre
+                for subtask_id, subtask_data in subtasks_list:
+                    parent_task_data["subtasks"][subtask_id] = subtask_data
+                    # Remover la subtarea de las tareas principales
+                    if subtask_id in project_data["tasks"]:
+                        del project_data["tasks"][subtask_id]
+
+                # Agregar padre a las tareas del proyecto
+                project_data["tasks"][parent_id] = parent_task_data
+                parent_tasks[parent_id] = parent_task_data["subtasks"]
+
+            # Calcular horas directas de tareas padre (excluyendo subtareas)
+            for parent_task_id, subtasks in parent_tasks.items():
+                if parent_task_id in project_data["tasks"]:
+                    parent_task_data = project_data["tasks"][parent_task_id]
+                    subtasks_hours = sum(
+                        subtask["total_hours"] for subtask in subtasks.values()
+                    )
+
+                    # IMPORTANTE: Las horas directas de la tarea padre son las que ya tiene
+                    # (antes de agregar subtareas), no se calculan restando
+                    original_parent_hours = parent_task_data["total_hours"]
+
+                    parent_task_data["direct_hours"] = original_parent_hours
+
+                    # Actualizar totales para incluir subtareas
+                    parent_task_data["total_hours"] = (
+                        original_parent_hours + subtasks_hours
+                    )
+
+                    # Almacenar subtareas en la tarea padre
+                    parent_task_data["subtasks"] = subtasks
+
+        # Construir estructura jerárquica
+        hierarchical_items = []
+        total_hours = 0.0
+
+        for project_id, project_data in projects_data.items():
+            project_item = HierarchicalItem(
+                type="project",
+                id=project_id,
+                name=project_data["name"],
+                total_hours=project_data["total_hours"],
+                data=[],
+                is_artificial=False,
+            )
+
+            # Agregar tareas principales al proyecto
+            for task_id, task_data in project_data["tasks"].items():
+                # Solo procesar tareas principales (sin parent_id)
+                if not task_data.get("parent_id"):
+                    task_item, updated_counter = self._build_task_item(
+                        task_id, task_data, artificial_subtask_id_counter
+                    )
+                    project_item.data.append(task_item)
+                    artificial_subtask_id_counter = updated_counter
+
+            # Agregar tarea artificial "Sin tarea" si hay horas directas al proyecto
+            if project_data["direct_hours"] > 0:
+                sin_tarea_item = HierarchicalItem(
+                    type="task",
+                    id=artificial_task_id_counter,
+                    name="Sin tarea",
+                    total_hours=project_data["direct_hours"],
+                    data=[],
+                    is_artificial=True,
+                )
+                project_item.data.append(sin_tarea_item)
+                artificial_task_id_counter -= 1
+
+            # Ordenar tareas por horas (mayor a menor)
+            project_item.data.sort(key=lambda x: x.total_hours, reverse=True)
+
+            # IMPORTANTE: Recalcular totales del proyecto basándose en las tareas finales
+            # Los valores originales en project_data pueden estar desactualizados
+            actual_project_hours = sum(task.total_hours for task in project_item.data)
+
+            # Actualizar el proyecto con los totales correctos
+            project_item.total_hours = actual_project_hours
+
+            hierarchical_items.append(project_item)
+            total_hours += actual_project_hours
+
+        # Ordenar proyectos por horas (mayor a menor)
+        hierarchical_items.sort(key=lambda x: x.total_hours, reverse=True)
+
+        # OPTIMIZACIÓN: Eliminar nodos intermedios que solo tienen un hijo artificial
+        optimized_items = []
+        for project_item in hierarchical_items:
+            optimized_project = self._optimize_single_artificial_children(project_item)
+            optimized_items.append(optimized_project)
+
+        return HierarchicalSummary(
+            total_hours=total_hours,
+            data=optimized_items,
+        )
+
+    def _build_task_item(
+        self,
+        task_id: int,
+        task_data: dict,
+        artificial_subtask_id_counter: int,
+    ) -> tuple[HierarchicalItem, int]:
+        """
+        Construye un elemento de tarea con sus subtareas.
+        """
+        task_item = HierarchicalItem(
+            type="task",
+            id=task_id,
+            name=task_data["name"],
+            total_hours=task_data["total_hours"],
+            data=[],
+            is_artificial=False,
+        )
+
+        # Agregar subtareas reales (pero como contenedores, no como nodos hoja)
+        for subtask_id, subtask_data in task_data["subtasks"].items():
+            subtask_item = HierarchicalItem(
+                type="task",
+                id=subtask_id,
+                name=subtask_data["name"],
+                total_hours=subtask_data["total_hours"],
+                data=[],
+                is_artificial=False,
+            )
+
+            # CONSISTENCIA: Cada subtarea real debe tener su propia "Sin subtarea" artificial
+            # para mantener la consistencia de que todos los nodos hoja son artificiales
+            sin_subtarea_real_item = HierarchicalItem(
+                type="task",
+                id=artificial_subtask_id_counter,
+                name="Sin subtarea",
+                total_hours=subtask_data["total_hours"],
+                data=[],
+                is_artificial=True,
+            )
+            subtask_item.data.append(sin_subtarea_real_item)
+            artificial_subtask_id_counter -= 1
+
+            task_item.data.append(subtask_item)
+
+        # Agregar subtarea artificial "Sin subtarea" si hay horas directas a la tarea padre
+        if task_data["direct_hours"] > 0:
+            sin_subtarea_padre_item = HierarchicalItem(
+                type="task",
+                id=artificial_subtask_id_counter,
+                name="Sin subtarea",
+                total_hours=task_data["direct_hours"],
+                data=[],
+                is_artificial=True,
+            )
+            task_item.data.append(sin_subtarea_padre_item)
+
+        # Ordenar subtareas por horas (mayor a menor)
+        task_item.data.sort(key=lambda x: x.total_hours, reverse=True)
+
+        return task_item, artificial_subtask_id_counter
+
+    def _optimize_single_artificial_children(
+        self, item: HierarchicalItem
+    ) -> HierarchicalItem:
+        """
+        Optimiza la estructura eliminando nodos intermedios que solo tienen un hijo artificial.
+
+        Lógica:
+        - Si un nodo tiene exactamente 1 hijo y ese hijo es artificial
+        - Entonces el nodo se convierte en nodo hoja (sin hijos)
+        - Esto elimina redundancia y reduce el tamaño del JSON
+
+        Args:
+            item: El nodo a optimizar
+
+        Returns:
+            El nodo optimizado
+        """
+        # Primero, optimizar recursivamente todos los hijos
+        optimized_children = []
+        for child in item.data:
+            optimized_child = self._optimize_single_artificial_children(child)
+            optimized_children.append(optimized_child)
+
+        # Aplicar optimización al nodo actual
+        if len(optimized_children) == 1 and optimized_children[0].is_artificial:
+            # Caso de optimización: Un solo hijo artificial
+            # Convertir este nodo en hoja (eliminar el hijo artificial redundante)
+            return HierarchicalItem(
+                type=item.type,
+                id=item.id,
+                name=item.name,
+                total_hours=item.total_hours,
+                data=[],  # Sin hijos, se convierte en nodo hoja
+                is_artificial=False,  # El nodo real se mantiene como real
+            )
+        else:
+            # No se aplica optimización, mantener estructura actual
+            return HierarchicalItem(
+                type=item.type,
+                id=item.id,
+                name=item.name,
+                total_hours=item.total_hours,
+                data=optimized_children,
+                is_artificial=item.is_artificial,
+            )

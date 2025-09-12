@@ -12,6 +12,8 @@ from app.dashboard.api.schemas import (
     EmployeeTotalResponse,
     DashboardSummaryResponseByEmployee,
     DashboardSummaryMetaResponseByEmployee,
+    HierarchicalSummaryResponse,
+    HierarchicalItemResponse,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -71,6 +73,7 @@ def get_task_gateway(
             status_code=500, detail="Error al conectar con el gateway de tareas"
         )
 
+
 def get_dashboard_data_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
@@ -79,7 +82,9 @@ def get_dashboard_data_gateway(
 ) -> DashboardDataService:
     """Dependencia para obtener el gateway de datos de dashboard."""
     try:
-        return OdooDashboardDataService(odoo_connection, employee_gateway, task_gateway, timesheet_line_gateway)
+        return OdooDashboardDataService(
+            odoo_connection, employee_gateway, task_gateway, timesheet_line_gateway
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de dashboard"
@@ -133,7 +138,9 @@ async def get_dashboard_summary(
         use_case = GetDashboardSummaryUseCase(
             dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
         )
-        dashboard_summary = use_case.execute(user_id, requester_employee_id, date_from, date_to)
+        dashboard_summary = use_case.execute(
+            user_id, requester_employee_id, date_from, date_to
+        )
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema(dashboard_summary)
 
@@ -258,6 +265,13 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
         ],
     )
 
+    # Transformar estructura jerárquica si existe
+    hierarchical_summary_response = None
+    if dashboard_summary.hierarchical_summary:
+        hierarchical_summary_response = _transform_hierarchical_summary(
+            dashboard_summary.hierarchical_summary
+        )
+
     # Crear respuesta completa
     return DashboardSummaryResponse(
         meta=DashboardSummaryMetaResponse(
@@ -265,10 +279,41 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
         ),
         summary=summary_response,
         totals=totals_response,
+        hierarchical_summary=hierarchical_summary_response,
     )
 
 
-def _transform_to_response_schema_by_employee(dashboard_summary) -> DashboardSummaryResponseByEmployee:
+def _transform_hierarchical_summary(
+    hierarchical_summary,
+) -> HierarchicalSummaryResponse:
+    """Transforma la estructura jerárquica del dominio al schema de respuesta."""
+    return HierarchicalSummaryResponse(
+        total_hours=hierarchical_summary.total_hours,
+        data=[_transform_hierarchical_item(item) for item in hierarchical_summary.data],
+    )
+
+
+def _transform_hierarchical_item(item) -> HierarchicalItemResponse:
+    """Transforma un item jerárquico del dominio al schema de respuesta."""
+    # Para nodos artificiales, no incluir el campo 'data' (siempre están vacíos)
+    # Para nodos no artificiales, incluir 'data' solo si tienen hijos
+    data_field = None
+    if not item.is_artificial and item.data:
+        data_field = [_transform_hierarchical_item(child) for child in item.data]
+
+    return HierarchicalItemResponse(
+        type=item.type,
+        id=item.id,
+        name=item.name,
+        total_hours=item.total_hours,
+        data=data_field,
+        is_artificial=item.is_artificial,
+    )
+
+
+def _transform_to_response_schema_by_employee(
+    dashboard_summary,
+) -> DashboardSummaryResponseByEmployee:
     """Transforma el modelo de dominio al esquema de respuesta de la API."""
 
     # Transformar KPIs
@@ -325,6 +370,13 @@ def _transform_to_response_schema_by_employee(dashboard_summary) -> DashboardSum
         ],
     )
 
+    # Transformar estructura jerárquica si existe
+    hierarchical_summary_response = None
+    if dashboard_summary.hierarchical_summary:
+        hierarchical_summary_response = _transform_hierarchical_summary(
+            dashboard_summary.hierarchical_summary
+        )
+
     # Crear respuesta completa
     return DashboardSummaryResponseByEmployee(
         meta=DashboardSummaryMetaResponseByEmployee(
@@ -333,4 +385,5 @@ def _transform_to_response_schema_by_employee(dashboard_summary) -> DashboardSum
         ),
         summary=summary_response,
         totals=totals_response,
+        hierarchical_summary=hierarchical_summary_response,
     )
