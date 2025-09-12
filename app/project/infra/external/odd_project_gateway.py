@@ -20,8 +20,8 @@ class OdooProjectGateway(ProjectGateway):
             ("active", "=", True),  # Solo proyectos activos
             (
                 "stage_id",
-                "in",
-                ProjectStages.active_stages(),
+                "not in",
+                ProjectStages.inactive_stages(),
             ),  # Solo proyectos en etapas activas
         ]
 
