@@ -60,8 +60,12 @@ class GetDashboardSummaryUseCase:
         )
 
         # 3. Calcular KPIs reales
-        hours_kpi = self.dashboard_gateway.calculate_hours_kpi(timesheet_data, users_count)
-        entries_kpi = self.dashboard_gateway.calculate_entries_kpi(timesheet_data, users_count)
+        hours_kpi = self.dashboard_gateway.calculate_hours_kpi(
+            timesheet_data, users_count
+        )
+        entries_kpi = self.dashboard_gateway.calculate_entries_kpi(
+            timesheet_data, users_count
+        )
         daily_average_kpi = self.dashboard_gateway.calculate_daily_average_kpi(
             timesheet_data, users_count, date_from, date_to
         )
@@ -69,17 +73,26 @@ class GetDashboardSummaryUseCase:
         # 4. Calcular totales desagregados
         by_project = self.dashboard_gateway.calculate_project_totals(timesheet_data)
         by_task = self.dashboard_gateway.calculate_task_totals(timesheet_data)
-        by_employee = self.dashboard_gateway.calculate_employee_totals(timesheet_data, users)
-        
+        by_employee = self.dashboard_gateway.calculate_employee_totals(
+            timesheet_data, users
+        )
+
         # 5. Calcular horas cargadas a proyectos sin tarea específica
-        by_project_without_task = self.dashboard_gateway.calculate_project_without_task_totals(
-            by_project, by_task
+        by_project_without_task = (
+            self.dashboard_gateway.calculate_project_without_task_totals(
+                by_project, by_task
+            )
         )
 
         "append de by_project_without_task a by_task"
         by_task.extend(by_project_without_task)
 
-        # 6. Crear y retornar el resumen del dashboard
+        # 6. Calcular nueva estructura jerárquica
+        hierarchical_summary = self.dashboard_gateway.calculate_hierarchical_summary(
+            timesheet_data, self.task_gateway
+        )
+
+        # 7. Crear y retornar el resumen del dashboard
         dashboard_summary = DashboardSummary.create(
             users_count=users_count,
             hours_selected_period=hours_kpi,
@@ -88,8 +101,7 @@ class GetDashboardSummaryUseCase:
             by_project=by_project,
             by_task=by_task,
             by_employee=by_employee,
+            hierarchical_summary=hierarchical_summary,
         )
 
         return dashboard_summary
-
-   
