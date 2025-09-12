@@ -1,5 +1,6 @@
 from app.project.domain.gateway import ProjectGateway
 from app.project.domain.models import Project
+from app.shared.security.project_stages import ProjectStages
 
 
 class OdooProjectGateway(ProjectGateway):
@@ -8,11 +9,20 @@ class OdooProjectGateway(ProjectGateway):
 
     def all(self) -> list[Project] | None:
         """
-        Obtiene todos los proyectos activos que tienen cuenta analítica activa.
+        Obtiene todos los proyectos activos que están en etapas activas.
         Solo devuelve proyectos que están listos para crear timesheets.
+
+        Utiliza el enum ProjectStages para obtener las etapas activas según el ambiente:
+        - En DEV: To Do (ID: 1) e In Progress (ID: 2)
+        - En STAGING: IDs configurados para ese ambiente
         """
         domain = [
             ("active", "=", True),  # Solo proyectos activos
+            (
+                "stage_id",
+                "in",
+                ProjectStages.active_stages(),
+            ),  # Solo proyectos en etapas activas
         ]
 
         projects = self.odoo_client["models"].execute_kw(
@@ -22,7 +32,7 @@ class OdooProjectGateway(ProjectGateway):
             "project.project",
             "search_read",
             [domain],
-            {"fields": ["id", "name"]},
+            {"fields": ["id", "name", "stage_id"]},
         )
 
         if not projects:
