@@ -7,4 +7,4 @@ class Roles(IntEnum):
     Ajusta los valores si en DEV/LOCAL cambian los IDs de Odoo.
     """
 
-    approver = 30
+    approver = 31

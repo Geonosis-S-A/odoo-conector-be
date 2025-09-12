@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from app.timesheet_line.domain.models import (
     CreateTimesheetLineNotification,
     DetailedTimesheetLine,
@@ -23,7 +23,13 @@ class TimesheetLineGateway(ABC):
         validated: Optional[bool] = None,
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
+        team_members_ids: Optional[list[int]] = None,
     ) -> list[DetailedTimesheetLine]: ...
+
+    @abstractmethod
+    def all_by_employees(
+        self, employee_ids: list[int], date_from: date, date_to: date
+    ) -> list[Dict[str, Any]]: ...
 
     @abstractmethod
     def delete(self, timesheet_lines_ids: list[int]) -> bool: ...
@@ -41,6 +47,12 @@ class TimesheetLineGateway(ABC):
 
     @abstractmethod
     def validate(self, timesheet_line_ids: list[int]) -> bool: ...
+
+
+    @abstractmethod
+    def get_team_users(
+        self, user_id: int, employee_id: int
+    ) -> list[Dict[str, Any]]: ...
 
 
 class TimesheetLineNotificationRepository(ABC):

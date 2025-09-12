@@ -154,11 +154,13 @@ def test_send_review_mail_success_admin_user(
     from app.shared.security.dependencies import get_current_user
 
     async def mock_admin_user():
+        #levantar el rol approver del dev.py
+        from app.shared.security.role_enums.dev import Roles
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     # Override dependencies
@@ -267,13 +269,13 @@ def test_send_review_mail_approver_not_found(
     # Mock admin user
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     # Override dependencies
@@ -314,13 +316,13 @@ def test_send_review_mail_multiple_timesheets_same_employee(
     # Mock admin user
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     # Override dependencies
@@ -396,13 +398,13 @@ def test_send_review_mail_without_body(
     # Mock admin user
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     # Override dependencies
@@ -465,13 +467,13 @@ def test_send_review_mail_email_service_exception(
     # Mock admin user
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     # Configure mock to throw exception
@@ -539,13 +541,13 @@ def test_send_review_mail_empty_timesheetline_ids(
     # Mock admin user
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     # Override dependencies

@@ -5,8 +5,6 @@ from app.auth.infra.auth_service import JWTPayload
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
-from app.shared.security.roles import Roles, user_has_role
-from app.users.application.use_cases.sync_users import SyncUsersUseCase
 from app.users.application.use_cases.sync_single_user_changes import (
     SyncSingleUserChangesUseCase,
 )
@@ -14,61 +12,12 @@ from app.users.application.use_cases.get_all_employees import GetAllEmployeesUse
 from app.users.infra.db.repositories import SQLModelUserRepository
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.users.api.schemas import (
-    UserSyncResponse,
     SingleUserSyncResponse,
     EmployeesListResponse,
     EmployeeResponse,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
-
-
-@router.post("/sync", response_model=UserSyncResponse)
-async def sync_users(
-    db: Session = Depends(get_db),
-    current_user: JWTPayload = Depends(get_current_user),
-):
-    """
-    Sincroniza los usuarios desde Odoo a la base de datos local.
-    - Los usuarios nuevos se crean como inactivos con sus roles de Odoo
-    - Los usuarios existentes se actualizan con sus datos y roles más recientes
-    - Mantiene el estado de activación e is_superuser de usuarios existentes
-    """
-    roles: list[int] = current_user["roles"]
-    is_admin = user_has_role(roles, Roles.approver)
-    if not is_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="No tienes permisos para sincronizar usuarios",
-        )
-
-    try:
-        # Inicializar dependencias
-        odoo_client = get_odoo_connection()
-        employee_gateway = OdooEmployeeGateway(odoo_client)
-        user_repository = SQLModelUserRepository(db)
-
-        # Crear y ejecutar caso de uso
-        use_case = SyncUsersUseCase(
-            employee_gateway=employee_gateway,
-            user_repository=user_repository,
-        )
-
-        # Ejecutar sincronización y obtener estadísticas
-        sync_result = use_case.execute()
-
-        return UserSyncResponse(
-            success=True,
-            message="Sincronización completada exitosamente",
-            users_created=sync_result["created"],
-            users_updated=sync_result["updated"],
-            total_processed=sync_result["total_processed"],
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error al sincronizar usuarios: {str(e)}"
-        )
 
 
 @router.post("/sync/{employee_id}", response_model=SingleUserSyncResponse)
