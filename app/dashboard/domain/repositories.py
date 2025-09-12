@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from datetime import date
 from typing import List, Dict, Any
 
-from app.dashboard.domain.models import KPI
+from app.dashboard.domain.models import KPI, HierarchicalSummary
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.task.domain.gateway import TaskGateway
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
@@ -34,51 +34,81 @@ class DashboardDataService(ABC):
             Lista de DetailedTimesheetLine del equipo en el período
         """
         pass
-    
+
     @abstractmethod
-    def calculate_hours_kpi(self, timesheet_data: List[DetailedTimesheetLine], users_count: int) -> KPI:
+    def calculate_hours_kpi(
+        self, timesheet_data: List[DetailedTimesheetLine], users_count: int
+    ) -> KPI:
         """Calcula el KPI de horas del período seleccionado."""
         pass
-    
+
     @abstractmethod
-    def calculate_entries_kpi(self, timesheet_data: List[DetailedTimesheetLine], users_count: int) -> KPI:
+    def calculate_entries_kpi(
+        self, timesheet_data: List[DetailedTimesheetLine], users_count: int
+    ) -> KPI:
         """Calcula el KPI de entradas del período seleccionado."""
         pass
-    
+
     @abstractmethod
-    def calculate_daily_average_kpi(self, timesheet_data: List[DetailedTimesheetLine], users_count: int, date_from: date, date_to: date) -> KPI:
+    def calculate_daily_average_kpi(
+        self,
+        timesheet_data: List[DetailedTimesheetLine],
+        users_count: int,
+        date_from: date,
+        date_to: date,
+    ) -> KPI:
         """Calcula el KPI de promedio diario de horas."""
         pass
-    
+
     @abstractmethod
-    def calculate_project_totals(self, timesheet_data: List[DetailedTimesheetLine]) -> List[ProjectTotal]:
+    def calculate_project_totals(
+        self, timesheet_data: List[DetailedTimesheetLine]
+    ) -> List[ProjectTotal]:
         """Calcula los totales de horas por proyecto."""
         pass
-    
+
     @abstractmethod
-    def calculate_task_totals(self, timesheet_data: List[DetailedTimesheetLine]) -> List[TaskTotal]:
+    def calculate_task_totals(
+        self, timesheet_data: List[DetailedTimesheetLine]
+    ) -> List[TaskTotal]:
         """Calcula los totales de horas por tarea."""
         pass
-    
+
     @abstractmethod
-    def calculate_employee_totals(self, timesheet_data: List[DetailedTimesheetLine], team_users: List[dict]) -> List[EmployeeTotal]:
+    def calculate_employee_totals(
+        self, timesheet_data: List[DetailedTimesheetLine], team_users: List[dict]
+    ) -> List[EmployeeTotal]:
         """Calcula los totales de horas por empleado."""
         pass
-    
+
     @abstractmethod
     def calculate_project_without_task_totals(
-        self, 
-        project_totals: List[ProjectTotal], 
-        task_totals: List[TaskTotal]
+        self, project_totals: List[ProjectTotal], task_totals: List[TaskTotal]
     ) -> List[TaskTotal]:
         """
         Calcula las horas cargadas directamente a proyectos sin tarea específica.
-        
+
         Args:
             project_totals: Lista de totales por proyecto
             task_totals: Lista de totales por tarea
-            
+
         Returns:
             Lista de ProjectWithoutTaskTotal con las horas cargadas sin tarea
+        """
+        pass
+
+    @abstractmethod
+    def calculate_hierarchical_summary(
+        self, timesheet_data: List[DetailedTimesheetLine], task_gateway: TaskGateway
+    ) -> HierarchicalSummary:
+        """
+        Calcula la estructura jerárquica de proyectos y tareas con casos borde.
+
+        Args:
+            timesheet_data: Lista de líneas de timesheet con información detallada
+            task_gateway: Gateway de tareas para obtener información de parent_id
+
+        Returns:
+            HierarchicalSummary con la estructura anidada completa
         """
         pass
