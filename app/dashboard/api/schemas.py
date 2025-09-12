@@ -42,8 +42,7 @@ class HierarchicalItemResponse(BaseModel):
     id: int  # project_id para proyectos, task_id para tareas
     name: str
     total_hours: float
-    total_entries: int
-    data: List["HierarchicalItemResponse"]
+    data: Optional[List["HierarchicalItemResponse"]] = None
     is_artificial: bool = False
 
 
@@ -51,7 +50,6 @@ class HierarchicalSummaryResponse(BaseModel):
     """Schema de respuesta para el resumen jerárquico."""
 
     total_hours: float
-    total_entries: int
     data: List[HierarchicalItemResponse]
 
 

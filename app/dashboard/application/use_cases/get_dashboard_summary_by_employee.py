@@ -45,7 +45,6 @@ class GetDashboardSummaryByEmployeeUseCase:
             DashboardSummary con todos los KPIs y totales calculados
         """
 
-
         timesheet_data = self.dashboard_gateway.get_timesheet_summary(
             [employee_id],
             date_from,
@@ -54,7 +53,6 @@ class GetDashboardSummaryByEmployeeUseCase:
             self.timesheet_line_gateway,
         )
 
-    
         dias_trabajados = {line.date for line in timesheet_data if line.hours > 0}
         dias_trabajados_count = len(dias_trabajados)
         # 3. Calcular KPIs reales
@@ -67,17 +65,26 @@ class GetDashboardSummaryByEmployeeUseCase:
         # 4. Calcular totales desagregados
         by_project = self.dashboard_gateway.calculate_project_totals(timesheet_data)
         by_task = self.dashboard_gateway.calculate_task_totals(timesheet_data)
-        by_employee = self.dashboard_gateway.calculate_employee_totals(timesheet_data, [{"id": employee_id}])
+        by_employee = self.dashboard_gateway.calculate_employee_totals(
+            timesheet_data, [{"id": employee_id}]
+        )
 
         # 5. Calcular horas cargadas a proyectos sin tarea específica
-        by_project_without_task = self.dashboard_gateway.calculate_project_without_task_totals(
-            by_project, by_task
+        by_project_without_task = (
+            self.dashboard_gateway.calculate_project_without_task_totals(
+                by_project, by_task
+            )
         )
 
         "append de by_project_without_task a by_task"
         by_task.extend(by_project_without_task)
 
-        # 6. Crear y retornar el resumen del dashboard
+        # 6. Calcular nueva estructura jerárquica
+        hierarchical_summary = self.dashboard_gateway.calculate_hierarchical_summary(
+            timesheet_data, self.task_gateway
+        )
+
+        # 7. Crear y retornar el resumen del dashboard
         dashboard_summary = DashboardSummaryByEmployee.create(
             users_count=1,
             worked_days=dias_trabajados_count,
@@ -87,8 +94,7 @@ class GetDashboardSummaryByEmployeeUseCase:
             by_project=by_project,
             by_task=by_task,
             by_employee=by_employee,
+            hierarchical_summary=hierarchical_summary,
         )
 
         return dashboard_summary
-
-    

@@ -289,20 +289,24 @@ def _transform_hierarchical_summary(
     """Transforma la estructura jerárquica del dominio al schema de respuesta."""
     return HierarchicalSummaryResponse(
         total_hours=hierarchical_summary.total_hours,
-        total_entries=hierarchical_summary.total_entries,
         data=[_transform_hierarchical_item(item) for item in hierarchical_summary.data],
     )
 
 
 def _transform_hierarchical_item(item) -> HierarchicalItemResponse:
     """Transforma un item jerárquico del dominio al schema de respuesta."""
+    # Para nodos artificiales, no incluir el campo 'data' (siempre están vacíos)
+    # Para nodos no artificiales, incluir 'data' solo si tienen hijos
+    data_field = None
+    if not item.is_artificial and item.data:
+        data_field = [_transform_hierarchical_item(child) for child in item.data]
+
     return HierarchicalItemResponse(
         type=item.type,
         id=item.id,
         name=item.name,
         total_hours=item.total_hours,
-        total_entries=item.total_entries,
-        data=[_transform_hierarchical_item(child) for child in item.data],
+        data=data_field,
         is_artificial=item.is_artificial,
     )
 

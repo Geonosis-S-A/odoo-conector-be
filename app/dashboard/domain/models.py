@@ -49,7 +49,6 @@ class HierarchicalItem:
     id: int  # project_id para proyectos, task_id para tareas
     name: str
     total_hours: float
-    total_entries: int
     data: List["HierarchicalItem"]
     is_artificial: bool = False  # Flag para identificar entradas artificiales
 
@@ -59,7 +58,6 @@ class HierarchicalSummary:
     """Resumen jerárquico con estructura anidada."""
 
     total_hours: float
-    total_entries: int
     data: List[HierarchicalItem]
 
 
@@ -111,6 +109,9 @@ class DashboardSummaryByEmployee:
     worked_days: int
     summary: Dict[str, KPI]  # KPIs principales
     totals: Dict[str, List[Any]]  # Totales desagregados
+    hierarchical_summary: Optional[HierarchicalSummary] = (
+        None  # Nueva estructura jerárquica
+    )
 
     @classmethod
     def create(
@@ -123,6 +124,7 @@ class DashboardSummaryByEmployee:
         by_project: List[ProjectTotal],
         by_task: List[TaskTotal],
         by_employee: List[EmployeeTotal],
+        hierarchical_summary: Optional[HierarchicalSummary] = None,
     ) -> "DashboardSummaryByEmployee":
         """Factory method para crear un DashboardSummary completo."""
         return cls(
@@ -138,4 +140,5 @@ class DashboardSummaryByEmployee:
                 "by_task": by_task,
                 "by_employee": by_employee,
             },
+            hierarchical_summary=hierarchical_summary,
         )

@@ -360,6 +360,26 @@ class OdooDashboardDataService(DashboardDataService):
             notification=None,  # No necesitamos notificaciones para dashboard
         )
 
+    def _get_task_display_name_for_hierarchy(self, task_with_parent_info) -> str:
+        """
+        Obtiene el nombre de la tarea SIN concatenación para la estructura jerárquica.
+        A diferencia de get_display_name(), esto retorna solo el nombre de la tarea.
+        """
+        return task_with_parent_info.name
+
+    def _clean_task_name_for_hierarchy(self, task_name: str) -> str:
+        """
+        Limpia el nombre de una tarea que puede estar concatenado con flecha.
+        Retorna solo la parte después de la flecha (→) si existe, o el nombre completo si no.
+
+        Ejemplos:
+        - "Tarea Padre → Subtarea" -> "Subtarea"
+        - "Tarea Simple" -> "Tarea Simple"
+        """
+        if " → " in task_name:
+            return task_name.split(" → ")[-1].strip()
+        return task_name
+
     def calculate_hierarchical_summary(
         self, timesheet_data: List[DetailedTimesheetLine], task_gateway: TaskGateway
     ) -> HierarchicalSummary:
@@ -387,36 +407,29 @@ class OdooDashboardDataService(DashboardDataService):
                 projects_data[project_id] = {
                     "name": project_name,
                     "total_hours": 0.0,
-                    "total_entries": 0,
                     "tasks": {},
                     "direct_hours": 0.0,  # Horas cargadas directamente al proyecto
-                    "direct_entries": 0,
                 }
 
             projects_data[project_id]["total_hours"] += line.hours
-            projects_data[project_id]["total_entries"] += 1
 
             if line.task:
                 task_id = line.task.id
-                task_name = line.task.name
+                task_name = self._clean_task_name_for_hierarchy(line.task.name)
 
                 if task_id not in projects_data[project_id]["tasks"]:
                     projects_data[project_id]["tasks"][task_id] = {
                         "name": task_name,
                         "total_hours": 0.0,
-                        "total_entries": 0,
                         "subtasks": {},
                         "direct_hours": 0.0,  # Horas cargadas directamente a la tarea
-                        "direct_entries": 0,
                         "parent_id": None,
                     }
 
                 projects_data[project_id]["tasks"][task_id]["total_hours"] += line.hours
-                projects_data[project_id]["tasks"][task_id]["total_entries"] += 1
             else:
                 # Horas cargadas directamente al proyecto sin tarea
                 projects_data[project_id]["direct_hours"] += line.hours
-                projects_data[project_id]["direct_entries"] += 1
 
         # Obtener información de parent_id para todas las tareas
         all_task_ids = []
@@ -481,18 +494,11 @@ class OdooDashboardDataService(DashboardDataService):
                     total_hours = sum(
                         subtask_data["total_hours"] for _, subtask_data in subtasks_list
                     )
-                    total_entries = sum(
-                        subtask_data["total_entries"]
-                        for _, subtask_data in subtasks_list
-                    )
-
                     parent_task_data = {
-                        "name": parent_info.name,
+                        "name": self._get_task_display_name_for_hierarchy(parent_info),
                         "total_hours": total_hours,
-                        "total_entries": total_entries,
                         "subtasks": {},
                         "direct_hours": 0.0,  # Las horas están todas en subtareas
-                        "direct_entries": 0,
                         "parent_id": None,
                     }
 
@@ -528,17 +534,11 @@ class OdooDashboardDataService(DashboardDataService):
                 total_hours = sum(
                     subtask_data["total_hours"] for _, subtask_data in subtasks_list
                 )
-                total_entries = sum(
-                    subtask_data["total_entries"] for _, subtask_data in subtasks_list
-                )
-
                 parent_task_data = {
-                    "name": parent_info.name,
+                    "name": self._get_task_display_name_for_hierarchy(parent_info),
                     "total_hours": total_hours,
-                    "total_entries": total_entries,
                     "subtasks": {},
                     "direct_hours": 0.0,  # Las horas están todas en subtareas
-                    "direct_entries": 0,
                     "parent_id": None,
                 }
 
@@ -560,12 +560,17 @@ class OdooDashboardDataService(DashboardDataService):
                     subtasks_hours = sum(
                         subtask["total_hours"] for subtask in subtasks.values()
                     )
-                    parent_task_data["direct_hours"] = (
-                        parent_task_data["total_hours"] - subtasks_hours
+
+                    # IMPORTANTE: Las horas directas de la tarea padre son las que ya tiene
+                    # (antes de agregar subtareas), no se calculan restando
+                    original_parent_hours = parent_task_data["total_hours"]
+
+                    parent_task_data["direct_hours"] = original_parent_hours
+
+                    # Actualizar totales para incluir subtareas
+                    parent_task_data["total_hours"] = (
+                        original_parent_hours + subtasks_hours
                     )
-                    parent_task_data["direct_entries"] = parent_task_data[
-                        "total_entries"
-                    ] - sum(subtask["total_entries"] for subtask in subtasks.values())
 
                     # Almacenar subtareas en la tarea padre
                     parent_task_data["subtasks"] = subtasks
@@ -573,7 +578,6 @@ class OdooDashboardDataService(DashboardDataService):
         # Construir estructura jerárquica
         hierarchical_items = []
         total_hours = 0.0
-        total_entries = 0
 
         for project_id, project_data in projects_data.items():
             project_item = HierarchicalItem(
@@ -581,7 +585,6 @@ class OdooDashboardDataService(DashboardDataService):
                 id=project_id,
                 name=project_data["name"],
                 total_hours=project_data["total_hours"],
-                total_entries=project_data["total_entries"],
                 data=[],
                 is_artificial=False,
             )
@@ -590,11 +593,11 @@ class OdooDashboardDataService(DashboardDataService):
             for task_id, task_data in project_data["tasks"].items():
                 # Solo procesar tareas principales (sin parent_id)
                 if not task_data.get("parent_id"):
-                    task_item = self._build_task_item(
+                    task_item, updated_counter = self._build_task_item(
                         task_id, task_data, artificial_subtask_id_counter
                     )
                     project_item.data.append(task_item)
-                    artificial_subtask_id_counter -= 1
+                    artificial_subtask_id_counter = updated_counter
 
             # Agregar tarea artificial "Sin tarea" si hay horas directas al proyecto
             if project_data["direct_hours"] > 0:
@@ -603,7 +606,6 @@ class OdooDashboardDataService(DashboardDataService):
                     id=artificial_task_id_counter,
                     name="Sin tarea",
                     total_hours=project_data["direct_hours"],
-                    total_entries=project_data["direct_entries"],
                     data=[],
                     is_artificial=True,
                 )
@@ -613,17 +615,28 @@ class OdooDashboardDataService(DashboardDataService):
             # Ordenar tareas por horas (mayor a menor)
             project_item.data.sort(key=lambda x: x.total_hours, reverse=True)
 
+            # IMPORTANTE: Recalcular totales del proyecto basándose en las tareas finales
+            # Los valores originales en project_data pueden estar desactualizados
+            actual_project_hours = sum(task.total_hours for task in project_item.data)
+
+            # Actualizar el proyecto con los totales correctos
+            project_item.total_hours = actual_project_hours
+
             hierarchical_items.append(project_item)
-            total_hours += project_data["total_hours"]
-            total_entries += project_data["total_entries"]
+            total_hours += actual_project_hours
 
         # Ordenar proyectos por horas (mayor a menor)
         hierarchical_items.sort(key=lambda x: x.total_hours, reverse=True)
 
+        # OPTIMIZACIÓN: Eliminar nodos intermedios que solo tienen un hijo artificial
+        optimized_items = []
+        for project_item in hierarchical_items:
+            optimized_project = self._optimize_single_artificial_children(project_item)
+            optimized_items.append(optimized_project)
+
         return HierarchicalSummary(
             total_hours=total_hours,
-            total_entries=total_entries,
-            data=hierarchical_items,
+            data=optimized_items,
         )
 
     def _build_task_item(
@@ -631,7 +644,7 @@ class OdooDashboardDataService(DashboardDataService):
         task_id: int,
         task_data: dict,
         artificial_subtask_id_counter: int,
-    ) -> HierarchicalItem:
+    ) -> tuple[HierarchicalItem, int]:
         """
         Construye un elemento de tarea con sus subtareas.
         """
@@ -640,38 +653,95 @@ class OdooDashboardDataService(DashboardDataService):
             id=task_id,
             name=task_data["name"],
             total_hours=task_data["total_hours"],
-            total_entries=task_data["total_entries"],
             data=[],
             is_artificial=False,
         )
 
-        # Agregar subtareas reales
+        # Agregar subtareas reales (pero como contenedores, no como nodos hoja)
         for subtask_id, subtask_data in task_data["subtasks"].items():
             subtask_item = HierarchicalItem(
                 type="task",
                 id=subtask_id,
                 name=subtask_data["name"],
                 total_hours=subtask_data["total_hours"],
-                total_entries=subtask_data["total_entries"],
                 data=[],
                 is_artificial=False,
             )
+
+            # CONSISTENCIA: Cada subtarea real debe tener su propia "Sin subtarea" artificial
+            # para mantener la consistencia de que todos los nodos hoja son artificiales
+            sin_subtarea_real_item = HierarchicalItem(
+                type="task",
+                id=artificial_subtask_id_counter,
+                name="Sin subtarea",
+                total_hours=subtask_data["total_hours"],
+                data=[],
+                is_artificial=True,
+            )
+            subtask_item.data.append(sin_subtarea_real_item)
+            artificial_subtask_id_counter -= 1
+
             task_item.data.append(subtask_item)
 
-        # Agregar subtarea artificial "Sin subtarea" si hay horas directas a la tarea
+        # Agregar subtarea artificial "Sin subtarea" si hay horas directas a la tarea padre
         if task_data["direct_hours"] > 0:
-            sin_subtarea_item = HierarchicalItem(
+            sin_subtarea_padre_item = HierarchicalItem(
                 type="task",
                 id=artificial_subtask_id_counter,
                 name="Sin subtarea",
                 total_hours=task_data["direct_hours"],
-                total_entries=task_data["direct_entries"],
                 data=[],
                 is_artificial=True,
             )
-            task_item.data.append(sin_subtarea_item)
+            task_item.data.append(sin_subtarea_padre_item)
 
         # Ordenar subtareas por horas (mayor a menor)
         task_item.data.sort(key=lambda x: x.total_hours, reverse=True)
 
-        return task_item
+        return task_item, artificial_subtask_id_counter
+
+    def _optimize_single_artificial_children(
+        self, item: HierarchicalItem
+    ) -> HierarchicalItem:
+        """
+        Optimiza la estructura eliminando nodos intermedios que solo tienen un hijo artificial.
+
+        Lógica:
+        - Si un nodo tiene exactamente 1 hijo y ese hijo es artificial
+        - Entonces el nodo se convierte en nodo hoja (sin hijos)
+        - Esto elimina redundancia y reduce el tamaño del JSON
+
+        Args:
+            item: El nodo a optimizar
+
+        Returns:
+            El nodo optimizado
+        """
+        # Primero, optimizar recursivamente todos los hijos
+        optimized_children = []
+        for child in item.data:
+            optimized_child = self._optimize_single_artificial_children(child)
+            optimized_children.append(optimized_child)
+
+        # Aplicar optimización al nodo actual
+        if len(optimized_children) == 1 and optimized_children[0].is_artificial:
+            # Caso de optimización: Un solo hijo artificial
+            # Convertir este nodo en hoja (eliminar el hijo artificial redundante)
+            return HierarchicalItem(
+                type=item.type,
+                id=item.id,
+                name=item.name,
+                total_hours=item.total_hours,
+                data=[],  # Sin hijos, se convierte en nodo hoja
+                is_artificial=False,  # El nodo real se mantiene como real
+            )
+        else:
+            # No se aplica optimización, mantener estructura actual
+            return HierarchicalItem(
+                type=item.type,
+                id=item.id,
+                name=item.name,
+                total_hours=item.total_hours,
+                data=optimized_children,
+                is_artificial=item.is_artificial,
+            )
