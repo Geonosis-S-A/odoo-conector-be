@@ -41,15 +41,22 @@ class OdooDashboardDataService(DashboardDataService):
         date_to: date,
         task_gateway: TaskGateway,
         timesheet_line_gateway: TimesheetLineGateway,
+        requester_user_id: int | None = None,
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene datos de timesheet del equipo haciendo consulta directa a Odoo.
         """
         try:
             # Construir dominio para filtrar por equipo
-            odoo_timesheet_lines = timesheet_line_gateway.all_by_employees(
-                members_ids, date_from, date_to
-            )
+            if requester_user_id is not None:
+                odoo_timesheet_lines = timesheet_line_gateway.all_by_employees_with_requester_user_id(
+                    members_ids, date_from, date_to, requester_user_id
+                )
+            else:
+                odoo_timesheet_lines = timesheet_line_gateway.all_by_employees(
+                    members_ids, date_from, date_to
+                )
+            
 
             # Obtener información completa de las tareas para manejar parent_id
             task_ids = []

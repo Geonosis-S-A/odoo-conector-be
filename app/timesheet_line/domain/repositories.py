@@ -75,6 +75,11 @@ class TimesheetLineGateway(ABC):
             Lista de DetailedTimesheetLine que coinciden con los criterios
         """
         ...
+    
+    @abstractmethod
+    def all_by_employees_with_requester_user_id(
+        self, employee_ids: list[int], date_from: date, date_to: date, requester_user_id: int
+    ) -> List[Dict[str, Any]]: ...
 
 
 class TimesheetLineNotificationRepository(ABC):

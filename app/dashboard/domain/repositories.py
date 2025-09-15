@@ -20,16 +20,18 @@ class DashboardDataService(ABC):
         date_to: date,
         task_gateway: TaskGateway,
         timesheet_line_gateway: TimesheetLineGateway,
+        requester_user_id: int | None = None,
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene datos de timesheet del equipo para el período especificado.
 
         Args:
-            user_id: ID del usuario que solicita el dashboard (para filtro de equipo)
+            members_ids: IDs de los miembros del equipo
             date_from: Fecha de inicio del período
             date_to: Fecha de fin del período
             task_gateway: Gateway de tareas para obtener información de parent_id
             timesheet_line_gateway: Gateway de líneas de timesheet para obtener datos del equipo
+            requester_user_id: ID del usuario que solicita el dashboard
         Returns:
             Lista de DetailedTimesheetLine del equipo en el período
         """

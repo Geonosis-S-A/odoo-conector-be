@@ -181,6 +181,7 @@ class TestGetDashboardSummaryUseCase:
             date_to,
             use_case.task_gateway,
             use_case.timesheet_line_gateway,
+            user_id,
         )
         mock_dashboard_gateway.calculate_hours_kpi.assert_called_once_with(
             mock_timesheet_data, 2
@@ -260,6 +261,7 @@ class TestGetDashboardSummaryUseCase:
             date_to,
             use_case.task_gateway,
             use_case.timesheet_line_gateway,
+            user_id,
         )
 
     def test_execute_with_single_user_team(

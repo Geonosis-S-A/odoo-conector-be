@@ -526,3 +526,61 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         except Exception as e:
             raise Exception(f"Error al obtener timesheet por tarea/proyecto: {str(e)}")
+
+
+    def all_by_employees_with_requester_user_id(
+        self,
+        employee_ids: list[int],
+        date_from: date,
+        date_to: date,
+        requester_user_id: int,
+    ) -> List[Dict[str, Any]]:
+        """
+        Obtiene líneas de timesheet que cumplen una de estas condiciones:
+        1. Pertenecen a empleados específicos (employee_ids)
+        2. Pertenecen a proyectos donde requester_user_id es gerente
+        """
+        # Primero obtenemos los proyectos donde el requester_user_id es gerente
+        managed_projects = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "project.project",
+            "search",
+            [[("user_id", "=", requester_user_id)]],  # user_id es el campo para el gerente del proyecto
+        )
+        
+        # Construir dominio con lógica OR correcta
+        domain = [
+            # Condiciones de fecha (obligatorias)
+            ("date", ">=", date_from.isoformat()),
+            ("date", "<=", date_to.isoformat()),
+            # Condición OR: empleados específicos O proyectos gestionados
+            "|",
+            ("employee_id", "in", employee_ids),
+            ("project_id", "in", managed_projects),
+        ]
+        odoo_timesheet_lines = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "account.analytic.line",
+                "search_read",
+                [domain],
+                {
+                    "fields": [
+                        "name",
+                        "date",
+                        "unit_amount",
+                        "employee_id",
+                        "project_id",
+                        "task_id",
+                        "create_date",
+                        "validated",
+                    ],
+                },
+            ),
+        )
+        return odoo_timesheet_lines
