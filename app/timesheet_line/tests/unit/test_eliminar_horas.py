@@ -323,7 +323,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_employee_gateway.all.assert_called_once()
         mock_timesheet_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, None, None
+            employee_id, date_from, date_to, None, None, None, None, None
         )
         # No se debe llamar get_by_timesheet_id si no hay timesheets
         mock_notification_repository.get_by_timesheet_id.assert_not_called()

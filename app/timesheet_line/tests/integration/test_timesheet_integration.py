@@ -236,11 +236,12 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
     from app.shared.security.dependencies import get_current_user
 
     async def mock_admin_user():
+        from app.shared.security.role_enums.dev import Roles
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user
@@ -577,13 +578,13 @@ def test_validate_timesheet_lines_success(test_client):
     # Mock admin user for validation endpoint
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user
@@ -642,13 +643,13 @@ def test_validate_timesheet_lines_permission_denied(test_client):
     # Cleanup - Switch to admin user to delete timesheet
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user
@@ -668,13 +669,13 @@ def test_validate_timesheet_lines_not_found(test_client):
     # Mock admin user for validation endpoint
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user
@@ -703,13 +704,13 @@ def test_validate_timesheet_lines_empty_list(test_client):
     # Mock admin user for validation endpoint
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user
@@ -752,13 +753,13 @@ def test_validate_timesheet_lines_mixed_existing_and_nonexisting(test_client):
     # Mock admin user for validation endpoint
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user
@@ -851,13 +852,13 @@ def test_edit_validated_timesheet_admin_user_allowed(test_client):
     # Mock admin user for editing validated timesheet
     from app.main import app
     from app.shared.security.dependencies import get_current_user
-
+    from app.shared.security.role_enums.dev import Roles
     async def mock_admin_user():
         return {
             "user_id": 1,
             "user_email": "admin@example.com",
             "user_name": "Admin User",
-            "roles": [30],  # Admin role
+            "roles": [Roles.approver],  # Admin role
         }
 
     app.dependency_overrides[get_current_user] = mock_admin_user

@@ -118,10 +118,11 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
-        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
+        # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
+        mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, True, user_id
+            employee_id, date_from, date_to, None, None, True, None, None
         )
         # Verificar que se buscó notificación para cada timesheet
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
@@ -163,10 +164,11 @@ class TestListTimesheetLinesUseCase:
         assert isinstance(result, list)
         assert len(result) == 0
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
-        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
+        # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
+        mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, True, user_id
+            employee_id, date_from, date_to, None, None, True, None, None
         )
         # No se debe llamar get_by_timesheet_id si no hay resultados
         mock_notification_repository.get_by_timesheet_id.assert_not_called()
@@ -204,10 +206,11 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
-        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
+        # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
+        mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, True, user_id
+            employee_id, date_from, date_to, None, None, True, None, None
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(1)
         assert len(result) == 1
@@ -331,10 +334,11 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
-        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(uid)
+        # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
+        mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, True, user_id
+            employee_id, date_from, date_to, None, None, True, None, None
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(2)
         assert len(result) == 1
@@ -375,7 +379,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, None
+            employee_id, date_from, date_to, None, None, False, None, None
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             sample_timesheet_lines
@@ -423,7 +427,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, None, False, None
+            employee_id, date_from, date_to, project_id, None, False, None, None
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             filtered_timesheets
@@ -466,7 +470,7 @@ class TestListTimesheetLinesUseCase:
 
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, None, False, None
+            employee_id, date_from, date_to, project_id, None, False, None, None
         )
         mock_notification_repository.get_by_timesheet_id.assert_not_called()
         assert result == []
@@ -517,7 +521,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, validated, False, None
+            employee_id, date_from, date_to, None, validated, False, None, None
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(1)
         assert result == validated_timesheets
@@ -560,7 +564,7 @@ class TestListTimesheetLinesUseCase:
 
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, validated, False, None
+            employee_id, date_from, date_to, None, validated, False, None, None
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             sample_timesheet_lines
@@ -618,7 +622,7 @@ class TestListTimesheetLinesUseCase:
 
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, validated, False, None
+            employee_id, date_from, date_to, project_id, validated, False, None, None
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(1)
         assert result == specific_timesheet
@@ -670,7 +674,7 @@ class TestListTimesheetLinesUseCase:
 
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, validated, False, None
+            employee_id, date_from, date_to, project_id, validated, False, None, None
         )
         mock_notification_repository.get_by_timesheet_id.assert_called_once_with(2)
         assert result == filtered_timesheet
@@ -712,7 +716,7 @@ class TestListTimesheetLinesUseCase:
 
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, validated, False, None
+            employee_id, date_from, date_to, project_id, validated, False, None, None
         )
         assert mock_notification_repository.get_by_timesheet_id.call_count == len(
             sample_timesheet_lines
@@ -923,7 +927,7 @@ class TestListTimesheetLinesUseCase:
         # Assert - No debe lanzar excepción
 
         mock_gateway.all.assert_called_once_with(
-            employee_id, None, date_to, None, None, False, None
+            employee_id, None, date_to, None, None, False, None, None
         )
         assert result == sample_timesheet_lines
 
@@ -958,7 +962,7 @@ class TestListTimesheetLinesUseCase:
         # Assert - No debe lanzar excepción
 
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, None, None, None, False, None
+            employee_id, date_from, None, None, None, False, None, None
         )
         assert result == sample_timesheet_lines
 
@@ -989,7 +993,7 @@ class TestListTimesheetLinesUseCase:
 
         mock_employee_gateway.all.assert_called_once()
         mock_gateway.all.assert_called_once_with(
-            None, None, None, None, None, False, None
+            None, None, None, None, None, False, None, None
         )
         assert result == sample_timesheet_lines
 
@@ -1024,7 +1028,7 @@ class TestListTimesheetLinesUseCase:
         # Assert - Debe pasar la validación al gateway (no es responsabilidad del use case validar project_id)
 
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, project_id, None, False, None
+            employee_id, date_from, date_to, project_id, None, False, None, None
         )
         assert result == []
 
@@ -1085,7 +1089,7 @@ class TestListTimesheetLinesUseCase:
         # Assert
 
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, None
+            employee_id, date_from, date_to, None, None, False, None, None
         )
         assert result == []
 
@@ -1134,7 +1138,7 @@ class TestListTimesheetLinesUseCase:
         # Assert - No debe lanzar excepción
 
         mock_gateway.all.assert_called_once_with(
-            employee_id, date_from, date_to, None, None, False, None
+            employee_id, date_from, date_to, None, None, False, None, None
         )
         assert result == same_date_timesheet
         assert len(result) == 1

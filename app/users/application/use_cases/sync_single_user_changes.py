@@ -32,6 +32,8 @@ class SyncSingleUserChangesUseCase:
         odoo_employee_data = self.employee_gateway.get_employee_with_user_data(
             employee_id
         )
+
+        print("DATA TRAIDA DE ODOO", odoo_employee_data)
         if not odoo_employee_data:
             return {
                 "success": False,

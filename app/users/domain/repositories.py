@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Dict, Any
 
 from app.users.domain.models import Employee, User
 
@@ -22,6 +22,9 @@ class EmployeeGateway(ABC):
 
     @abstractmethod
     def get_user_id_by_employee_id(self, employee_id: int) -> int | None: ...
+
+    @abstractmethod
+    def get_employee_with_user_data(self, employee_id: int) -> Dict[str, Any] | None: ...
 
 
 class UserRepository(ABC):

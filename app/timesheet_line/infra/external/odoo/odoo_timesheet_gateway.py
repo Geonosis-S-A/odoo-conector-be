@@ -134,6 +134,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         validated: Optional[bool] = None,
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
+        team_members_ids: Optional[list[int]] = None,
     ) -> List[DetailedTimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo."""
         domain: list[tuple[str, str, Any]] = [("is_timesheet", "=", True)]
@@ -149,19 +150,16 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         if validated is not None:
             domain.append(("validated", "=", validated))
-        if employee_id is not None:
+        if employee_id is not None and team is None:
             domain.append(("employee_id", "=", employee_id))
 
         if team and user_id is not None:
             # Aquí aplicamos el filtro de equipo como se ve en la petición web
             team_domain = [
-                "|",
-                "|",
-                ("employee_id.timesheet_manager_id", "=", user_id),
-                ("employee_id.parent_id.user_id", "=", user_id),
-                ("employee_id.is_subordinate", "=", True),
+                ("employee_id", "in", team_members_ids),
             ]
             domain.extend(team_domain)
+
 
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
@@ -186,11 +184,50 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 },
             ),
         )
+
+        print("odoo_timesheet_lines", odoo_timesheet_lines)
         parsed_lines = [
             self._transform_odoo_to_detailed_domain(line)
             for line in odoo_timesheet_lines
         ]
         return parsed_lines
+
+    def all_by_employees(
+        self,
+        employee_ids: list[int],
+        date_from: date,
+        date_to: date,
+    ) -> List[Dict[str, Any]]:
+        """Obtiene todas las líneas de hoja de tiempo de Odoo por empleados."""
+        domain = [
+            ("employee_id", "in", employee_ids),
+            ("date", ">=", date_from.isoformat()),
+            ("date", "<=", date_to.isoformat()),
+        ]
+        odoo_timesheet_lines = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "account.analytic.line",
+                "search_read",
+                [domain],
+                {
+                    "fields": [
+                        "name",
+                        "date",
+                        "unit_amount",
+                        "employee_id",
+                        "project_id",
+                        "task_id",
+                        "create_date",
+                        "validated",
+                    ],
+                },
+            ),
+        )
+        return odoo_timesheet_lines
 
     def delete(self, timesheet_lines_ids: list[int]) -> bool:
         """Elimina líneas de hoja de tiempo de Odoo.
@@ -362,3 +399,47 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         )
 
         return bool(response)
+
+
+    def get_team_users(self, user_id: int, employee_id: int) -> list[Dict[str, Any]]:
+        """
+        Obtiene la cantidad de usuarios activos en el equipo consultando directamente a Odoo.
+        """
+        try:
+            # Construir dominio para obtener empleados del equipo que estén activos
+            subordinates_domain = [
+                # Condición 1: El empleado NO debo ser yo
+                ("id", "!=", employee_id),
+                # Condición 2: Y debe cumplir la lógica de equipo
+                "|",
+                ("timesheet_manager_id", "=", user_id),
+                ("id", "child_of", employee_id),
+            ]
+
+            # Contar empleados que cumplen el criterio
+            subordinates_data = self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",  # Estamos buscando en el modelo de empleados
+                "search_read",  # El método que busca Y lee los datos
+                [subordinates_domain],  # El filtro se pasa como una lista de argumentos
+                {
+                    # El diccionario de opciones donde especificamos qué queremos
+                    "fields": [
+                        "id",  # El ID del empleado (el "employee_id" que buscas)
+                        "name",  # El nombre completo del empleado
+                        "work_email",
+                    ],
+                    # "limit": 100 # Opcional: para limitar el número de resultados
+                },
+            )
+
+            print("subordinates_data", subordinates_data)
+
+            return subordinates_data
+
+        except Exception as e:
+            raise Exception(
+                f"Error al obtener cantidad de usuarios del equipo: {str(e)}"
+            )
