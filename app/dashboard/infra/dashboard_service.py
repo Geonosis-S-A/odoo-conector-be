@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, cast
 from app.dashboard.domain.repositories import DashboardDataService
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.project.domain.models import Project
@@ -759,3 +759,40 @@ class OdooDashboardDataService(DashboardDataService):
                 data=optimized_children,
                 is_artificial=item.is_artificial,
             )
+
+    def get_timesheet_by_task_or_project(
+        self,
+        task_id: Optional[int] = None,
+        project_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        timesheet_line_gateway: Optional[TimesheetLineGateway] = None,
+    ) -> List[DetailedTimesheetLine]:
+        """
+        Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
+        
+        Args:
+            task_id: ID de la tarea a filtrar (opcional)
+            project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
+            date_from: Fecha de inicio del período
+            date_to: Fecha de fin del período
+            timesheet_line_gateway: Gateway de líneas de timesheet
+            
+        Returns:
+            Lista de DetailedTimesheetLine que coinciden con los criterios
+        """
+        try:
+            # Validar que el gateway esté presente
+            if not timesheet_line_gateway:
+                raise ValueError("timesheet_line_gateway es requerido")
+
+            # Delegar la funcionalidad al TimesheetLineGateway
+            return timesheet_line_gateway.get_by_task_or_project(
+                task_id=task_id,
+                project_id=project_id,
+                date_from=date_from,
+                date_to=date_to,
+            )
+
+        except Exception as e:
+            raise Exception(f"Error al obtener timesheet por tarea/proyecto: {str(e)}")

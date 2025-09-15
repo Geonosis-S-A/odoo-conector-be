@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.dashboard.domain.models import KPI, HierarchicalSummary
 from app.timesheet_line.domain.models import DetailedTimesheetLine
@@ -110,5 +110,29 @@ class DashboardDataService(ABC):
 
         Returns:
             HierarchicalSummary con la estructura anidada completa
+        """
+        pass
+
+    @abstractmethod
+    def get_timesheet_by_task_or_project(
+        self,
+        task_id: Optional[int] = None,
+        project_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        timesheet_line_gateway: Optional[TimesheetLineGateway] = None,
+    ) -> List[DetailedTimesheetLine]:
+        """
+        Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
+        
+        Args:
+            task_id: ID de la tarea a filtrar (opcional)
+            project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
+            date_from: Fecha de inicio del período
+            date_to: Fecha de fin del período
+            timesheet_line_gateway: Gateway de líneas de timesheet
+            
+        Returns:
+            Lista de DetailedTimesheetLine que coinciden con los criterios
         """
         pass

@@ -54,6 +54,28 @@ class TimesheetLineGateway(ABC):
         self, user_id: int, employee_id: int
     ) -> list[Dict[str, Any]]: ...
 
+    @abstractmethod
+    def get_by_task_or_project(
+        self,
+        task_id: Optional[int] = None,
+        project_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[DetailedTimesheetLine]:
+        """
+        Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
+        
+        Args:
+            task_id: ID de la tarea a filtrar (opcional)
+            project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
+            date_from: Fecha de inicio del período
+            date_to: Fecha de fin del período
+            
+        Returns:
+            Lista de DetailedTimesheetLine que coinciden con los criterios
+        """
+        ...
+
 
 class TimesheetLineNotificationRepository(ABC):
     @abstractmethod

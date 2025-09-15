@@ -443,3 +443,86 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             raise Exception(
                 f"Error al obtener cantidad de usuarios del equipo: {str(e)}"
             )
+
+    def get_by_task_or_project(
+        self,
+        task_id: Optional[int] = None,
+        project_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> List[DetailedTimesheetLine]:
+        """
+        Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
+        
+        Args:
+            task_id: ID de la tarea a filtrar (opcional)
+            project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
+            date_from: Fecha de inicio del período
+            date_to: Fecha de fin del período
+            
+        Returns:
+            Lista de DetailedTimesheetLine que coinciden con los criterios
+        """
+        try:
+            # Validar que al menos uno de los parámetros de filtro esté presente
+            if not task_id and not project_id:
+                raise ValueError("Debe proporcionar task_id o project_id")
+            
+            if not date_from or not date_to:
+                raise ValueError("Debe proporcionar date_from y date_to")
+
+            # Construir dominio de filtros para Odoo
+            domain = [
+                ("is_timesheet", "=", True),
+                ("date", ">=", date_from.isoformat()),
+                ("date", "<=", date_to.isoformat()),
+            ]
+
+            # Filtrar por tarea específica si se proporciona task_id
+            if task_id:
+                domain.append(("task_id", "=", task_id))
+            # Si no hay task_id, filtrar por proyecto Y solo líneas sin tarea
+            elif project_id:
+                domain.extend([
+                    ("project_id", "=", project_id),
+                    ("task_id", "=", False),  # Solo líneas sin tarea asignada
+                ])
+
+            # Hacer consulta directa a Odoo
+            odoo_timesheet_lines = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "account.analytic.line",
+                    "search_read",
+                    [domain],
+                    {
+                        "fields": [
+                            "id",
+                            "name",
+                            "date",
+                            "unit_amount",
+                            "employee_id",
+                            "project_id",
+                            "task_id",
+                            "create_date",
+                            "validated",
+                        ],
+                    },
+                ),
+            )
+
+            # Transformar datos de Odoo a nuestro modelo de dominio
+            parsed_lines = []
+            if odoo_timesheet_lines:
+                parsed_lines = [
+                    self._transform_odoo_to_detailed_domain(line)
+                    for line in odoo_timesheet_lines
+                ]
+
+            return parsed_lines
+
+        except Exception as e:
+            raise Exception(f"Error al obtener timesheet por tarea/proyecto: {str(e)}")
