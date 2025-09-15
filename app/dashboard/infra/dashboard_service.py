@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Dict, Any, Optional, cast
+from typing import List, Dict, Any, Optional
 from app.dashboard.domain.repositories import DashboardDataService
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.project.domain.models import Project
@@ -394,9 +394,8 @@ class OdooDashboardDataService(DashboardDataService):
         # Diccionario para agrupar por proyecto
         projects_data = {}
 
-        # Contadores para IDs artificiales (números negativos)
-        artificial_task_id_counter = -1000
-        artificial_subtask_id_counter = -2000
+        # Ya no necesitamos contadores para IDs artificiales
+        # Los elementos artificiales usan el ID del padre
 
         # Agrupar datos por proyecto
         for line in timesheet_data:
@@ -621,24 +620,20 @@ class OdooDashboardDataService(DashboardDataService):
             for task_id, task_data in project_data["tasks"].items():
                 # Solo procesar tareas principales (sin parent_id)
                 if not task_data.get("parent_id"):
-                    task_item, updated_counter = self._build_task_item(
-                        task_id, task_data, artificial_subtask_id_counter
-                    )
+                    task_item = self._build_task_item(task_id, task_data)
                     project_item.data.append(task_item)
-                    artificial_subtask_id_counter = updated_counter
 
             # Agregar tarea artificial "Sin tarea" si hay horas directas al proyecto
             if project_data["direct_hours"] > 0:
                 sin_tarea_item = HierarchicalItem(
                     type="task",
-                    id=artificial_task_id_counter,
+                    id=project_id,  # Usar el ID del proyecto padre
                     name="Sin tarea",
                     total_hours=project_data["direct_hours"],
                     data=[],
                     is_artificial=True,
                 )
                 project_item.data.append(sin_tarea_item)
-                artificial_task_id_counter -= 1
 
             # Ordenar tareas por horas (mayor a menor)
             project_item.data.sort(key=lambda x: x.total_hours, reverse=True)
@@ -671,8 +666,7 @@ class OdooDashboardDataService(DashboardDataService):
         self,
         task_id: int,
         task_data: dict,
-        artificial_subtask_id_counter: int,
-    ) -> tuple[HierarchicalItem, int]:
+    ) -> HierarchicalItem:
         """
         Construye un elemento de tarea con sus subtareas.
         """
@@ -701,7 +695,7 @@ class OdooDashboardDataService(DashboardDataService):
         if task_data["direct_hours"] > 0:
             sin_subtarea_padre_item = HierarchicalItem(
                 type="task",
-                id=artificial_subtask_id_counter,
+                id=task_id,  # Usar el ID de la tarea padre
                 name="Sin subtarea",
                 total_hours=task_data["direct_hours"],
                 data=[],
@@ -712,7 +706,7 @@ class OdooDashboardDataService(DashboardDataService):
         # Ordenar subtareas por horas (mayor a menor)
         task_item.data.sort(key=lambda x: x.total_hours, reverse=True)
 
-        return task_item, artificial_subtask_id_counter
+        return task_item
 
     def _optimize_single_artificial_children(
         self, item: HierarchicalItem
@@ -770,14 +764,14 @@ class OdooDashboardDataService(DashboardDataService):
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
-        
+
         Args:
             task_id: ID de la tarea a filtrar (opcional)
             project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
             date_from: Fecha de inicio del período
             date_to: Fecha de fin del período
             timesheet_line_gateway: Gateway de líneas de timesheet
-            
+
         Returns:
             Lista de DetailedTimesheetLine que coinciden con los criterios
         """
