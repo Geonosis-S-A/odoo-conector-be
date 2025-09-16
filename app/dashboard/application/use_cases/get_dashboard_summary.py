@@ -29,7 +29,7 @@ class GetDashboardSummaryUseCase:
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
         self.timesheet_line_gateway = timesheet_line_gateway
-    
+
     def execute(
         self, user_id: int, employee_id: int, date_from: date, date_to: date
     ) -> DashboardSummary:
