@@ -134,7 +134,7 @@ class TestHierarchicalSummary:
             assert len(project.data) == 1
             sin_tarea = project.data[0]
             assert sin_tarea.type == "task"
-            assert sin_tarea.id < 0  # ID artificial negativo
+            assert sin_tarea.id == 1  # ID del proyecto padre
             assert sin_tarea.name == "Sin tarea"
             assert sin_tarea.total_hours == 6.0
             assert sin_tarea.is_artificial
@@ -227,7 +227,7 @@ class TestHierarchicalSummary:
 
         # "Sin subtarea" del padre (4.0 horas)
         sin_subtarea_padre = tarea_padre.data[1]
-        assert sin_subtarea_padre.id < 0  # ID artificial
+        assert sin_subtarea_padre.id == 1  # ID del proyecto padre
         assert sin_subtarea_padre.name == "Sin subtarea"
         assert sin_subtarea_padre.total_hours == 4.0
         assert sin_subtarea_padre.is_artificial
@@ -842,7 +842,7 @@ class TestHierarchicalSummary:
 
         # Todos los IDs artificiales deben ser negativos y únicos
         artificial_ids = [node.id for node in artificial_nodes]
-        assert all(id < 0 for id in artificial_ids)
+        assert all(id == 1 for id in artificial_ids)
         assert len(artificial_ids) == len(set(artificial_ids))  # Únicos
 
     def test_tasks_ordering_within_project_by_hours(

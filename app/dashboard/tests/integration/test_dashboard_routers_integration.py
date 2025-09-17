@@ -675,3 +675,401 @@ def test_dashboard_business_logic_validation(client_admin):
     print(f"   - Proyectos: {len(project_totals)}")
     print(f"   - Tareas: {len(data['totals']['by_task'])}")
     print(f"   - Empleados: {len(data['totals']['by_employee'])}")
+
+
+@pytest.mark.integration
+def test_get_task_detail_success_with_task_id(client_admin):
+    """Test de integración: detalle de tarea exitoso con task_id."""
+    # Arrange
+    test_task_id = 1  # Usar un ID que probablemente exista
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 12, 31)  # Rango amplio para obtener datos
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "task_id" in data
+    assert "project_id" in data
+    assert "timesheet_lines" in data
+    assert data["task_id"] == test_task_id
+    assert isinstance(data["timesheet_lines"], list)
+
+    # Si hay líneas de timesheet, verificar estructura
+    if data["timesheet_lines"]:
+        timesheet_line = data["timesheet_lines"][0]
+        assert "id" in timesheet_line
+        assert "name" in timesheet_line
+        assert "employee" in timesheet_line
+        assert "hours" in timesheet_line
+        assert "date" in timesheet_line
+        assert "validated" in timesheet_line
+        assert "notification" in timesheet_line
+
+        # Verificar estructura del empleado
+        employee = timesheet_line["employee"]
+        assert "employee_id" in employee
+        assert "employee_name" in employee
+        assert isinstance(employee["employee_id"], int)
+        assert isinstance(employee["employee_name"], str)
+
+        # Verificar tipos de datos
+        assert isinstance(timesheet_line["id"], int)
+        assert isinstance(timesheet_line["name"], str)
+        assert isinstance(timesheet_line["hours"], (int, float))
+        assert isinstance(timesheet_line["validated"], bool)
+
+
+@pytest.mark.integration
+def test_get_task_detail_success_with_project_id(client_admin):
+    """Test de integración: detalle de proyecto exitoso con project_id."""
+    # Arrange
+    test_project_id = 1  # Usar un ID que probablemente exista
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 12, 31)  # Rango amplio para obtener datos
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "project_id": test_project_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["task_id"] is None
+    assert data["project_id"] == test_project_id
+    assert isinstance(data["timesheet_lines"], list)
+
+    # Si hay líneas de timesheet, verificar que todas pertenecen al proyecto
+    for timesheet_line in data["timesheet_lines"]:
+        assert "id" in timesheet_line
+        assert "name" in timesheet_line
+        assert "employee" in timesheet_line
+        assert "hours" in timesheet_line
+        assert "date" in timesheet_line
+        assert "validated" in timesheet_line
+        assert "notification" in timesheet_line
+
+
+@pytest.mark.integration
+def test_get_task_detail_forbidden_regular_user(client_regular):
+    """Test de integración: usuario regular no puede acceder al detalle."""
+    # Arrange
+    test_task_id = 1
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 1, 31)
+
+    # Act
+    response = client_regular.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 403
+    error_detail = response.json()["detail"]
+    assert "No tienes permisos para ver esta información" in error_detail
+
+
+@pytest.mark.integration
+def test_get_task_detail_missing_both_ids(client_admin):
+    """Test de integración: error cuando no se proporciona task_id ni project_id."""
+    # Arrange
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 1, 31)
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 400
+    error_detail = response.json()["detail"]
+    assert "Debe proporcionar task_id o project_id" in error_detail
+
+
+@pytest.mark.integration
+def test_get_task_detail_invalid_date_range(client_admin):
+    """Test de integración: error con rango de fechas inválido."""
+    # Arrange
+    test_task_id = 1
+    test_date_from = date(2024, 1, 31)  # Fecha posterior
+    test_date_to = date(2024, 1, 1)  # Fecha anterior
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 400
+    error_detail = response.json()["detail"]
+    assert "La fecha de inicio no puede ser posterior a la fecha de fin" in error_detail
+
+
+@pytest.mark.integration
+def test_get_task_detail_nonexistent_task(client_admin):
+    """Test de integración: detalle con task_id inexistente."""
+    # Arrange
+    test_task_id = 99999  # ID que probablemente no existe
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 1, 31)
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    # Puede retornar 200 con lista vacía o 404, dependiendo de la implementación
+    assert response.status_code in [200, 404]
+
+    if response.status_code == 200:
+        data = response.json()
+        assert data["task_id"] == test_task_id
+        assert len(data["timesheet_lines"]) == 0  # Lista vacía para tarea inexistente
+
+
+@pytest.mark.integration
+def test_get_task_detail_empty_date_range(client_admin):
+    """Test de integración: detalle con rango de fechas sin datos."""
+    # Arrange
+    test_task_id = 1
+    test_date_from = date(1990, 1, 1)  # Fechas muy antiguas sin datos
+    test_date_to = date(1990, 1, 31)
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["task_id"] == test_task_id
+    assert len(data["timesheet_lines"]) == 0  # Sin datos en ese rango
+
+
+@pytest.mark.integration
+def test_get_task_detail_response_format(client_admin):
+    """Test de integración: verifica formato de respuesta consistente."""
+    # Arrange
+    test_task_id = 1
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 12, 31)
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+
+    data = response.json()
+
+    # Verificar estructura requerida
+    required_fields = {"task_id", "project_id", "timesheet_lines"}
+    assert set(data.keys()) == required_fields
+
+    # task_id debe coincidir con el solicitado
+    assert data["task_id"] == test_task_id
+
+    # timesheet_lines debe ser una lista
+    assert isinstance(data["timesheet_lines"], list)
+
+
+@pytest.mark.integration
+def test_get_task_detail_both_task_and_project_params(client_admin):
+    """Test de integración: comportamiento cuando se proporcionan ambos IDs."""
+    # Arrange
+    test_task_id = 1
+    test_project_id = 1
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 1, 31)
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "project_id": test_project_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+
+    data = response.json()
+    # Debe priorizar task_id cuando ambos están presentes
+    assert data["task_id"] == test_task_id
+    # project_id puede ser None o el ID del proyecto de la tarea
+
+
+@pytest.mark.integration
+def test_get_task_detail_with_notifications(client_admin):
+    """Test de integración: verifica que las notificaciones se incluyen correctamente."""
+    # Arrange
+    test_task_id = 1
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 12, 31)  # Rango amplio
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "task_id": test_task_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+
+    data = response.json()
+
+    # Verificar que cada línea de timesheet tiene el campo notification
+    for timesheet_line in data["timesheet_lines"]:
+        assert "notification" in timesheet_line
+
+        # Si hay notificación, verificar estructura
+        if timesheet_line["notification"] is not None:
+            notification = timesheet_line["notification"]
+            assert "id" in notification
+            assert "sender_name" in notification
+            assert "sended_at" in notification
+            assert isinstance(notification["id"], int)
+            assert isinstance(notification["sender_name"], str)
+            assert isinstance(notification["sended_at"], str)
+
+
+@pytest.mark.integration
+def test_get_task_detail_consistent_results(client_admin):
+    """Test de integración: verifica que los resultados son consistentes."""
+    # Arrange
+    test_task_id = 1
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 1, 31)
+    params = {
+        "task_id": test_task_id,
+        "date_from": test_date_from.isoformat(),
+        "date_to": test_date_to.isoformat(),
+    }
+
+    # Act - Hacer múltiples llamadas
+    response1 = client_admin.get("/dashboard/summary/detail", params=params)
+    response2 = client_admin.get("/dashboard/summary/detail", params=params)
+
+    # Assert
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+
+    data1 = response1.json()
+    data2 = response2.json()
+
+    # Los resultados deben ser consistentes
+    assert data1["task_id"] == data2["task_id"]
+    assert data1["project_id"] == data2["project_id"]
+    assert len(data1["timesheet_lines"]) == len(data2["timesheet_lines"])
+
+    # Verificar que los IDs de las líneas son los mismos
+    if data1["timesheet_lines"]:
+        ids1 = [line["id"] for line in data1["timesheet_lines"]]
+        ids2 = [line["id"] for line in data2["timesheet_lines"]]
+        assert ids1 == ids2
+
+
+@pytest.mark.integration
+def test_get_task_detail_data_integrity(client_admin):
+    """Test de integración: verifica la integridad de los datos."""
+    # Arrange
+    test_project_id = 1
+    test_date_from = date(2024, 1, 1)
+    test_date_to = date(2024, 12, 31)
+
+    # Act
+    response = client_admin.get(
+        "/dashboard/summary/detail",
+        params={
+            "project_id": test_project_id,
+            "date_from": test_date_from.isoformat(),
+            "date_to": test_date_to.isoformat(),
+        },
+    )
+
+    # Assert
+    assert response.status_code == 200
+
+    data = response.json()
+
+    # Verificar integridad de datos
+    for timesheet_line in data["timesheet_lines"]:
+        # Las horas deben ser positivas o cero
+        assert timesheet_line["hours"] >= 0
+
+        # La fecha debe estar en el rango solicitado
+        line_date = date.fromisoformat(timesheet_line["date"])
+        assert test_date_from <= line_date <= test_date_to
+
+        # El empleado debe tener ID y nombre válidos
+        employee = timesheet_line["employee"]
+        assert employee["employee_id"] > 0
+        assert len(employee["employee_name"].strip()) > 0
+
+        # validated debe ser booleano
+        assert isinstance(timesheet_line["validated"], bool)
+
+    print("✅ Validación de integridad de datos exitosa:")
+    print(f"   - Líneas de timesheet verificadas: {len(data['timesheet_lines'])}")
+    print(f"   - Proyecto ID: {data['project_id']}")
+    print(f"   - Tarea ID: {data['task_id']}")
