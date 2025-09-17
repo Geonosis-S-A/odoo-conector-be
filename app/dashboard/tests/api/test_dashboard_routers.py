@@ -611,7 +611,7 @@ class TestDashboardRouters:
 
             # Verificar que se llamó al use case con los parámetros correctos
             mock_use_case.execute.assert_called_once_with(
-                test_task_id, None, test_date_from, test_date_to
+                test_task_id, None, test_date_from, test_date_to, None
             )
 
     def test_get_task_detail_success_with_project_id(
@@ -690,7 +690,7 @@ class TestDashboardRouters:
 
             # Verificar que se llamó al use case con los parámetros correctos
             mock_use_case.execute.assert_called_once_with(
-                None, test_project_id, test_date_from, test_date_to
+                None, test_project_id, test_date_from, test_date_to, None
             )
 
     def test_get_task_detail_forbidden_regular_user(
@@ -830,6 +830,211 @@ class TestDashboardRouters:
             "La fecha de inicio no puede ser posterior a la fecha de fin"
             in response.json()["detail"]
         )
+
+    def test_get_task_detail_success_with_employee_filter(
+        self,
+        app,
+        client,
+        mock_current_user_admin,
+        mock_dashboard_gateway,
+        mock_employee_gateway,
+        mock_task_gateway,
+        mock_timesheet_gateway,
+    ):
+        """Test exitoso del endpoint get_task_detail con filtro por employee_id."""
+        # Arrange
+        test_task_id = 1
+        test_employee_id = 2
+        test_date_from = date(2024, 1, 1)
+        test_date_to = date(2024, 1, 31)
+
+        # Mock del repositorio de notificaciones
+        mock_notification_repository = Mock()
+        app.dependency_overrides[get_notification_repository] = (
+            lambda: mock_notification_repository
+        )
+
+        # Configurar overrides de dependencias
+        app.dependency_overrides[get_current_user] = lambda: mock_current_user_admin
+        app.dependency_overrides[get_dashboard_data_gateway] = (
+            lambda: mock_dashboard_gateway
+        )
+        app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
+        app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
+        app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+
+        # Mock del caso de uso - solo devuelve datos del empleado filtrado
+        mock_task_detail_data = {
+            "task_id": test_task_id,
+            "project_id": None,
+            "timesheet_lines": [
+                {
+                    "id": 2,
+                    "name": "Testing",
+                    "employee": {"employee_id": test_employee_id, "employee_name": "Ana García"},
+                    "hours": 4.0,
+                    "date": test_date_from,
+                    "create_date": "2024-01-01T14:00:00Z",
+                    "validated": True,
+                    "notification": None,
+                }
+            ],
+        }
+
+        with patch(
+            "app.dashboard.api.routers.GetTaskDetailUseCase"
+        ) as mock_use_case_class:
+            mock_use_case = Mock()
+            mock_use_case.execute.return_value = mock_task_detail_data
+            mock_use_case_class.return_value = mock_use_case
+
+            # Act
+            response = client.get(
+                "/dashboard/summary/detail",
+                params={
+                    "task_id": test_task_id,
+                    "employee_id": test_employee_id,
+                    "date_from": test_date_from.isoformat(),
+                    "date_to": test_date_to.isoformat(),
+                },
+            )
+
+            # Assert
+            assert response.status_code == 200
+
+            data = response.json()
+            assert data["task_id"] == test_task_id
+            assert len(data["timesheet_lines"]) == 1
+            
+            # Verificar que solo está el empleado filtrado
+            timesheet_line = data["timesheet_lines"][0]
+            assert timesheet_line["employee"]["employee_id"] == test_employee_id
+
+            # Verificar que se llamó al use case con el employee_id
+            mock_use_case.execute.assert_called_once_with(
+                test_task_id, None, test_date_from, test_date_to, test_employee_id
+            )
+
+    def test_get_task_detail_regular_user_own_employee_id(
+        self,
+        app,
+        client,
+        mock_current_user_regular,
+        mock_dashboard_gateway,
+        mock_employee_gateway,
+        mock_task_gateway,
+        mock_timesheet_gateway,
+    ):
+        """Test que verifica que un usuario regular puede ver su propia información."""
+        # Arrange
+        test_task_id = 1
+        test_employee_id = 2  # Mismo ID que el usuario regular
+        test_date_from = date(2024, 1, 1)
+        test_date_to = date(2024, 1, 31)
+
+        # Mock del repositorio de notificaciones
+        mock_notification_repository = Mock()
+        app.dependency_overrides[get_notification_repository] = (
+            lambda: mock_notification_repository
+        )
+
+        # Configurar overrides de dependencias
+        app.dependency_overrides[get_current_user] = lambda: mock_current_user_regular
+        app.dependency_overrides[get_dashboard_data_gateway] = (
+            lambda: mock_dashboard_gateway
+        )
+        app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
+        app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
+        app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+
+        # Mock del caso de uso
+        mock_task_detail_data = {
+            "task_id": test_task_id,
+            "project_id": None,
+            "timesheet_lines": [
+                {
+                    "id": 1,
+                    "name": "Mi trabajo",
+                    "employee": {"employee_id": test_employee_id, "employee_name": "Usuario Regular"},
+                    "hours": 8.0,
+                    "date": test_date_from,
+                    "create_date": "2024-01-01T10:00:00Z",
+                    "validated": False,
+                    "notification": None,
+                }
+            ],
+        }
+
+        with patch(
+            "app.dashboard.api.routers.GetTaskDetailUseCase"
+        ) as mock_use_case_class:
+            mock_use_case = Mock()
+            mock_use_case.execute.return_value = mock_task_detail_data
+            mock_use_case_class.return_value = mock_use_case
+
+            # Act
+            response = client.get(
+                "/dashboard/summary/detail",
+                params={
+                    "task_id": test_task_id,
+                    "employee_id": test_employee_id,
+                    "date_from": test_date_from.isoformat(),
+                    "date_to": test_date_to.isoformat(),
+                },
+            )
+
+            # Assert
+            assert response.status_code == 200
+            data = response.json()
+            assert len(data["timesheet_lines"]) == 1
+            assert data["timesheet_lines"][0]["employee"]["employee_id"] == test_employee_id
+
+    def test_get_task_detail_regular_user_forbidden_other_employee(
+        self,
+        app,
+        client,
+        mock_current_user_regular,
+        mock_dashboard_gateway,
+        mock_employee_gateway,
+        mock_task_gateway,
+        mock_timesheet_gateway,
+    ):
+        """Test que verifica que un usuario regular no puede ver información de otros empleados."""
+        # Arrange
+        test_task_id = 1
+        test_employee_id = 5  # ID diferente al usuario regular (2)
+        test_date_from = date(2024, 1, 1)
+        test_date_to = date(2024, 1, 31)
+
+        # Mock del repositorio de notificaciones
+        mock_notification_repository = Mock()
+        app.dependency_overrides[get_notification_repository] = (
+            lambda: mock_notification_repository
+        )
+
+        # Configurar overrides de dependencias
+        app.dependency_overrides[get_current_user] = lambda: mock_current_user_regular
+        app.dependency_overrides[get_dashboard_data_gateway] = (
+            lambda: mock_dashboard_gateway
+        )
+        app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
+        app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
+        app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+
+        # Act
+        response = client.get(
+            "/dashboard/summary/detail",
+            params={
+                "task_id": test_task_id,
+                "employee_id": test_employee_id,
+                "date_from": test_date_from.isoformat(),
+                "date_to": test_date_to.isoformat(),
+            },
+        )
+
+        # Assert
+        assert response.status_code == 403
+        assert "No tienes permisos para ver esta información" in response.json()["detail"]
 
 
 class TestDashboardDependencies:
