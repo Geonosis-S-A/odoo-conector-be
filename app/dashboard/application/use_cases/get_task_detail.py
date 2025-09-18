@@ -31,6 +31,7 @@ class GetTaskDetailUseCase:
         project_id: Optional[int],
         date_from: date,
         date_to: date,
+        employee_id: Optional[int] = None,
     ) -> dict:
         """
         Ejecuta el caso de uso para obtener empleados que cargaron horas en una tarea/proyecto.
@@ -40,6 +41,7 @@ class GetTaskDetailUseCase:
             project_id: ID del proyecto (usado cuando task_id es None)
             date_from: Fecha de inicio del período
             date_to: Fecha de fin del período
+            employee_id: ID del empleado para filtrar (opcional)
 
         Returns:
             dict con información detallada de las líneas de timesheet y estadísticas
@@ -61,6 +63,12 @@ class GetTaskDetailUseCase:
             date_from=date_from,
             date_to=date_to,
         )
+
+        # Filtrar por empleado específico si se proporciona employee_id
+        if employee_id is not None:
+            timesheet_lines = [
+                line for line in timesheet_lines if line.employee_id == employee_id
+            ]
 
         # Obtener IDs únicos de empleados para buscar nombres
         unique_employee_ids = list(set(line.employee_id for line in timesheet_lines))

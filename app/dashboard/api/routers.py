@@ -183,6 +183,7 @@ async def get_task_detail(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
+    employee_id: int | None = Query(None, description="ID del empleado para filtrar"),
 ):
     """
     Obtiene el detalle de empleados que cargaron horas en una tarea específica o proyecto en un período.
@@ -203,10 +204,22 @@ async def get_task_detail(
     # Validar permisos
     roles: list[int] = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
-    if not is_approver:
-        raise HTTPException(
-            status_code=403, detail="No tienes permisos para ver esta información"
-        )
+    
+    # Si no es approver, solo puede ver información general o su propia información
+    
+    if employee_id:
+        if (
+            (employee_id is not None and current_user["user_id"] != employee_id)
+            or (employee_id is None)
+        ) and (not is_approver):
+            raise HTTPException(
+                status_code=403, detail="No tienes permisos para ver esta información"
+            )
+    else: 
+        if not is_approver:
+            raise HTTPException(
+                status_code=403, detail="No tienes permisos para ver esta información"
+            )
 
     try:
         # Validar parámetros de entrada
@@ -228,7 +241,7 @@ async def get_task_detail(
             employee_gateway,
             notification_repository,
         )
-        task_detail = use_case.execute(task_id, project_id, date_from, date_to)
+        task_detail = use_case.execute(task_id, project_id, date_from, date_to, employee_id)
 
         # Transformar líneas de timesheet al schema correcto
         timesheet_lines = [
