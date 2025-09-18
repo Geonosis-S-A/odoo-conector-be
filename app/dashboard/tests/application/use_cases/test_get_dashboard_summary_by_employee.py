@@ -179,6 +179,7 @@ class TestGetDashboardSummaryByEmployeeUseCase:
             date_to,
             use_case.task_gateway,
             use_case.timesheet_line_gateway,
+            None,
         )
         mock_dashboard_gateway.calculate_hours_kpi.assert_called_once_with(
             mock_timesheet_data_single_employee, 1

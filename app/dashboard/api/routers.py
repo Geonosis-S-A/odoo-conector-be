@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 
 from app.dashboard.api.schemas import (
@@ -14,12 +15,17 @@ from app.dashboard.api.schemas import (
     DashboardSummaryMetaResponseByEmployee,
     HierarchicalSummaryResponse,
     HierarchicalItemResponse,
+    TaskDetailResponse,
+    SimpleTimesheetLineResponse,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary_by_employee import (
     GetDashboardSummaryByEmployeeUseCase,
+)
+from app.dashboard.application.use_cases.get_task_detail import (
+    GetTaskDetailUseCase,
 )
 from app.dashboard.domain.repositories import DashboardDataService
 from app.dashboard.infra.dashboard_service import OdooDashboardDataService
@@ -37,6 +43,11 @@ from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
+from app.timesheet_line.infra.db.repositories import (
+    SQLModelTimesheetLineNotificationRepository,
+)
+from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
+from app.shared.infra.db.session import get_db, Session
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -91,6 +102,12 @@ def get_dashboard_data_gateway(
         )
 
 
+def get_notification_repository(
+    db: Session = Depends(get_db),
+) -> TimesheetLineNotificationRepository:
+    return SQLModelTimesheetLineNotificationRepository(db)
+
+
 @router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
@@ -143,6 +160,101 @@ async def get_dashboard_summary(
         )
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema(dashboard_summary)
+
+        return response
+
+    except HTTPException:
+        # Re-lanzar HTTPExceptions tal como están
+        raise
+
+
+@router.get("/summary/detail", response_model=TaskDetailResponse)
+async def get_task_detail(
+    task_id: Optional[int] = Query(None, description="ID de la tarea para filtrar"),
+    project_id: Optional[int] = Query(
+        None, description="ID del proyecto para filtrar (cuando no hay tarea)"
+    ),
+    date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
+    date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    dashboard_gateway: DashboardDataService = Depends(get_dashboard_data_gateway),
+    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    current_user: dict = Depends(get_current_user),
+    notification_repository: TimesheetLineNotificationRepository = Depends(
+        get_notification_repository
+    ),
+    employee_id: int | None = Query(None, description="ID del empleado para filtrar"),
+):
+    """
+    Obtiene el detalle de empleados que cargaron horas en una tarea específica o proyecto en un período.
+
+    Args:
+        task_id: ID de la tarea a consultar (opcional)
+        project_id: ID del proyecto a consultar (opcional, usado cuando task_id es None)
+        date_from: Fecha de inicio del período (YYYY-MM-DD)
+        date_to: Fecha de fin del período (YYYY-MM-DD)
+        dashboard_gateway: Gateway de datos de dashboard (inyectado)
+        timesheet_line_gateway: Gateway de líneas de timesheet (inyectado)
+        current_user: Usuario autenticado (inyectado)
+
+    Returns:
+        TaskDetailResponse: Detalle con líneas de timesheet y estadísticas
+    """
+
+    # Validar permisos
+    roles: list[int] = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    
+    # Si no es approver, solo puede ver información general o su propia información
+    
+    if employee_id:
+        if (
+            (employee_id is not None and current_user["user_id"] != employee_id)
+            or (employee_id is None)
+        ) and (not is_approver):
+            raise HTTPException(
+                status_code=403, detail="No tienes permisos para ver esta información"
+            )
+    else: 
+        if not is_approver:
+            raise HTTPException(
+                status_code=403, detail="No tienes permisos para ver esta información"
+            )
+
+    try:
+        # Validar parámetros de entrada
+        if not task_id and not project_id:
+            raise HTTPException(
+                status_code=400, detail="Debe proporcionar task_id o project_id"
+            )
+
+        if date_from > date_to:
+            raise HTTPException(
+                status_code=400,
+                detail="La fecha de inicio no puede ser posterior a la fecha de fin",
+            )
+
+        # Crear y ejecutar caso de uso
+        use_case = GetTaskDetailUseCase(
+            dashboard_gateway,
+            timesheet_line_gateway,
+            employee_gateway,
+            notification_repository,
+        )
+        task_detail = use_case.execute(task_id, project_id, date_from, date_to, employee_id)
+
+        # Transformar líneas de timesheet al schema correcto
+        timesheet_lines = [
+            SimpleTimesheetLineResponse(**line)
+            for line in task_detail["timesheet_lines"]
+        ]
+
+        # Crear respuesta
+        response = TaskDetailResponse(
+            task_id=task_detail["task_id"],
+            project_id=task_detail["project_id"],
+            timesheet_lines=timesheet_lines,
+        )
 
         return response
 
