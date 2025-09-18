@@ -2,6 +2,7 @@ import pytest
 from typing import Optional, List
 from datetime import datetime
 from fastapi.testclient import TestClient
+from app.timesheet_line.tests.utils.date_utils import get_valid_test_date, get_multiple_test_dates
 from app.email.api.dependencies import get_common_email_service
 from app.timesheet_line.api.routers import (
     get_notification_repository,
@@ -173,13 +174,14 @@ def test_send_review_mail_success_admin_user(
 
     try:
         # Arrange - Crear líneas de timesheet primero
+        test_date = get_valid_test_date()
         create_data = [
             {
                 "name": "Test Timesheet for Review",
                 "employee_id": 1,
                 "project_id": 1,
                 "hours": 8.0,
-                "date": "2025-08-01",
+                "date": test_date,
             }
         ]
         create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -335,20 +337,21 @@ def test_send_review_mail_multiple_timesheets_same_employee(
 
     try:
         # Arrange - Crear múltiples líneas de timesheet para el mismo empleado
+        test_dates = get_multiple_test_dates(2)
         create_data = [
             {
                 "name": "Test Timesheet 1 for Review",
                 "employee_id": 1,
                 "project_id": 1,
                 "hours": 4.0,
-                "date": "2025-08-01",
+                "date": test_dates[0],
             },
             {
                 "name": "Test Timesheet 2 for Review",
                 "employee_id": 1,
                 "project_id": 1,
                 "hours": 4.0,
-                "date": "2025-08-02",
+                "date": test_dates[1],
             },
         ]
         create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -417,13 +420,14 @@ def test_send_review_mail_without_body(
 
     try:
         # Arrange - Crear línea de timesheet
+        test_date = get_valid_test_date()
         create_data = [
             {
                 "name": "Test Timesheet for Review without body",
                 "employee_id": 1,
                 "project_id": 1,
                 "hours": 8.0,
-                "date": "2025-08-01",
+                "date": test_date,
             }
         ]
         create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -494,13 +498,14 @@ def test_send_review_mail_email_service_exception(
 
     try:
         # Arrange - Crear línea de timesheet
+        test_date = get_valid_test_date()
         create_data = [
             {
                 "name": "Test Timesheet for Email Error",
                 "employee_id": 1,
                 "project_id": 1,
                 "hours": 8.0,
-                "date": "2025-08-01",
+                "date": test_date,
             }
         ]
         create_response = test_client.post("/api/v1/timesheet/", json=create_data)

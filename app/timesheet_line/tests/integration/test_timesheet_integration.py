@@ -1,6 +1,12 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.timesheet_line.api.routers import router
+from app.timesheet_line.tests.utils.date_utils import (
+    get_valid_test_date,
+    get_multiple_test_dates,
+    get_date_range_for_filtering,
+    get_wide_date_range_for_filtering
+)
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
@@ -41,7 +47,7 @@ def test_create_and_delete_timesheet_line(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
 
@@ -77,7 +83,7 @@ def test_list_timesheet_lines(test_client):
     """Test de integración que prueba el listado de líneas de timesheet."""
     # Act - Ahora necesitamos pasar los parámetros obligatorios
     response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2025-01-01&date_to=2025-12-31"
+        f"/api/v1/timesheet/?employee_id=1&date_from={get_date_range_for_filtering()[0]}&date_to={get_date_range_for_filtering()[1]}"
     )
 
     # Assert - Siempre debería devolver 200, con datos o lista vacía
@@ -111,7 +117,7 @@ def test_create_timesheet_line_validation(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": -1,  # Horas inválidas
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
 
@@ -133,7 +139,7 @@ def test_edit_timesheet_line(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -147,7 +153,7 @@ def test_edit_timesheet_line(test_client):
         "employee_id": 1,
         "project_id": 1,
         "hours": 4.0,
-        "date": "2025-08-01",
+        "date": get_valid_test_date(),
         "validated": False,  # Timesheet no validado
     }
     edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
@@ -158,7 +164,7 @@ def test_edit_timesheet_line(test_client):
 
     # Verificar que los cambios se aplicaron
     get_response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2025-01-01&date_to=2025-12-31"
+        f"/api/v1/timesheet/?employee_id=1&date_from={get_date_range_for_filtering()[0]}&date_to={get_date_range_for_filtering()[1]}"
     )
     assert get_response.status_code == 200
     updated_line = next(
@@ -185,7 +191,7 @@ def test_edit_timesheet_line_validation(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -199,7 +205,7 @@ def test_edit_timesheet_line_validation(test_client):
         "employee_id": 1,
         "project_id": 1,
         "hours": -1.0,  # Horas inválidas
-        "date": "2025-08-01",
+        "date": get_valid_test_date(),
         "validated": False,  # Timesheet no validado
     }
     edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
@@ -254,7 +260,7 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
                 "employee_id": 1,
                 "project_id": 1,
                 "hours": 8.0,
-                "date": "2025-08-01",
+                "date": get_valid_test_date(),
             }
         ]
         create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -263,12 +269,12 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
 
         # Act - Filtrar por empleado existente
         response_with_filter = test_client.get(
-            "/api/v1/timesheet/?employee_id=1&date_from=2025-01-01&date_to=2025-12-31"
+            f"/api/v1/timesheet/?employee_id=1&date_from={get_date_range_for_filtering()[0]}&date_to={get_date_range_for_filtering()[1]}"
         )
 
         # Act - Filtrar por empleado que no existe (debería devolver 404)
         response_without_filter = test_client.get(
-            "/api/v1/timesheet/?employee_id=999&date_from=2025-01-01&date_to=2025-12-31"
+            f"/api/v1/timesheet/?employee_id=999&date_from={get_date_range_for_filtering()[0]}&date_to={get_date_range_for_filtering()[1]}"
         )
 
         # Assert
@@ -299,27 +305,28 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
 def test_list_timesheet_lines_with_date_filter(test_client):
     """Test de integración que prueba el filtrado por rango de fechas."""
     # Arrange - Crear líneas de timesheet en diferentes fechas
+    test_dates = get_multiple_test_dates(3)
     create_data_1 = [
         {
             "name": "Test Timesheet 1",
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-15",
+            "date": test_dates[0],
         },
         {
             "name": "Test Timesheet 2",
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-20",
+            "date": test_dates[1],
         },
         {
             "name": "Test Timesheet 3",
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-25",
+            "date": test_dates[2],
         },
     ]
 
@@ -329,9 +336,12 @@ def test_list_timesheet_lines_with_date_filter(test_client):
     created_ids = [item["id"] for item in create_response_1.json()]
     assert len(created_ids) == 3  # Verificar que se crearon 3 timesheets
 
-    # Act - Filtrar por rango de fechas que incluye solo las dos primeras
+    # Act - Filtrar por rango de fechas que incluye solo las dos primeras  
+    # Usar el rango entre la primera y segunda fecha de test
+    date_from = test_dates[0]
+    date_to = test_dates[1]
     response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2025-08-12&date_to=2025-08-22"
+        f"/api/v1/timesheet/?employee_id=1&date_from={date_from}&date_to={date_to}"
     )
 
     # Assert
@@ -341,7 +351,7 @@ def test_list_timesheet_lines_with_date_filter(test_client):
 
     # Verificar que solo aparecen las líneas dentro del rango de fechas
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
-    # Solo los primeros 2 timesheets deben estar en el rango (2025-08-15 y 2025-08-20)
+    # Solo los primeros 2 timesheets deben estar en el rango
     assert len(created_ids_in_response) == 2
 
     # Limpieza
@@ -354,20 +364,21 @@ def test_list_timesheet_lines_with_date_filter(test_client):
 def test_list_timesheet_lines_with_date_from_filter(test_client):
     """Test de integración que prueba el filtrado solo con fecha de inicio."""
     # Arrange
+    test_dates = get_multiple_test_dates(2)
     create_data_old = [
         {
             "name": "Test Timesheet Old",
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-10",
+            "date": test_dates[0],
         },
         {
             "name": "Test Timesheet New",
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-20",
+            "date": test_dates[1],
         },
     ]
     create_response_old = test_client.post("/api/v1/timesheet/", json=create_data_old)
@@ -377,8 +388,11 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
     assert len(created_ids) == 2  # Verificar que se crearon 2 timesheets
 
     # Act - Ahora necesitamos pasar employee_id y date_to también
+    # Filtrar desde la segunda fecha hacia adelante
+    date_from = test_dates[1]
+    _, date_to_range = get_wide_date_range_for_filtering()
     response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2025-08-15&date_to=2025-12-31"
+        f"/api/v1/timesheet/?employee_id=1&date_from={date_from}&date_to={date_to_range}"
     )
 
     # Assert
@@ -387,7 +401,7 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
     assert isinstance(data, list)
 
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
-    # Solo el timesheet nuevo (2025-08-20) debe estar en el rango
+    # Solo el timesheet nuevo debe estar en el rango
     assert len(created_ids_in_response) == 1
 
     # Limpieza
@@ -400,20 +414,21 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
 def test_list_timesheet_lines_with_date_to_filter(test_client):
     """Test de integración que prueba el filtrado solo con fecha de fin."""
     # Arrange
+    test_dates = get_multiple_test_dates(2)
     create_data_old = [
         {
             "name": "Test Timesheet Old",
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-10",
+            "date": test_dates[0],
         },
         {
             "name": "Test Timesheet New",
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-20",
+            "date": test_dates[1],
         },
     ]
     create_response_old = test_client.post("/api/v1/timesheet/", json=create_data_old)
@@ -423,8 +438,11 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
     assert len(created_ids) == 2  # Verificar que se crearon 2 timesheets
 
     # Act - Ahora necesitamos pasar employee_id y date_from también
+    # Filtrar hasta la primera fecha, usando una fecha de inicio anterior
+    date_from_range, _ = get_wide_date_range_for_filtering()
+    date_to = test_dates[0]  # Solo hasta la primera fecha de test
     response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2025-01-01&date_to=2025-08-15"
+        f"/api/v1/timesheet/?employee_id=1&date_from={date_from_range}&date_to={date_to}"
     )
 
     # Assert
@@ -432,7 +450,7 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
     data = response.json()
 
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
-    # Solo el timesheet viejo (2025-08-10) debe estar en el rango
+    # Solo el timesheet viejo debe estar en el rango
     assert len(created_ids_in_response) == 1
 
     # Limpieza
@@ -451,7 +469,7 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-15",
+            "date": get_valid_test_date(),
         }
     ]
     create_response_emp1 = test_client.post("/api/v1/timesheet/", json=create_data_emp1)
@@ -462,7 +480,7 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
 
     # Act
     response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2025-08-14&date_to=2025-08-16"
+        f"/api/v1/timesheet/?employee_id=1&date_from={get_date_range_for_filtering()[0]}&date_to={get_date_range_for_filtering()[1]}"
     )
 
     # Assert
@@ -524,7 +542,7 @@ def test_delete_timesheet_validation_errors(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -560,14 +578,14 @@ def test_validate_timesheet_lines_success(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         },
         {
             "name": "Test Timesheet for Validation 2",
             "employee_id": 1,
             "project_id": 1,
             "hours": 4.0,
-            "date": "2025-08-02",
+            "date": get_valid_test_date(8),
         },
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -620,7 +638,7 @@ def test_validate_timesheet_lines_permission_denied(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -743,7 +761,7 @@ def test_validate_timesheet_lines_mixed_existing_and_nonexisting(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -799,7 +817,7 @@ def test_edit_validated_timesheet_non_admin_user_forbidden(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -813,7 +831,7 @@ def test_edit_validated_timesheet_non_admin_user_forbidden(test_client):
         "employee_id": 1,
         "project_id": 1,
         "hours": 4.0,
-        "date": "2025-08-01",
+        "date": get_valid_test_date(),
         "validated": True,  # Timesheet validado
     }
     edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
@@ -842,7 +860,7 @@ def test_edit_validated_timesheet_admin_user_allowed(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -871,7 +889,7 @@ def test_edit_validated_timesheet_admin_user_allowed(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 4.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
             "validated": True,  # Timesheet validado
         }
         edit_response = test_client.put(
@@ -901,7 +919,7 @@ def test_edit_non_validated_timesheet_any_user_allowed(test_client):
             "employee_id": 1,
             "project_id": 1,
             "hours": 8.0,
-            "date": "2025-08-01",
+            "date": get_valid_test_date(),
         }
     ]
     create_response = test_client.post("/api/v1/timesheet/", json=create_data)
@@ -915,7 +933,7 @@ def test_edit_non_validated_timesheet_any_user_allowed(test_client):
         "employee_id": 1,
         "project_id": 1,
         "hours": 4.0,
-        "date": "2025-08-01",
+        "date": get_valid_test_date(),
         "validated": False,  # Timesheet no validado
     }
     edit_response = test_client.put(f"/api/v1/timesheet/{created_id}", json=edit_data)
@@ -926,7 +944,7 @@ def test_edit_non_validated_timesheet_any_user_allowed(test_client):
 
     # Verificar que los cambios se aplicaron
     get_response = test_client.get(
-        "/api/v1/timesheet/?employee_id=1&date_from=2025-01-01&date_to=2025-12-31"
+        f"/api/v1/timesheet/?employee_id=1&date_from={get_date_range_for_filtering()[0]}&date_to={get_date_range_for_filtering()[1]}"
     )
     assert get_response.status_code == 200
     updated_line = next(
