@@ -33,7 +33,6 @@ class SyncSingleUserChangesUseCase:
             employee_id
         )
 
-        print("DATA TRAIDA DE ODOO", odoo_employee_data)
         if not odoo_employee_data:
             return {
                 "success": False,
