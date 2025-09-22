@@ -53,8 +53,12 @@ async def get_timeoff_types(
             )
             for timeoff_type in timeoff_types
         ]
-    except HTTPException:
-        raise
+    except ValueError as e:
+        # Errores de validación → HTTP 400
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Errores de Odoo/negocio → HTTP 400 (datos rechazados por reglas de negocio)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/create", response_model=TimeOffRequestResponse)
@@ -180,16 +184,10 @@ async def get_employee_timeoff_requests(
 
     
     except ValueError as e:
-        # Errores de validación de parámetros
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        # Errores de validación → HTTP 400
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Errores internos del servidor (gateway/Odoo)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al obtener solicitudes de tiempo personal: {str(e)}"
-        )
+        # Errores de Odoo/negocio → HTTP 400 (datos rechazados por reglas de negocio)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
