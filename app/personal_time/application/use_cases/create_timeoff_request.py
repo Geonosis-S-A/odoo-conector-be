@@ -39,32 +39,23 @@ class CreateTimeOffRequestUseCase:
             ValueError: Si los parámetros no son válidos
             Exception: Si hay un error al crear la solicitud
         """
-        try:
-            # Validaciones de negocio
-            self._validate_input_parameters(
-                employee_id, holiday_status_id, request_date_from, request_date_to, description
-            )
-            
-            # Crear la solicitud
-            timeoff_request = TimeOffRequest(
-                holiday_status_id=holiday_status_id,
-                name=description,
-                request_date_from=request_date_from,
-                request_date_to=request_date_to,
-                employee_id=employee_id
-            )
-            
-            # Delegar al gateway
-            result = self.timeoff_gateway.create_timeoff_request(timeoff_request)
-            
-            return result
-            
-        except ValueError:
-            # Re-propagar ValueError para que el router pueda manejarlo con HTTP 400
-            raise
-        except Exception:
-            # Re-propagar otras excepciones para que el router las maneje como HTTP 500
-            raise
+        # Validaciones de negocio
+        self._validate_input_parameters(
+            employee_id, holiday_status_id, request_date_from, request_date_to, description
+        )
+        
+        # Crear la solicitud
+        timeoff_request = TimeOffRequest(
+            holiday_status_id=holiday_status_id,
+            name=description,
+            request_date_from=request_date_from,
+            request_date_to=request_date_to,
+            employee_id=employee_id
+        )
+        
+        # Delegar al gateway - cualquier error se propaga directamente
+        return self.timeoff_gateway.create_timeoff_request(timeoff_request)
+
     
     def _validate_input_parameters(
         self,

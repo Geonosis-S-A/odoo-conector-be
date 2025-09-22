@@ -109,22 +109,12 @@ async def create_timeoff_request(
             success=result.success,
             message=result.message
         )
-
-    
     except ValueError as e:
-        # Errores de validación de parámetros
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
-    except HTTPException:
-        raise
+        # Errores de validación → HTTP 400
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Errores internos del servidor (gateway/Odoo)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        # Errores de Odoo/negocio → HTTP 400 (datos rechazados por reglas de negocio)
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/requests", response_model=List[TimeOffRequestInfoResponse])
