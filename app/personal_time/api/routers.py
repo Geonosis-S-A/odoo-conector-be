@@ -13,7 +13,7 @@ from app.shared.infra.external.odoo.odoo_client import (
 from app.shared.security.dependencies import get_current_user
 
 
-router = APIRouter(prefix="/personal-time", tags=["personal-time"])
+router = APIRouter(prefix="/timeoff", tags=["timeoff"])
 
 
 def get_timeoff_gateway(
@@ -29,7 +29,7 @@ def get_timeoff_gateway(
         )
 
 
-@router.get("/timeoff-types", response_model=List[TimeOffTypeResponse])
+@router.get("/types", response_model=List[TimeOffTypeResponse])
 async def get_timeoff_types(
     gateway: TimeOffGateway = Depends(get_timeoff_gateway),
     current_user: dict = Depends(get_current_user),
@@ -55,7 +55,7 @@ async def get_timeoff_types(
         raise
 
 
-@router.post("/timeoff-requests", response_model=TimeOffRequestResponse)
+@router.post("/create", response_model=TimeOffRequestResponse)
 async def create_timeoff_request(
     request_data: TimeOffRequestCreate,
     gateway: TimeOffGateway = Depends(get_timeoff_gateway),
