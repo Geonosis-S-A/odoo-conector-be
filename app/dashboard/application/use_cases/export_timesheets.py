@@ -38,5 +38,23 @@ class ExportTimesheetsByTeamUseCase:
             )
         )
 
-        timesheet_lines_df = pd.DataFrame(timesheet_lines)
-        return timesheet_lines_df
+        df = pd.DataFrame(timesheet_lines)
+
+        df["empleado"] = df["employee_id"].apply(lambda x: x[1])
+        df["proyecto"] = df["project_id"].apply(lambda x: x[1])
+        df["tarea"] = df["task_id"].apply(
+            lambda x: x[1] if isinstance(x, list) else "-"
+        )
+        df["name"] = df["name"].apply(lambda x: "-" if x == "/" else x)
+
+        df = df.drop(columns=["employee_id", "project_id", "task_id"])
+        df = df.rename(
+            columns={
+                "id": "id_carga",
+                "date": "fecha",
+                "unit_amount": "cantidad",
+                "name": "descripcion",
+                "create_date": "fecha de carga",
+            }
+        )
+        return df
