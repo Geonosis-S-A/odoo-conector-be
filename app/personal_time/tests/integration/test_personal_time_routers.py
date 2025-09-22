@@ -56,10 +56,10 @@ def client_regular(local_db_session):
 
 
 @pytest.mark.integration
-def test_get_leave_types_success_admin_user(client_admin):
+def test_get_timeoff_types_success_admin_user(client_admin):
     """Test de integración: obtener tipos de licencias exitoso con usuario admin."""
     # Act
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     assert response.status_code == 200
@@ -70,25 +70,25 @@ def test_get_leave_types_success_admin_user(client_admin):
     # Si hay tipos de licencias, verificar estructura
     if data:
         print(f"\n✅ Tipos de licencias encontrados: {len(data)}")
-        for leave_type in data[:5]:  # Mostrar solo los primeros 5
-            print(f"   ID: {leave_type['id']:2d} - {leave_type['name']}")
+        for timeoff_type in data[:5]:  # Mostrar solo los primeros 5
+            print(f"   ID: {timeoff_type['id']:2d} - {timeoff_type['name']}")
             
             # Verificar estructura de cada tipo de licencia
-            assert "id" in leave_type
-            assert "name" in leave_type
-            assert isinstance(leave_type["id"], int)
-            assert isinstance(leave_type["name"], str)
-            assert leave_type["id"] > 0
-            assert len(leave_type["name"].strip()) > 0
+            assert "id" in timeoff_type
+            assert "name" in timeoff_type
+            assert isinstance(timeoff_type["id"], int)
+            assert isinstance(timeoff_type["name"], str)
+            assert timeoff_type["id"] > 0
+            assert len(timeoff_type["name"].strip()) > 0
     else:
         print("\n⚠️  No se encontraron tipos de licencias en Odoo")
 
 
 @pytest.mark.integration
-def test_get_leave_types_success_regular_user(client_regular):
+def test_get_timeoff_types_success_regular_user(client_regular):
     """Test de integración: obtener tipos de licencias exitoso con usuario regular."""
     # Act
-    response = client_regular.get("/personal-time/leave-types")
+    response = client_regular.get("/personal-time/timeoff-types")
 
     # Assert
     assert response.status_code == 200
@@ -99,18 +99,18 @@ def test_get_leave_types_success_regular_user(client_regular):
     # Los usuarios regulares también deberían poder ver tipos de licencias
     # ya que es información básica necesaria para solicitar licencias
     if data:
-        leave_type = data[0]
-        assert "id" in leave_type
-        assert "name" in leave_type
-        assert isinstance(leave_type["id"], int)
-        assert isinstance(leave_type["name"], str)
+        timeoff_type = data[0]
+        assert "id" in timeoff_type
+        assert "name" in timeoff_type
+        assert isinstance(timeoff_type["id"], int)
+        assert isinstance(timeoff_type["name"], str)
 
 
 @pytest.mark.integration
-def test_get_leave_types_response_format(client_admin):
+def test_get_timeoff_types_response_format(client_admin):
     """Test de integración: verifica formato de respuesta."""
     # Act
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     assert response.status_code == 200
@@ -120,26 +120,26 @@ def test_get_leave_types_response_format(client_admin):
     assert isinstance(data, list)
 
     # Verificar que cada elemento tiene la estructura correcta
-    for leave_type in data:
+    for timeoff_type in data:
         # Verificar campos requeridos
         required_fields = {"id", "name"}
-        assert set(leave_type.keys()) == required_fields
+        assert set(timeoff_type.keys()) == required_fields
 
         # Verificar tipos de datos
-        assert isinstance(leave_type["id"], int)
-        assert isinstance(leave_type["name"], str)
+        assert isinstance(timeoff_type["id"], int)
+        assert isinstance(timeoff_type["name"], str)
 
         # Verificar validez de datos
-        assert leave_type["id"] > 0
-        assert len(leave_type["name"].strip()) > 0
+        assert timeoff_type["id"] > 0
+        assert len(timeoff_type["name"].strip()) > 0
 
 
 @pytest.mark.integration
-def test_get_leave_types_consistent_results(client_admin):
+def test_get_timeoff_types_consistent_results(client_admin):
     """Test de integración: verifica que los resultados son consistentes."""
     # Act - Hacer múltiples llamadas
-    response1 = client_admin.get("/personal-time/leave-types")
-    response2 = client_admin.get("/personal-time/leave-types")
+    response1 = client_admin.get("/personal-time/timeoff-types")
+    response2 = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     assert response1.status_code == 200
@@ -164,10 +164,10 @@ def test_get_leave_types_consistent_results(client_admin):
 
 
 @pytest.mark.integration
-def test_get_leave_types_data_integrity(client_admin):
+def test_get_timeoff_types_data_integrity(client_admin):
     """Test de integración: verifica la integridad de los datos."""
     # Act
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     assert response.status_code == 200
@@ -180,12 +180,12 @@ def test_get_leave_types_data_integrity(client_admin):
         assert len(ids) == len(set(ids)), "No debe haber IDs duplicados"
 
         # Verificar que no hay nombres vacíos
-        for leave_type in data:
-            assert leave_type["name"].strip(), f"El nombre no debe estar vacío para ID {leave_type['id']}"
+        for timeoff_type in data:
+            assert timeoff_type["name"].strip(), f"El nombre no debe estar vacío para ID {timeoff_type['id']}"
 
         # Verificar que los IDs son únicos y positivos
-        for leave_type in data:
-            assert leave_type["id"] > 0, f"El ID debe ser positivo: {leave_type['id']}"
+        for timeoff_type in data:
+            assert timeoff_type["id"] > 0, f"El ID debe ser positivo: {timeoff_type['id']}"
 
         # Verificar que los nombres son diferentes (en la mayoría de casos)
         names = [item["name"] for item in data]
@@ -197,13 +197,13 @@ def test_get_leave_types_data_integrity(client_admin):
 
 
 @pytest.mark.integration
-def test_get_leave_types_performance(client_admin):
+def test_get_timeoff_types_performance(client_admin):
     """Test de integración: verifica el rendimiento del endpoint."""
     import time
 
     # Act
     start_time = time.time()
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
     end_time = time.time()
 
     # Assert
@@ -219,14 +219,14 @@ def test_get_leave_types_performance(client_admin):
 
 
 @pytest.mark.integration
-def test_get_leave_types_error_handling(client_admin):
+def test_get_timeoff_types_error_handling(client_admin):
     """Test de integración: verifica el manejo de errores."""
     # Este test verifica que el endpoint maneja errores graciosamente
     # En condiciones normales debería funcionar, pero si hay problemas de conexión
     # debería retornar un error 500 apropiado
 
     # Act
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     # El endpoint debería funcionar o fallar graciosamente
@@ -244,10 +244,10 @@ def test_get_leave_types_error_handling(client_admin):
 
 
 @pytest.mark.integration
-def test_get_leave_types_content_validation(client_admin):
+def test_get_timeoff_types_content_validation(client_admin):
     """Test de integración: verifica la validez del contenido."""
     # Act
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     assert response.status_code == 200
@@ -255,9 +255,9 @@ def test_get_leave_types_content_validation(client_admin):
     data = response.json()
 
     if data:
-        for leave_type in data:
+        for timeoff_type in data:
             # Verificar que el nombre no tiene caracteres de control
-            name = leave_type["name"]
+            name = timeoff_type["name"]
             assert not any(ord(char) < 32 for char in name if char != '\t'), \
                 f"Nombre contiene caracteres de control: {repr(name)}"
 
@@ -266,15 +266,15 @@ def test_get_leave_types_content_validation(client_admin):
                 f"Nombre tiene longitud inválida: {len(name)} caracteres"
 
             # Verificar que el ID está en un rango razonable
-            assert 1 <= leave_type["id"] <= 999999, \
-                f"ID fuera de rango esperado: {leave_type['id']}"
+            assert 1 <= timeoff_type["id"] <= 999999, \
+                f"ID fuera de rango esperado: {timeoff_type['id']}"
 
 
 @pytest.mark.integration
-def test_get_leave_types_encoding_handling(client_admin):
+def test_get_timeoff_types_encoding_handling(client_admin):
     """Test de integración: verifica el manejo de caracteres especiales."""
     # Act
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     assert response.status_code == 200
@@ -286,8 +286,8 @@ def test_get_leave_types_encoding_handling(client_admin):
         special_chars_found = False
         common_spanish_chars = ['ñ', 'á', 'é', 'í', 'ó', 'ú', 'ü', 'Ñ', 'Á', 'É', 'Í', 'Ó', 'Ú', 'Ü']
         
-        for leave_type in data:
-            name = leave_type["name"]
+        for timeoff_type in data:
+            name = timeoff_type["name"]
             
             # Verificar que los caracteres especiales se manejan correctamente
             if any(char in name for char in common_spanish_chars):
@@ -305,10 +305,10 @@ def test_get_leave_types_encoding_handling(client_admin):
 
 
 @pytest.mark.integration
-def test_get_leave_types_business_logic_validation(client_admin):
+def test_get_timeoff_types_business_logic_validation(client_admin):
     """Test de integración: valida la lógica de negocio específica."""
     # Act
-    response = client_admin.get("/personal-time/leave-types")
+    response = client_admin.get("/personal-time/timeoff-types")
 
     # Assert
     assert response.status_code == 200
@@ -318,13 +318,13 @@ def test_get_leave_types_business_logic_validation(client_admin):
     if data:
         # Verificar que hay tipos de licencias comunes esperados
         # (esto puede variar según la configuración de Odoo)
-        leave_type_names = [item["name"].lower() for item in data]
+        timeoff_type_names = [item["name"].lower() for item in data]
         
         # Contar tipos comunes que podrían estar presentes
         common_types = {
-            "vacaciones": any("vacacion" in name for name in leave_type_names),
-            "enfermedad": any("enferm" in name or "médic" in name for name in leave_type_names),
-            "maternidad": any("maternidad" in name or "paternidad" in name for name in leave_type_names),
+            "vacaciones": any("vacacion" in name for name in timeoff_type_names),
+            "enfermedad": any("enferm" in name or "médic" in name for name in timeoff_type_names),
+            "maternidad": any("maternidad" in name or "paternidad" in name for name in timeoff_type_names),
         }
         
         # Al menos uno de los tipos comunes debería estar presente en una instalación típica
@@ -347,12 +347,12 @@ def test_get_leave_types_business_logic_validation(client_admin):
 
 
 @pytest.mark.integration
-def test_get_leave_types_ordering_consistency(client_admin):
+def test_get_timeoff_types_ordering_consistency(client_admin):
     """Test de integración: verifica la consistencia del ordenamiento."""
     # Act - Hacer múltiples llamadas
     responses = []
     for _ in range(3):
-        response = client_admin.get("/personal-time/leave-types")
+        response = client_admin.get("/personal-time/timeoff-types")
         assert response.status_code == 200
         responses.append(response.json())
 

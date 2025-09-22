@@ -1,26 +1,26 @@
 import pytest
 from datetime import date, timedelta
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
-from app.personal_time.infra.external.odoo_leave_type_gateway import OdooLeaveTypeGateway
-from app.personal_time.domain.models import LeaveRequest
+from app.personal_time.infra.external.odoo_timeoff_type_gateway import OdooTimeOffeGateway
+from app.personal_time.domain.models import TimeOffRequest
 
 
 @pytest.mark.integration  # type: ignore[attr-defined]
-class TestCreateLeaveRequestIntegration:
+class TestCreatetimeoffRequestIntegration:
     @pytest.fixture(autouse=True)  # type: ignore[attr-defined]
     def setup(self):
         """Setup para tests de integración con Odoo real."""
         self.odoo_client = get_odoo_connection()
-        self.gateway = OdooLeaveTypeGateway(self.odoo_client)
+        self.gateway = OdooTimeOffeGateway(self.odoo_client)
         yield
 
-    def test_create_leave_request_success(self):
+    def test_create_timeoff_request_success(self):
         """Test de integración que crea una solicitud de licencia real en Odoo."""
         # Arrange - Crear una solicitud de prueba
         tomorrow = date.today() + timedelta(days=1)
         day_after_tomorrow = date.today() + timedelta(days=2)
         
-        leave_request = LeaveRequest(
+        timeoff_request = TimeOffRequest(
             holiday_status_id=1,  # Usar ID 1 que probablemente existe
             name="Tiempo personal - Prueba automatizada",
             request_date_from=tomorrow,
@@ -29,7 +29,7 @@ class TestCreateLeaveRequestIntegration:
         )
 
         # Act
-        result = self.gateway.create_leave_request(leave_request)
+        result = self.gateway.create_timeoff_request(timeoff_request)
 
         # Assert
         print(f"\n🔍 Resultado de creación:")
@@ -60,13 +60,13 @@ class TestCreateLeaveRequestIntegration:
             if is_known_error:
                 pytest.skip(f"Error de configuración conocido: {result.message}")
 
-    def test_leave_request_data_conversion(self):
+    def test_timeoff_request_data_conversion(self):
         """Test que verifica la conversión de datos a formato Odoo."""
         # Arrange
         test_date_from = date(2024, 12, 25)
         test_date_to = date(2024, 12, 26)
         
-        leave_request = LeaveRequest(
+        timeoff_request = TimeOffRequest(
             holiday_status_id=2,
             name="Vacaciones de prueba",
             request_date_from=test_date_from,
@@ -75,7 +75,7 @@ class TestCreateLeaveRequestIntegration:
         )
 
         # Act
-        odoo_data = leave_request.to_odoo_data()
+        odoo_data = timeoff_request.to_odoo_data()
 
         # Assert
         expected_data = {
@@ -91,13 +91,13 @@ class TestCreateLeaveRequestIntegration:
         for key, value in odoo_data.items():
             print(f"   {key}: {value}")
 
-    def test_leave_request_validation_future_dates(self):
+    def test_timeoff_request_validation_future_dates(self):
         """Test que verifica la creación con fechas futuras."""
         # Arrange - Usar fechas futuras para evitar conflictos
         future_date = date.today() + timedelta(days=30)
         end_date = future_date + timedelta(days=1)
         
-        leave_request = LeaveRequest(
+        timeoff_request = TimeOffRequest(
             holiday_status_id=1,
             name="Prueba fechas futuras",
             request_date_from=future_date,
@@ -106,7 +106,7 @@ class TestCreateLeaveRequestIntegration:
         )
 
         # Act
-        result = self.gateway.create_leave_request(leave_request)
+        result = self.gateway.create_timeoff_request(timeoff_request)
 
         # Assert
         print(f"\n📅 Test con fechas futuras:")

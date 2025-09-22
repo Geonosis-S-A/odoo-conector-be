@@ -1,17 +1,17 @@
 from abc import ABC, abstractmethod
 from typing import List
-from app.personal_time.domain.models import LeaveType, LeaveRequest, LeaveRequestResult
+from app.personal_time.domain.models import TimeOffType, TimeOffRequest, TimeOffRequestResult
 
 
-class LeaveTypeGateway(ABC):
+class TimeOffGateway(ABC):
     """Gateway abstracto para operaciones con tipos de licencias."""
     
     @abstractmethod
-    def get_all_leave_types(self) -> List[LeaveType]:
+    def get_all_timeoff_types(self) -> List[TimeOffType]:
         """Obtiene todos los tipos de licencias disponibles.
         
         Returns:
-            List[LeaveType]: Lista de tipos de licencias disponibles
+            List[TimeOffType]: Lista de tipos de licencias disponibles
             
         Raises:
             Exception: Si hay un error al obtener los tipos de licencias
@@ -19,14 +19,14 @@ class LeaveTypeGateway(ABC):
         pass
 
     @abstractmethod
-    def create_leave_request(self, leave_request: LeaveRequest) -> LeaveRequestResult:
+    def create_timeoff_request(self, timeoff_request: TimeOffRequest) -> TimeOffRequestResult:
         """Crea una nueva solicitud de licencia en Odoo.
         
         Args:
-            leave_request: Solicitud de licencia a crear
+            timeoff_request: Solicitud de licencia a crear
             
         Returns:
-            LeaveRequestResult: Resultado de la operación con ID si es exitosa
+            TimeOffRequestResult: Resultado de la operación con ID si es exitosa
             
         Raises:
             Exception: Si hay un error al crear la solicitud

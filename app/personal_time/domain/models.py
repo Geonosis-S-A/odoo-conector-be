@@ -6,21 +6,21 @@ from typing import Optional
 
 
 @dataclass
-class LeaveType:
+class TimeOffType:
     """Representa un tipo de licencia/ausencia en el sistema."""
     
     id: int
     name: str
 
     @classmethod
-    def from_odoo_data(cls, odoo_data: dict) -> "LeaveType":
-        """Crea un LeaveType desde los datos de Odoo.
+    def from_odoo_data(cls, odoo_data: dict) -> "TimeOffType":
+        """Crea un TimeOffType desde los datos de Odoo.
         
         Args:
             odoo_data: Diccionario con datos de Odoo que debe contener 'id' y 'name'
             
         Returns:
-            LeaveType: Instancia del tipo de licencia
+            TimeOffType: Instancia del tipo de licencia
         """
         return cls(
             id=odoo_data["id"],
@@ -29,7 +29,7 @@ class LeaveType:
 
 
 @dataclass
-class LeaveRequest:
+class TimeOffRequest:
     """Representa una solicitud de licencia/ausencia."""
     
     holiday_status_id: int  # ID del tipo de licencia
@@ -54,7 +54,7 @@ class LeaveRequest:
 
 
 @dataclass
-class LeaveRequestResult:
+class TimeOffRequestResult:
     """Representa el resultado de crear una solicitud de licencia."""
     
     request_id: Optional[int]
@@ -62,7 +62,7 @@ class LeaveRequestResult:
     message: str
 
     @classmethod
-    def success_result(cls, request_id: int) -> "LeaveRequestResult":
+    def success_result(cls, request_id: int) -> "TimeOffRequestResult":
         """Crea un resultado exitoso."""
         return cls(
             request_id=request_id,
@@ -71,7 +71,7 @@ class LeaveRequestResult:
         )
 
     @classmethod
-    def error_result(cls, error_message: str) -> "LeaveRequestResult":
+    def error_result(cls, error_message: str) -> "TimeOffRequestResult":
         """Crea un resultado de error."""
         return cls(
             request_id=None,

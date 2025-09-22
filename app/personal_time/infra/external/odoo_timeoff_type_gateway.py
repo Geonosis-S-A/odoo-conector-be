@@ -1,10 +1,10 @@
 from typing import List
-from app.personal_time.domain.gateway import LeaveTypeGateway
-from app.personal_time.domain.models import LeaveType, LeaveRequest, LeaveRequestResult
+from app.personal_time.domain.gateway import TimeOffGateway
+from app.personal_time.domain.models import TimeOffType, TimeOffRequest, TimeOffRequestResult
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
 
-class OdooLeaveTypeGateway(LeaveTypeGateway):
+class OdooTimeOffeGateway(TimeOffGateway):
     """Implementación del gateway para tipos de licencias usando Odoo."""
     
     def __init__(self, odoo_connection: OdooConnection):
@@ -15,11 +15,11 @@ class OdooLeaveTypeGateway(LeaveTypeGateway):
         """
         self.odoo_connection = odoo_connection
     
-    def get_all_leave_types(self) -> List[LeaveType]:
+    def get_all_timeoff_types(self) -> List[TimeOffType]:
         """Obtiene todos los tipos de licencias desde Odoo.
         
         Returns:
-            List[LeaveType]: Lista de tipos de licencias disponibles
+            List[TimeOffType]: Lista de tipos de licencias disponibles
             
         Raises:
             Exception: Si hay un error al conectar con Odoo o procesar los datos
@@ -41,25 +41,25 @@ class OdooLeaveTypeGateway(LeaveTypeGateway):
                 raise Exception("Respuesta inesperada de Odoo: se esperaba una lista")
             
             # Convertir los datos de Odoo a nuestros modelos de dominio
-            leave_types = [LeaveType.from_odoo_data(item) for item in result]
+            timeoff_types = [TimeOffType.from_odoo_data(item) for item in result]
             
-            return leave_types
+            return timeoff_types
             
         except Exception as e:
             raise Exception(f"Error al obtener tipos de licencias desde Odoo: {str(e)}")
 
-    def create_leave_request(self, leave_request: LeaveRequest) -> LeaveRequestResult:
+    def create_timeoff_request(self, timeoff_request: TimeOffRequest) -> TimeOffRequestResult:
         """Crea una nueva solicitud de licencia en Odoo.
         
         Args:
-            leave_request: Solicitud de licencia a crear
+            timeoff_request: Solicitud de licencia a crear
             
         Returns:
-            LeaveRequestResult: Resultado de la operación con ID si es exitosa
+            TimeOffRequestResult: Resultado de la operación con ID si es exitosa
         """
         try:
             # Convertir la solicitud al formato esperado por Odoo
-            odoo_data = leave_request.to_odoo_data()
+            odoo_data = timeoff_request.to_odoo_data()
             
             # Ejecutar la creación en Odoo usando el modelo hr.leave
             request_id = self.odoo_connection["models"].execute_kw(
@@ -73,11 +73,11 @@ class OdooLeaveTypeGateway(LeaveTypeGateway):
             
             # Validar que el ID retornado sea válido
             if not isinstance(request_id, int) or request_id <= 0:
-                return LeaveRequestResult.error_result(
+                return TimeOffRequestResult.error_result(
                     f"Respuesta inválida de Odoo: ID={request_id}"
                 )
             
-            return LeaveRequestResult.success_result(request_id)
+            return TimeOffRequestResult.success_result(request_id)
             
         except Exception as e:
-            return LeaveRequestResult.error_result(str(e))
+            return TimeOffRequestResult.error_result(str(e))
