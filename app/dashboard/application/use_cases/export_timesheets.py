@@ -164,4 +164,6 @@ class ExportTimesheetsByTeamUseCase:
             + [f"subtarea_{i + 1}" for i in range(max_depth - 1)]
             + ["fecha", "cantidad", "descripcion", "fecha de carga", "id_carga"]
         )
+        df = df.sort_values(by="empleado")
+        df = df.sort_values(by="fecha")
         return df[reorder_columns]
