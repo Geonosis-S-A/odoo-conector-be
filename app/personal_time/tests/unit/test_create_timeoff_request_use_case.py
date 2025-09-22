@@ -182,66 +182,7 @@ class TestCreateTimeOffRequestUseCase:
         # Assert
         assert result.success is False
         assert "no puede exceder 500 caracteres" in result.message
-
-    def test_execute_default_description(self, use_case, mock_gateway, valid_dates):
-        """Test que verifica el uso de descripción por defecto."""
-        # Arrange
-        start_date, end_date = valid_dates
-        expected_result = TimeOffRequestResult.success_result(456)
-        mock_gateway.create_timeoff_request.return_value = expected_result
-
-        # Act
-        result = use_case.execute(
-            employee_id=1,
-            holiday_status_id=2,
-            request_date_from=start_date,
-            request_date_to=end_date
-            # No se proporciona descripción
-        )
-
-        # Assert
-        assert result.success is True
-        call_args = mock_gateway.create_timeoff_request.call_args[0][0]
-        assert call_args.name == "Solicitud de tiempo personal"
-
-    def test_execute_with_validation_success(self, use_case, mock_gateway, valid_dates):
-        """Test que verifica la ejecución exitosa con validaciones extendidas."""
-        # Arrange
-        start_date, end_date = valid_dates
-        expected_result = TimeOffRequestResult.success_result(789)
-        mock_gateway.create_timeoff_request.return_value = expected_result
-
-        # Act
-        result = use_case.execute_with_validation(
-            employee_id=1,
-            holiday_status_id=2,
-            request_date_from=start_date,
-            request_date_to=end_date,
-            description="Vacaciones con validación extendida"
-        )
-
-        # Assert
-        assert result.success is True
-        assert result.request_id == 789
-
-    def test_execute_with_validation_long_duration(self, use_case, mock_gateway):
-        """Test que verifica la validación de duración muy larga."""
-        # Arrange
-        start_date = date.today() + timedelta(days=1)
-        end_date = start_date + timedelta(days=400)  # Más de 365 días
-
-        # Act
-        result = use_case.execute_with_validation(
-            employee_id=1,
-            holiday_status_id=2,
-            request_date_from=start_date,
-            request_date_to=end_date
-        )
-
-        # Assert
-        assert result.success is False
-        assert "no puede exceder" in result.message
-
+    
     def test_use_case_initialization(self, mock_gateway):
         """Test que verifica la correcta inicialización del caso de uso."""
         # Act

@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 from app.personal_time.domain.gateway import TimeOffGateway
 from app.personal_time.domain.models import TimeOffRequest, TimeOffRequestResult
 
@@ -20,7 +21,7 @@ class CreateTimeOffRequestUseCase:
         holiday_status_id: int,
         request_date_from: date,
         request_date_to: date,
-        description: str = "Solicitud de tiempo personal"
+        description: Optional[str] = None
     ) -> TimeOffRequestResult:
         """Ejecuta el caso de uso para crear una solicitud de licencia.
         
@@ -69,7 +70,7 @@ class CreateTimeOffRequestUseCase:
         holiday_status_id: int,
         request_date_from: date,
         request_date_to: date,
-        description: str
+        description: Optional[str]
     ) -> None:
         """Valida los parámetros de entrada.
         
@@ -105,71 +106,10 @@ class CreateTimeOffRequestUseCase:
         if request_date_to < today:
             raise ValueError("No se pueden crear solicitudes para fechas pasadas")
         
-        # Validar descripción
-        if not isinstance(description, str):
-            raise ValueError("description debe ser una cadena de texto")
-        
-        if not description.strip():
+        if description and not description.strip():
             raise ValueError("description no puede estar vacía")
         
-        if len(description.strip()) > 500:
+        if description and len(description.strip()) > 500:
             raise ValueError("description no puede exceder 500 caracteres")
     
-    def _validate_date_range(self, request_date_from: date, request_date_to: date) -> None:
-        """Valida que el rango de fechas sea razonable.
-        
-        Args:
-            request_date_from: Fecha de inicio
-            request_date_to: Fecha de fin
-            
-        Raises:
-            ValueError: Si el rango de fechas no es válido
-        """
-        # Calcular duración
-        duration = (request_date_to - request_date_from).days + 1
-        
-        # Validar duración máxima (opcional, depende de las políticas de la empresa)
-        max_duration_days = 365  # Un año como máximo por solicitud
-        if duration > max_duration_days:
-            raise ValueError(f"La duración de la licencia no puede exceder {max_duration_days} días")
-        
-        # Validar duración mínima
-        if duration <= 0:
-            raise ValueError("La duración de la licencia debe ser de al menos 1 día")
     
-    def execute_with_validation(
-        self,
-        employee_id: int,
-        holiday_status_id: int,
-        request_date_from: date,
-        request_date_to: date,
-        description: str = "Solicitud de tiempo personal"
-    ) -> TimeOffRequestResult:
-        """Versión del execute con validaciones adicionales más estrictas.
-        
-        Args:
-            employee_id: ID del empleado que solicita la licencia
-            holiday_status_id: ID del tipo de licencia
-            request_date_from: Fecha de inicio de la licencia
-            request_date_to: Fecha de fin de la licencia
-            description: Descripción/motivo de la solicitud
-            
-        Returns:
-            TimeOffRequestResult: Resultado de la operación con ID si es exitosa
-        """
-        try:
-            # Validaciones básicas
-            self._validate_input_parameters(
-                employee_id, holiday_status_id, request_date_from, request_date_to, description
-            )
-            
-            # Validaciones adicionales de rango de fechas
-            self._validate_date_range(request_date_from, request_date_to)
-            
-            # Ejecutar el caso de uso normal
-            return self.execute(employee_id, holiday_status_id, request_date_from, request_date_to, description)
-            
-        except ValueError as e:
-            return TimeOffRequestResult.error_result(f"Validación fallida: {str(e)}")
-        except Exception as e:
-            return TimeOffRequestResult.error_result(f"Error en validación extendida: {str(e)}")

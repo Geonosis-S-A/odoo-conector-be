@@ -33,7 +33,7 @@ class TimeOffRequest:
     """Representa una solicitud de licencia/ausencia."""
     
     holiday_status_id: int  # ID del tipo de licencia
-    name: str  # Descripción/motivo
+    name: Optional[str]  # Descripción/motivo
     request_date_from: date  # Fecha de inicio
     request_date_to: date  # Fecha de fin
     employee_id: int  # ID del empleado
@@ -46,7 +46,7 @@ class TimeOffRequest:
         """
         return {
             "holiday_status_id": self.holiday_status_id,
-            "name": self.name,
+            "name": self.name or "",
             "request_date_from": self.request_date_from.strftime("%Y-%m-%d"),
             "request_date_to": self.request_date_to.strftime("%Y-%m-%d"),
             "employee_id": self.employee_id,
