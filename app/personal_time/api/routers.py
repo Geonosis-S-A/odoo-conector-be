@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import List, Optional
+from datetime import date
 
-from app.personal_time.api.schemas import TimeOffTypeResponse, TimeOffRequestCreate, TimeOffRequestResponse
+from app.personal_time.api.schemas import TimeOffTypeResponse, TimeOffRequestCreate, TimeOffRequestResponse, TimeOffRequestInfoResponse
 from app.personal_time.application.use_cases.get_timeoff_types import GetTimeOffTypesUseCase
 from app.personal_time.application.use_cases.create_timeoff_request import CreateTimeOffRequestUseCase
+from app.personal_time.application.use_cases.get_employee_timeoff_requests import GetEmployeeTimeOffRequestsUseCase
 from app.personal_time.domain.gateway import TimeOffGateway
 from app.personal_time.infra.external.odoo_timeoff_type_gateway import OdooTimeOffeGateway
 from app.shared.infra.external.odoo.odoo_client import (
@@ -107,6 +109,71 @@ async def create_timeoff_request(
             success=result.success,
             message=result.message
         )
+
+    except HTTPException:
+        raise
+
+
+@router.get("/requests", response_model=List[TimeOffRequestInfoResponse])
+async def get_employee_timeoff_requests(
+    date_from: Optional[date] = Query(None, description="Fecha de inicio del filtro (YYYY-MM-DD)"),
+    date_to: Optional[date] = Query(None, description="Fecha de fin del filtro (YYYY-MM-DD)"),
+    gateway: TimeOffGateway = Depends(get_timeoff_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Obtiene las solicitudes de tiempo personal del empleado autenticado.
+
+    Permite filtrar las solicitudes por rango de fechas. Si no se especifican filtros,
+    retorna todas las solicitudes del empleado.
+
+    Args:
+        date_from: Fecha de inicio del filtro (opcional)
+        date_to: Fecha de fin del filtro (opcional)
+        gateway: Gateway para operaciones de tiempo personal
+        current_user: Usuario autenticado actual
+
+    Returns:
+        List[TimeOffRequestInfoResponse]: Lista de solicitudes del empleado
+
+    Raises:
+        HTTPException: Si hay errores en la validación o consulta
+    """
+    try:
+        # Obtener el employee_id del usuario autenticado
+        employee_id = current_user.get("user_id")
+        if not employee_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se pudo determinar el ID del empleado para el usuario actual"
+            )
+
+        # Crear el caso de uso
+        use_case = GetEmployeeTimeOffRequestsUseCase(gateway)
+        
+        # Ejecutar la consulta
+        timeoff_requests = use_case.execute(
+            employee_id=employee_id,
+            date_from=date_from,
+            date_to=date_to
+        )
+
+        # Convertir a schemas de respuesta
+        return [
+            TimeOffRequestInfoResponse(
+                id=request.id,
+                holiday_status_id=request.holiday_status_id,
+                holiday_status_name=request.holiday_status_name,
+                name=request.name,
+                request_date_from=request.request_date_from,
+                request_date_to=request.request_date_to,
+                employee_id=request.employee_id,
+                employee_name=request.employee_name,
+                state=request.state,
+                number_of_days=request.number_of_days
+            )
+            for request in timeoff_requests
+        ]
 
     except HTTPException:
         raise

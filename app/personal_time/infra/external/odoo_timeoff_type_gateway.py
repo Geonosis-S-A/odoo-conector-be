@@ -1,6 +1,7 @@
-from typing import List
+from typing import List, Optional
+from datetime import date
 from app.personal_time.domain.gateway import TimeOffGateway
-from app.personal_time.domain.models import TimeOffType, TimeOffRequest, TimeOffRequestResult
+from app.personal_time.domain.models import TimeOffType, TimeOffRequest, TimeOffRequestResult, TimeOffRequestInfo
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
 
@@ -81,3 +82,77 @@ class OdooTimeOffeGateway(TimeOffGateway):
             
         except Exception as e:
             return TimeOffRequestResult.error_result(str(e))
+
+    def get_employee_timeoff_requests(
+        self, 
+        employee_id: int, 
+        date_from: Optional[date] = None, 
+        date_to: Optional[date] = None
+    ) -> List[TimeOffRequestInfo]:
+        """Obtiene las solicitudes de tiempo personal de un empleado desde Odoo, opcionalmente filtradas por fechas.
+        
+        Args:
+            employee_id: ID del empleado en Odoo
+            date_from: Fecha de inicio del filtro (opcional)
+            date_to: Fecha de fin del filtro (opcional)
+            
+        Returns:
+            List[TimeOffRequestInfo]: Lista de solicitudes del empleado filtradas por fecha
+            
+        Raises:
+            Exception: Si hay un error al conectar con Odoo o procesar los datos
+            ValueError: Si los parámetros no son válidos
+        """
+        try:
+
+            # Campos que necesitamos de hr.leave
+            fields = [
+                "id",
+                "holiday_status_id",  # Relación con hr.leave.type
+                "name",
+                "request_date_from",
+                "request_date_to", 
+                "employee_id",  # Relación con hr.employee
+                "state",
+                "number_of_days"
+            ]
+
+            # Filtro base: solicitudes del empleado especificado
+            domain = [["employee_id", "=", employee_id]]
+            
+            if date_from and date_to:
+                domain.append(["request_date_from", ">=", date_from.strftime("%Y-%m-%d")])
+                domain.append(["request_date_to", "<=", date_to.strftime("%Y-%m-%d")])
+
+            # Ejecutar la consulta a Odoo usando el modelo hr.leave
+            result = self.odoo_connection["models"].execute_kw(
+                self.odoo_connection["ODOO_DB"],
+                self.odoo_connection["uid"],
+                self.odoo_connection["ODOO_PASSWORD"],
+                "hr.leave",
+                "search_read",
+                [domain],  # El dominio debe estar dentro de una lista
+                {"fields": fields, "order": "request_date_from desc"}  # Ordenar por fecha más reciente primero
+            )
+            
+            # Validar que el resultado sea una lista
+            if not isinstance(result, list):
+                raise Exception("Respuesta inesperada de Odoo: se esperaba una lista")
+            
+            # Convertir los datos de Odoo a nuestros modelos de dominio
+            timeoff_requests = []
+            for item in result:
+                try:
+                    timeoff_request_info = TimeOffRequestInfo.from_odoo_data(item)
+                    timeoff_requests.append(timeoff_request_info)
+                except Exception as e:
+                    # Log the error but continue processing other records
+                    print(f"Warning: Error procesando solicitud ID {item.get('id', 'unknown')}: {str(e)}")
+                    continue
+            
+            return timeoff_requests
+            
+        except Exception as e:
+            raise Exception(f"Error al obtener solicitudes de tiempo personal desde Odoo: {str(e)}")
+
+

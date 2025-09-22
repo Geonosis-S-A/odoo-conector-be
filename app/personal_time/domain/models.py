@@ -78,3 +78,66 @@ class TimeOffRequestResult:
             success=False,
             message=f"Error al crear solicitud: {error_message}"
         )
+
+
+@dataclass
+class TimeOffRequestInfo:
+    """Representa información de una solicitud de tiempo personal existente."""
+    
+    id: int
+    holiday_status_id: int
+    holiday_status_name: str
+    name: Optional[str]  # Descripción/motivo
+    request_date_from: date
+    request_date_to: date
+    employee_id: int
+    employee_name: str
+    state: str  # Estado de la solicitud (draft, confirm, validate, refuse, cancel)
+    number_of_days: float
+
+    @classmethod
+    def from_odoo_data(cls, odoo_data: dict) -> "TimeOffRequestInfo":
+        """Crea un TimeOffRequestInfo desde los datos de Odoo.
+        
+        Args:
+            odoo_data: Diccionario con datos de Odoo hr.leave
+            
+        Returns:
+            TimeOffRequestInfo: Instancia de la solicitud
+        """
+        # Manejo de fechas que pueden venir en diferentes formatos
+        date_from = odoo_data["request_date_from"]
+        date_to = odoo_data["request_date_to"]
+        
+        if isinstance(date_from, str):
+            date_from = date.fromisoformat(date_from.split(' ')[0])  # Tomar solo la fecha si viene con hora
+        
+        if isinstance(date_to, str):
+            date_to = date.fromisoformat(date_to.split(' ')[0])
+        
+        # Manejar campos que pueden ser False en Odoo en lugar de None o cadenas vacías
+        def safe_string_value(value, default=""):
+            """Convierte valores de Odoo a string, manejando False y None."""
+            if value is False or value is None:
+                return default
+            return str(value)
+
+        # Extraer valores de campos many2one de forma segura
+        holiday_status_id = odoo_data["holiday_status_id"][0] if isinstance(odoo_data["holiday_status_id"], list) else odoo_data["holiday_status_id"]
+        holiday_status_name = odoo_data["holiday_status_id"][1] if isinstance(odoo_data["holiday_status_id"], list) else odoo_data.get("holiday_status_name", "")
+        
+        employee_id = odoo_data["employee_id"][0] if isinstance(odoo_data["employee_id"], list) else odoo_data["employee_id"]
+        employee_name = odoo_data["employee_id"][1] if isinstance(odoo_data["employee_id"], list) else odoo_data.get("employee_name", "")
+
+        return cls(
+            id=odoo_data["id"],
+            holiday_status_id=holiday_status_id,
+            holiday_status_name=safe_string_value(holiday_status_name),
+            name=safe_string_value(odoo_data.get("name")),
+            request_date_from=date_from,
+            request_date_to=date_to,
+            employee_id=employee_id,
+            employee_name=safe_string_value(employee_name),
+            state=safe_string_value(odoo_data.get("state", "draft")),
+            number_of_days=float(odoo_data.get("number_of_days", 0))
+        )

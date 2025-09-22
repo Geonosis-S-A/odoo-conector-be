@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import date
-from typing import Optional
+from typing import Optional, List
 
 
 class TimeOffTypeResponse(BaseModel):
@@ -45,3 +45,22 @@ class TimeOffRequestResponse(BaseModel):
                 "message": "Solicitud creada exitosamente con ID: 123"
             }
         }
+
+
+class TimeOffRequestInfoResponse(BaseModel):
+    """Schema de respuesta para información de una solicitud de tiempo personal existente."""
+    
+    id: int = Field(..., description="ID de la solicitud")
+    holiday_status_id: int = Field(..., description="ID del tipo de licencia")
+    holiday_status_name: str = Field(..., description="Nombre del tipo de licencia")
+    name: Optional[str] = Field(None, description="Descripción/motivo de la solicitud")
+    request_date_from: date = Field(..., description="Fecha de inicio de la licencia")
+    request_date_to: date = Field(..., description="Fecha de fin de la licencia")
+    employee_id: int = Field(..., description="ID del empleado")
+    employee_name: str = Field(..., description="Nombre del empleado")
+    state: str = Field(..., description="Estado de la solicitud")
+    number_of_days: float = Field(..., description="Número de días de la solicitud")
+    
+    class Config:
+        from_attributes = True
+
