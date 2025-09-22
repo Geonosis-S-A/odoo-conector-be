@@ -1,7 +1,10 @@
 from datetime import date
+import io
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi.responses import StreamingResponse
 
+from app.auth.infra.auth_service import JWTPayload
 from app.dashboard.api.schemas import (
     DashboardSummaryResponse,
     DashboardSummaryMetaResponse,
@@ -17,6 +20,9 @@ from app.dashboard.api.schemas import (
     HierarchicalItemResponse,
     TaskDetailResponse,
     SimpleTimesheetLineResponse,
+)
+from app.dashboard.application.use_cases.export_timesheets import (
+    ExportTimesheetsByTeamUseCase,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -48,6 +54,7 @@ from app.timesheet_line.infra.db.repositories import (
 )
 from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
 from app.shared.infra.db.session import get_db, Session
+import pandas as pd
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -204,9 +211,9 @@ async def get_task_detail(
     # Validar permisos
     roles: list[int] = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
-    
+
     # Si no es approver, solo puede ver información general o su propia información
-    
+
     if employee_id:
         if (
             (employee_id is not None and current_user["user_id"] != employee_id)
@@ -215,7 +222,7 @@ async def get_task_detail(
             raise HTTPException(
                 status_code=403, detail="No tienes permisos para ver esta información"
             )
-    else: 
+    else:
         if not is_approver:
             raise HTTPException(
                 status_code=403, detail="No tienes permisos para ver esta información"
@@ -241,7 +248,9 @@ async def get_task_detail(
             employee_gateway,
             notification_repository,
         )
-        task_detail = use_case.execute(task_id, project_id, date_from, date_to, employee_id)
+        task_detail = use_case.execute(
+            task_id, project_id, date_from, date_to, employee_id
+        )
 
         # Transformar líneas de timesheet al schema correcto
         timesheet_lines = [
@@ -318,6 +327,39 @@ async def get_dashboard_summary_by_employee(
     except HTTPException:
         # Re-lanzar HTTPExceptions tal como están
         raise
+
+
+@router.get("/export-timesheets")
+async def export_timesheets(
+    date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
+    date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: JWTPayload = Depends(get_current_user),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+):
+    roles = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    if not is_approver:
+        raise HTTPException(
+            status_code=403, detail="No tienes permisos para exportar timesheets"
+        )
+
+    use_case = ExportTimesheetsByTeamUseCase(
+        timesheet_line_gateway, employee_gateway, current_user["user_id"]
+    )
+    timesheet_lines_df = use_case.execute(date_from, date_to)
+    print(timesheet_lines_df)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        timesheet_lines_df.to_excel(writer, index=False, sheet_name="Horas")
+
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=horas.xlsx"},
+    )
 
 
 def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:
