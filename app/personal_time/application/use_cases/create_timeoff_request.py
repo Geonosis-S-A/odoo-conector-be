@@ -59,8 +59,9 @@ class CreateTimeOffRequestUseCase:
             
             return result
             
-        except ValueError as e:
-            return TimeOffRequestResult.error_result(f"Datos inválidos: {str(e)}")
+        except ValueError:
+            # Re-propagar ValueError para que el router pueda manejarlo con HTTP 400
+            raise
         except Exception as e:
             return TimeOffRequestResult.error_result(f"Error en el caso de uso CreateTimeOffRequest: {str(e)}")
     
