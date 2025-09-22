@@ -159,4 +159,9 @@ class ExportTimesheetsByTeamUseCase:
                 "create_date": "fecha de carga",
             }
         )
-        return df
+        reorder_columns = (
+            ["empleado", "proyecto", "tarea"]
+            + [f"subtarea_{i + 1}" for i in range(max_depth - 1)]
+            + ["fecha", "cantidad", "descripcion", "fecha de carga", "id_carga"]
+        )
+        return df[reorder_columns]
