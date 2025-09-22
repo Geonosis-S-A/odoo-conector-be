@@ -349,7 +349,6 @@ async def export_timesheets(
         timesheet_line_gateway, employee_gateway, task_gateway, current_user["user_id"]
     )
     timesheet_lines_df = use_case.execute(date_from, date_to)
-    print(timesheet_lines_df)
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         timesheet_lines_df.to_excel(writer, index=False, sheet_name="Horas")
