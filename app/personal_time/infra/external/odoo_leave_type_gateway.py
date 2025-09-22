@@ -1,6 +1,6 @@
 from typing import List
 from app.personal_time.domain.gateway import LeaveTypeGateway
-from app.personal_time.domain.models import LeaveType
+from app.personal_time.domain.models import LeaveType, LeaveRequest, LeaveRequestResult
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
 
@@ -47,3 +47,37 @@ class OdooLeaveTypeGateway(LeaveTypeGateway):
             
         except Exception as e:
             raise Exception(f"Error al obtener tipos de licencias desde Odoo: {str(e)}")
+
+    def create_leave_request(self, leave_request: LeaveRequest) -> LeaveRequestResult:
+        """Crea una nueva solicitud de licencia en Odoo.
+        
+        Args:
+            leave_request: Solicitud de licencia a crear
+            
+        Returns:
+            LeaveRequestResult: Resultado de la operación con ID si es exitosa
+        """
+        try:
+            # Convertir la solicitud al formato esperado por Odoo
+            odoo_data = leave_request.to_odoo_data()
+            
+            # Ejecutar la creación en Odoo usando el modelo hr.leave
+            request_id = self.odoo_connection["models"].execute_kw(
+                self.odoo_connection["ODOO_DB"],
+                self.odoo_connection["uid"],
+                self.odoo_connection["ODOO_PASSWORD"],
+                "hr.leave",
+                "create",
+                [odoo_data]
+            )
+            
+            # Validar que el ID retornado sea válido
+            if not isinstance(request_id, int) or request_id <= 0:
+                return LeaveRequestResult.error_result(
+                    f"Respuesta inválida de Odoo: ID={request_id}"
+                )
+            
+            return LeaveRequestResult.success_result(request_id)
+            
+        except Exception as e:
+            return LeaveRequestResult.error_result(str(e))
