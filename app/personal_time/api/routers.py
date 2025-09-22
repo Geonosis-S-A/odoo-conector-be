@@ -112,6 +112,18 @@ async def create_timeoff_request(
 
     except HTTPException:
         raise
+    except ValueError as e:
+        # Errores de validación de parámetros
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        # Errores internos del servidor
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al crear solicitud de tiempo personal: {str(e)}"
+        )
 
 
 @router.get("/requests", response_model=List[TimeOffRequestInfoResponse])
@@ -175,6 +187,14 @@ async def get_employee_timeoff_requests(
             for request in timeoff_requests
         ]
 
+    
+    except ValueError as e:
+        # Errores de validación de parámetros
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except HTTPException:
         raise
+
 
