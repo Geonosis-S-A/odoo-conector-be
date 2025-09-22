@@ -110,19 +110,20 @@ async def create_timeoff_request(
             message=result.message
         )
 
-    except HTTPException:
-        raise
+    
     except ValueError as e:
         # Errores de validación de parámetros
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+    except HTTPException:
+        raise
     except Exception as e:
-        # Errores internos del servidor
+        # Errores internos del servidor (gateway/Odoo)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al crear solicitud de tiempo personal: {str(e)}"
+            detail=str(e)
         )
 
 
@@ -196,5 +197,11 @@ async def get_employee_timeoff_requests(
         )
     except HTTPException:
         raise
+    except Exception as e:
+        # Errores internos del servidor (gateway/Odoo)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al obtener solicitudes de tiempo personal: {str(e)}"
+        )
 
 

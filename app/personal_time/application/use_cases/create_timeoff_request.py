@@ -62,8 +62,9 @@ class CreateTimeOffRequestUseCase:
         except ValueError:
             # Re-propagar ValueError para que el router pueda manejarlo con HTTP 400
             raise
-        except Exception as e:
-            return TimeOffRequestResult.error_result(f"Error en el caso de uso CreateTimeOffRequest: {str(e)}")
+        except Exception:
+            # Re-propagar otras excepciones para que el router las maneje como HTTP 500
+            raise
     
     def _validate_input_parameters(
         self,

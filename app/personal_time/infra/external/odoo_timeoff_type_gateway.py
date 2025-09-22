@@ -57,6 +57,9 @@ class OdooTimeOffeGateway(TimeOffGateway):
             
         Returns:
             TimeOffRequestResult: Resultado de la operación con ID si es exitosa
+            
+        Raises:
+            Exception: Si hay errores de comunicación con Odoo o errores del sistema
         """
         try:
             # Convertir la solicitud al formato esperado por Odoo
@@ -74,14 +77,13 @@ class OdooTimeOffeGateway(TimeOffGateway):
             
             # Validar que el ID retornado sea válido
             if not isinstance(request_id, int) or request_id <= 0:
-                return TimeOffRequestResult.error_result(
-                    f"Respuesta inválida de Odoo: ID={request_id}"
-                )
+                raise Exception(f"Respuesta inválida de Odoo: ID={request_id}")
             
             return TimeOffRequestResult.success_result(request_id)
             
         except Exception as e:
-            return TimeOffRequestResult.error_result(str(e))
+            # Propagar la excepción para que el caso de uso y router puedan manejarla
+            raise Exception(f"Error al crear solicitud en Odoo: {str(e)}")
 
     def get_employee_timeoff_requests(
         self, 
