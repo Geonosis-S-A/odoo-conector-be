@@ -335,6 +335,7 @@ async def export_timesheets(
     date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
     timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: JWTPayload = Depends(get_current_user),
+    task_gateway: TaskGateway = Depends(get_task_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
 ):
     roles = current_user["roles"]
@@ -345,7 +346,7 @@ async def export_timesheets(
         )
 
     use_case = ExportTimesheetsByTeamUseCase(
-        timesheet_line_gateway, employee_gateway, current_user["user_id"]
+        timesheet_line_gateway, employee_gateway, task_gateway, current_user["user_id"]
     )
     timesheet_lines_df = use_case.execute(date_from, date_to)
     print(timesheet_lines_df)
