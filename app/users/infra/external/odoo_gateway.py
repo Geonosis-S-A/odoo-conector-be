@@ -383,7 +383,6 @@ class OdooEmployeeGateway(EmployeeGateway):
             if not employee_data:
                 return None
 
-            print("EMPLEADO TRAIDA DE ODOO", employee_data)
             employee = employee_data[0]
 
             # 2. Preparar datos básicos del empleado (nombre y email del hr.employee)
@@ -485,7 +484,7 @@ class OdooEmployeeGateway(EmployeeGateway):
                     {"fields": ["user_id"]},
                 ),
             )
-            print(employee_data)
+
             if not employee_data:
                 return None
 

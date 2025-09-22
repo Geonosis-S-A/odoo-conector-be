@@ -160,7 +160,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             ]
             domain.extend(team_domain)
 
-
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
             self.odoo_client["models"].execute_kw(
@@ -185,7 +184,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             ),
         )
 
-        print("odoo_timesheet_lines", odoo_timesheet_lines)
         parsed_lines = [
             self._transform_odoo_to_detailed_domain(line)
             for line in odoo_timesheet_lines
@@ -400,7 +398,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         return bool(response)
 
-
     def get_team_users(self, user_id: int, employee_id: int) -> list[Dict[str, Any]]:
         """
         Obtiene la cantidad de usuarios activos en el equipo consultando directamente a Odoo.
@@ -435,8 +432,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 },
             )
 
-            print("subordinates_data", subordinates_data)
-
             return subordinates_data
 
         except Exception as e:
@@ -453,13 +448,13 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
-        
+
         Args:
             task_id: ID de la tarea a filtrar (opcional)
             project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
             date_from: Fecha de inicio del período
             date_to: Fecha de fin del período
-            
+
         Returns:
             Lista de DetailedTimesheetLine que coinciden con los criterios
         """
@@ -467,7 +462,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             # Validar que al menos uno de los parámetros de filtro esté presente
             if not task_id and not project_id:
                 raise ValueError("Debe proporcionar task_id o project_id")
-            
+
             if not date_from or not date_to:
                 raise ValueError("Debe proporcionar date_from y date_to")
 
@@ -483,10 +478,12 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 domain.append(("task_id", "=", task_id))
             # Si no hay task_id, filtrar por proyecto Y solo líneas sin tarea
             elif project_id:
-                domain.extend([
-                    ("project_id", "=", project_id),
-                    ("task_id", "=", False),  # Solo líneas sin tarea asignada
-                ])
+                domain.extend(
+                    [
+                        ("project_id", "=", project_id),
+                        ("task_id", "=", False),  # Solo líneas sin tarea asignada
+                    ]
+                )
 
             # Hacer consulta directa a Odoo
             odoo_timesheet_lines = cast(
@@ -527,7 +524,6 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         except Exception as e:
             raise Exception(f"Error al obtener timesheet por tarea/proyecto: {str(e)}")
 
-
     def all_by_employees_with_requester_user_id(
         self,
         employee_ids: list[int],
@@ -547,9 +543,11 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             self.odoo_client["ODOO_PASSWORD"],
             "project.project",
             "search",
-            [[("user_id", "=", requester_user_id)]],  # user_id es el campo para el gerente del proyecto
+            [
+                [("user_id", "=", requester_user_id)]
+            ],  # user_id es el campo para el gerente del proyecto
         )
-        
+
         # Construir dominio con lógica OR correcta
         domain = [
             # Condiciones de fecha (obligatorias)
