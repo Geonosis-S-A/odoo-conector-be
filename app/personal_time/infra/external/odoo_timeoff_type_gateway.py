@@ -83,6 +83,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
             
         except Exception as e:
             # Propagar la excepción para que el caso de uso y router puedan manejarla
+            print(f"AAAAAAAAAAAAA Error al crear solicitud en Odoo: {str(e)}")
             raise Exception(f"Error al crear solicitud en Odoo: {str(e)}")
 
     def get_employee_timeoff_requests(

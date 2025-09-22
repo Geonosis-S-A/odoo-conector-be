@@ -195,8 +195,6 @@ async def get_employee_timeoff_requests(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
-    except HTTPException:
-        raise
     except Exception as e:
         # Errores internos del servidor (gateway/Odoo)
         raise HTTPException(
