@@ -45,6 +45,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
 
         context = {
             "employee_id": employee_id,
+            "lang": "es_AR",
         }
 
         try:
