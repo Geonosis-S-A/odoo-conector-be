@@ -30,7 +30,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
         Raises:
             Exception: Si hay un error al conectar con Odoo o procesar los datos
         """
-
+        employee_id = 624
         domain = [
             "|",
             ["requires_allocation", "=", "no"],
@@ -39,9 +39,13 @@ class OdooTimeOffeGateway(TimeOffGateway):
             "|",
             ["allows_negative", "=", True],
             "&",
-            ["virtual_remaining_leaves", ">", 0],
+            ["virtual_remaining_leaves", ">=", 0],
             ["allows_negative", "=", False],
         ]
+
+        context = {
+            "employee_id": employee_id,
+        }
 
         try:
             # Ejecutar la consulta a Odoo usando el modelo hr.leave.type
@@ -51,10 +55,20 @@ class OdooTimeOffeGateway(TimeOffGateway):
                 self.odoo_connection["ODOO_PASSWORD"],
                 "hr.leave.type",
                 "search_read",
-                [domain],  # Sin filtros, obtener todos
-                {"fields": ["id", "name"]},  # Solo campos necesarios
+                [domain],
+                {
+                    "fields": [
+                        "id",
+                        "name",
+                        "virtual_remaining_leaves",
+                        "requires_allocation",
+                        "has_valid_allocation",
+                        "allows_negative",
+                    ],
+                    "context": context,
+                },
             )
-
+            print(result)
             # Validar que el resultado sea una lista
             if not isinstance(result, list):
                 raise Exception("Respuesta inesperada de Odoo: se esperaba una lista")

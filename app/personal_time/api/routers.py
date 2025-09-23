@@ -2,12 +2,25 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
 from datetime import date
 
-from app.personal_time.api.schemas import TimeOffTypeResponse, TimeOffRequestCreate, TimeOffRequestResponse, TimeOffRequestInfoResponse
-from app.personal_time.application.use_cases.get_timeoff_types import GetTimeOffTypesUseCase
-from app.personal_time.application.use_cases.create_timeoff_request import CreateTimeOffRequestUseCase
-from app.personal_time.application.use_cases.get_employee_timeoff_requests import GetEmployeeTimeOffRequestsUseCase
+from app.personal_time.api.schemas import (
+    TimeOffTypeResponse,
+    TimeOffRequestCreate,
+    TimeOffRequestResponse,
+    TimeOffRequestInfoResponse,
+)
+from app.personal_time.application.use_cases.get_timeoff_types import (
+    GetTimeOffTypesUseCase,
+)
+from app.personal_time.application.use_cases.create_timeoff_request import (
+    CreateTimeOffRequestUseCase,
+)
+from app.personal_time.application.use_cases.get_employee_timeoff_requests import (
+    GetEmployeeTimeOffRequestsUseCase,
+)
 from app.personal_time.domain.gateway import TimeOffGateway
-from app.personal_time.infra.external.odoo_timeoff_type_gateway import OdooTimeOffeGateway
+from app.personal_time.infra.external.odoo_timeoff_type_gateway import (
+    OdooTimeOffeGateway,
+)
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
@@ -26,8 +39,8 @@ def get_timeoff_gateway(
         return OdooTimeOffeGateway(odoo_connection)
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
-            detail="Error al conectar con el gateway de tipos de licencias"
+            status_code=500,
+            detail="Error al conectar con el gateway de tipos de licencias",
         )
 
 
@@ -45,11 +58,15 @@ async def get_timeoff_types(
     try:
         use_case = GetTimeOffTypesUseCase(gateway)
         timeoff_types = use_case.execute()
-        
+
         return [
             TimeOffTypeResponse(
                 id=timeoff_type.id,
                 name=timeoff_type.name,
+                virtual_remaining_leaves=timeoff_type.virtual_remaining_leaves,
+                requires_allocation=timeoff_type.requires_allocation,
+                has_valid_allocation=timeoff_type.has_valid_allocation,
+                allows_negative=timeoff_type.allows_negative,
             )
             for timeoff_type in timeoff_types
         ]
@@ -89,29 +106,27 @@ async def create_timeoff_request(
         if not employee_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo determinar el ID del empleado para el usuario actual"
+                detail="No se pudo determinar el ID del empleado para el usuario actual",
             )
 
         # Crear el caso de uso
         use_case = CreateTimeOffRequestUseCase(gateway)
-        
+
         # Ejecutar la creación de la solicitud
         # Si description es None, usar valor por defecto
         description = request_data.description or "Solicitud de tiempo personal"
-        
+
         result = use_case.execute(
             employee_id=employee_id,
             holiday_status_id=request_data.holiday_status_id,
             request_date_from=request_data.request_date_from,
             request_date_to=request_data.request_date_to,
-            description=description
+            description=description,
         )
 
         # Devolver la respuesta exitosa
         return TimeOffRequestResponse(
-            request_id=result.request_id,
-            success=result.success,
-            message=result.message
+            request_id=result.request_id, success=result.success, message=result.message
         )
     except ValueError as e:
         # Errores de validación → HTTP 400
@@ -123,8 +138,12 @@ async def create_timeoff_request(
 
 @router.get("/requests", response_model=List[TimeOffRequestInfoResponse])
 async def get_employee_timeoff_requests(
-    date_from: Optional[date] = Query(None, description="Fecha de inicio del filtro (YYYY-MM-DD)"),
-    date_to: Optional[date] = Query(None, description="Fecha de fin del filtro (YYYY-MM-DD)"),
+    date_from: Optional[date] = Query(
+        None, description="Fecha de inicio del filtro (YYYY-MM-DD)"
+    ),
+    date_to: Optional[date] = Query(
+        None, description="Fecha de fin del filtro (YYYY-MM-DD)"
+    ),
     gateway: TimeOffGateway = Depends(get_timeoff_gateway),
     current_user: dict = Depends(get_current_user),
 ):
@@ -152,17 +171,15 @@ async def get_employee_timeoff_requests(
         if not employee_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No se pudo determinar el ID del empleado para el usuario actual"
+                detail="No se pudo determinar el ID del empleado para el usuario actual",
             )
 
         # Crear el caso de uso
         use_case = GetEmployeeTimeOffRequestsUseCase(gateway)
-        
+
         # Ejecutar la consulta
         timeoff_requests = use_case.execute(
-            employee_id=employee_id,
-            date_from=date_from,
-            date_to=date_to
+            employee_id=employee_id, date_from=date_from, date_to=date_to
         )
 
         # Convertir a schemas de respuesta
@@ -177,17 +194,14 @@ async def get_employee_timeoff_requests(
                 employee_id=request.employee_id,
                 employee_name=request.employee_name,
                 state=request.state,
-                number_of_days=request.number_of_days
+                number_of_days=request.number_of_days,
             )
             for request in timeoff_requests
         ]
 
-    
     except ValueError as e:
         # Errores de validación → HTTP 400
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         # Errores de Odoo/negocio → HTTP 400 (datos rechazados por reglas de negocio)
         raise HTTPException(status_code=400, detail=str(e))
-
-
