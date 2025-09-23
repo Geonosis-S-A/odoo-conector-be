@@ -13,7 +13,7 @@ class TimeOffGateway(ABC):
     """Gateway abstracto para operaciones con tipos de licencias."""
 
     @abstractmethod
-    def get_all_timeoff_types(self) -> List[TimeOffType]:
+    def get_all_timeoff_types(self, employee_id: int) -> List[TimeOffType]:
         """Obtiene todos los tipos de licencias disponibles.
 
         Returns:

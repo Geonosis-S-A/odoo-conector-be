@@ -21,7 +21,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
         """
         self.odoo_connection = odoo_connection
 
-    def get_all_timeoff_types(self) -> List[TimeOffType]:
+    def get_all_timeoff_types(self, employee_id: int) -> List[TimeOffType]:
         """Obtiene todos los tipos de licencias desde Odoo.
 
         Returns:
@@ -30,7 +30,6 @@ class OdooTimeOffeGateway(TimeOffGateway):
         Raises:
             Exception: Si hay un error al conectar con Odoo o procesar los datos
         """
-        employee_id = 624
         domain = [
             "|",
             ["requires_allocation", "=", "no"],

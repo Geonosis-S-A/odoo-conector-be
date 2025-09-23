@@ -59,9 +59,15 @@ async def get_timeoff_types(
     Returns:
         List[TimeOffTypeResponse]: Lista de tipos de licencias disponibles
     """
+    employee_id = current_user.get("user_id")
+    if not employee_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo determinar el ID del empleado para el usuario actual",
+        )
     try:
         use_case = GetTimeOffTypesUseCase(gateway)
-        timeoff_types = use_case.execute()
+        timeoff_types = use_case.execute(employee_id)
 
         return [
             TimeOffTypeResponse(
