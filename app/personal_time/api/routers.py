@@ -5,6 +5,7 @@ from datetime import date
 from app.personal_time.api.schemas import (
     TimeOffTypeResponse,
     TimeOffRequestCreate,
+    TimeOffRequestUpdate,
     TimeOffRequestResponse,
     TimeOffRequestInfoResponse,
 )
@@ -13,6 +14,9 @@ from app.personal_time.application.use_cases.get_timeoff_types import (
 )
 from app.personal_time.application.use_cases.create_timeoff_request import (
     CreateTimeOffRequestUseCase,
+)
+from app.personal_time.application.use_cases.update_timeoff_request import (
+    UpdateTimeOffRequestUseCase,
 )
 from app.personal_time.application.use_cases.get_employee_timeoff_requests import (
     GetEmployeeTimeOffRequestsUseCase,
@@ -198,6 +202,68 @@ async def get_employee_timeoff_requests(
             )
             for request in timeoff_requests
         ]
+
+    except ValueError as e:
+        # Errores de validación → HTTP 400
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Errores de Odoo/negocio → HTTP 400 (datos rechazados por reglas de negocio)
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/requests/{request_id}", response_model=TimeOffRequestResponse)
+async def update_timeoff_request(
+    request_id: int,
+    request_data: TimeOffRequestUpdate,
+    gateway: TimeOffGateway = Depends(get_timeoff_gateway),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Actualiza una solicitud de tiempo personal existente en el sistema.
+
+    Args:
+        request_id: ID de la solicitud a actualizar
+        request_data: Nuevos datos para la solicitud de tiempo personal
+        gateway: Gateway para operaciones de tiempo personal
+        current_user: Usuario autenticado actual
+
+    Returns:
+        TimeOffRequestResponse: Resultado de la operación de actualización
+
+    Raises:
+        HTTPException: Si hay errores en la validación, permisos o actualización
+    """
+    try:
+        # Obtener el employee_id del usuario autenticado
+        employee_id = current_user.get("user_id")
+        if not employee_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No se pudo determinar el ID del empleado para el usuario actual",
+            )
+
+        # Crear el caso de uso
+        use_case = UpdateTimeOffRequestUseCase(gateway)
+
+        # Si description es None, usar valor por defecto
+        description = (
+            request_data.description or "Solicitud de tiempo personal actualizada"
+        )
+
+        # Ejecutar la actualización de la solicitud
+        result = use_case.execute(
+            request_id=request_id,
+            employee_id=employee_id,
+            holiday_status_id=request_data.holiday_status_id,
+            request_date_from=request_data.request_date_from,
+            request_date_to=request_data.request_date_to,
+            description=description,
+        )
+
+        # Devolver la respuesta exitosa
+        return TimeOffRequestResponse(
+            request_id=result.request_id, success=result.success, message=result.message
+        )
 
     except ValueError as e:
         # Errores de validación → HTTP 400

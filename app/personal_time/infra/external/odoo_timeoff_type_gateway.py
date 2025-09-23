@@ -119,6 +119,88 @@ class OdooTimeOffeGateway(TimeOffGateway):
             # Propagar directamente el error original
             raise
 
+    def update_timeoff_request(
+        self, request_id: int, timeoff_request: TimeOffRequest
+    ) -> TimeOffRequestResult:
+        """Edita una solicitud de licencia existente en Odoo.
+
+        Args:
+            request_id: ID de la solicitud a editar
+            timeoff_request: Datos actualizados de la solicitud
+
+        Returns:
+            TimeOffRequestResult: Resultado de la operación
+
+        Raises:
+            Exception: Si hay errores de comunicación con Odoo o errores del sistema
+        """
+        try:
+            # Convertir la solicitud al formato esperado por Odoo
+            odoo_data = timeoff_request.to_odoo_data()
+
+            # Ejecutar la actualización en Odoo usando el modelo hr.leave
+            success = self.odoo_connection["models"].execute_kw(
+                self.odoo_connection["ODOO_DB"],
+                self.odoo_connection["uid"],
+                self.odoo_connection["ODOO_PASSWORD"],
+                "hr.leave",
+                "write",
+                [[request_id], odoo_data],
+            )
+
+            # Validar que la operación fue exitosa
+            if not success:
+                raise Exception(f"Error al actualizar la solicitud ID {request_id}")
+
+            return TimeOffRequestResult.success_result(request_id)
+
+        except Exception as e:
+            # Propagar directamente el error original
+            raise
+
+    def get_timeoff_request_state(self, request_id: int) -> str:
+        """Obtiene el estado de una solicitud de tiempo personal específica desde Odoo.
+
+        Args:
+            request_id: ID de la solicitud de tiempo personal
+
+        Returns:
+            str: Estado de la solicitud (draft, confirm, validate, refuse, cancel)
+
+        Raises:
+            Exception: Si hay un error al conectar con Odoo o procesar los datos
+            ValueError: Si la solicitud no existe
+        """
+        try:
+            # Ejecutar la consulta a Odoo usando el modelo hr.leave
+            result = self.odoo_connection["models"].execute_kw(
+                self.odoo_connection["ODOO_DB"],
+                self.odoo_connection["uid"],
+                self.odoo_connection["ODOO_PASSWORD"],
+                "hr.leave",
+                "search_read",
+                [[["id", "=", request_id]]],
+                {
+                    "fields": ["id", "state"],
+                },
+            )
+
+            # Validar que el resultado sea una lista
+            if not isinstance(result, list):
+                raise Exception("Respuesta inesperada de Odoo: se esperaba una lista")
+
+            # Verificar que se encontró la solicitud
+            if not result:
+                raise ValueError(f"No se encontró la solicitud con ID {request_id}")
+
+            # Retornar el estado de la solicitud
+            return result[0]["state"]
+
+        except Exception as e:
+            raise Exception(
+                f"Error al obtener el estado de la solicitud desde Odoo: {str(e)}"
+            )
+
     def get_employee_timeoff_requests(
         self,
         employee_id: int,

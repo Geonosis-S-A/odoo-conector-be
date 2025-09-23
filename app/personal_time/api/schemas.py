@@ -34,6 +34,23 @@ class TimeOffRequestCreate(BaseModel):
         from_attributes = True
 
 
+class TimeOffRequestUpdate(BaseModel):
+    """Schema para actualizar una solicitud de tiempo personal existente."""
+
+    holiday_status_id: int = Field(..., description="ID del tipo de licencia", gt=0)
+    request_date_from: date = Field(..., description="Fecha de inicio de la licencia")
+    request_date_to: date = Field(..., description="Fecha de fin de la licencia")
+    description: Optional[str] = Field(
+        default=None,
+        description="Descripción/motivo de la solicitud (opcional)",
+        max_length=500,
+        min_length=0,
+    )
+
+    class Config:
+        from_attributes = True
+
+
 class TimeOffRequestResponse(BaseModel):
     """Schema de respuesta para una solicitud de tiempo personal creada."""
 
