@@ -30,6 +30,19 @@ class OdooTimeOffeGateway(TimeOffGateway):
         Raises:
             Exception: Si hay un error al conectar con Odoo o procesar los datos
         """
+
+        domain = [
+            "|",
+            ["requires_allocation", "=", "no"],
+            "&",
+            ["has_valid_allocation", "=", True],
+            "|",
+            ["allows_negative", "=", True],
+            "&",
+            ["virtual_remaining_leaves", ">", 0],
+            ["allows_negative", "=", False],
+        ]
+
         try:
             # Ejecutar la consulta a Odoo usando el modelo hr.leave.type
             result = self.odoo_connection["models"].execute_kw(
@@ -38,7 +51,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
                 self.odoo_connection["ODOO_PASSWORD"],
                 "hr.leave.type",
                 "search_read",
-                [[]],  # Sin filtros, obtener todos
+                [domain],  # Sin filtros, obtener todos
                 {"fields": ["id", "name"]},  # Solo campos necesarios
             )
 
@@ -126,18 +139,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
             ]
 
             # Filtro base: solicitudes del empleado especificado
-            domain = [
-                "|",
-                ["requires_allocation", "=", "no"],
-                "&",
-                ["has_valid_allocation", "=", True],
-                "|",
-                ["allows_negative", "=", True],
-                "&",
-                ["virtual_remaining_leaves", ">", 0],
-                ["allows_negative", "=", False],
-                ["employee_id", "=", employee_id],
-            ]
+            domain = [["employee_id", "=", employee_id]]
 
             if date_from and date_to:
                 domain.append(
