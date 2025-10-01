@@ -102,6 +102,9 @@ class OdooDashboardDataService(DashboardDataService):
 
         return KPI(total=float(total_entries), average_per_user=average_per_user)
 
+    
+    
+
     def calculate_daily_average_kpi(
         self,
         timesheet_data: List[DetailedTimesheetLine],
@@ -111,10 +114,10 @@ class OdooDashboardDataService(DashboardDataService):
     ) -> KPI:
         """Calcula el KPI de promedio diario de horas."""
         total_hours = sum(record.hours for record in timesheet_data)
-        days_in_period = (date_to - date_from).days + 1
+        worked_days = len(set(record.date for record in timesheet_data))
 
         total_daily_average = (
-            total_hours / days_in_period if days_in_period > 0 else 0.0
+            total_hours / worked_days if worked_days > 0 else 0.0
         )
         average_per_user = total_daily_average / users_count if users_count > 0 else 0.0
 
