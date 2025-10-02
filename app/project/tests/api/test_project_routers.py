@@ -169,21 +169,6 @@ class TestGetProjects:
         # Verificar que el gateway se llama correctamente
         mock_gateway.all.assert_called_once_with()
 
-    def test_get_projects_server_error(self, mock_gateway, test_client):
-        """Test que verifica el manejo de errores del servidor."""
-        # Arrange
-        mock_gateway.all.side_effect = Exception("Error de servidor")
-
-        # Act
-        headers = {"Authorization": "Bearer testtoken"}
-        response = test_client.get("/api/v1/projects/", headers=headers)
-
-        # Assert
-        assert response.status_code == 500
-        assert "Error interno del servidor" in response.json()["detail"]
-
-        # Verificar que el gateway se llama correctamente
-        mock_gateway.all.assert_called_once_with()
 
     def test_get_projects_response_format(self, mock_gateway, test_client):
         """Test que verifica el formato de respuesta del endpoint."""

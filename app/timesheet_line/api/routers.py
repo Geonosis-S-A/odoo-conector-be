@@ -142,11 +142,6 @@ async def create_timesheet_line(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al crear la línea de timesheet",
-        )
 
 
 @router.get("/", response_model=List[DetailedTimesheetLineResponse])
@@ -250,11 +245,6 @@ async def delete_timesheet_line(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al eliminar las líneas de timesheet",
-        )
 
 
 @router.put("/{timesheet_id}")
@@ -305,11 +295,7 @@ def edit_timesheet(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al editar la línea de timesheet",
-        )
+
 
 
 @router.post("/validate", response_model=Dict[str, bool])
@@ -348,11 +334,6 @@ async def validate_timesheet_lines(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al validar las líneas de timesheet",
-        )
 
 
 @router.post("/review")

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.infra.auth_service import JWTPayload
@@ -34,34 +34,30 @@ async def sync_user_changes(
     Mantiene el estado de activación e is_superuser del usuario.
     """
 
-    try:
-        # Inicializar dependencias
-        odoo_client = get_odoo_connection()
-        employee_gateway = OdooEmployeeGateway(odoo_client)
-        user_repository = SQLModelUserRepository(db)
+    
+    # Inicializar dependencias
+    odoo_client = get_odoo_connection()
+    employee_gateway = OdooEmployeeGateway(odoo_client)
+    user_repository = SQLModelUserRepository(db)
 
-        # Crear y ejecutar caso de uso
-        use_case = SyncSingleUserChangesUseCase(
-            employee_gateway=employee_gateway,
-            user_repository=user_repository,
-        )
+    # Crear y ejecutar caso de uso
+    use_case = SyncSingleUserChangesUseCase(
+        employee_gateway=employee_gateway,
+        user_repository=user_repository,
+    )
 
-        # Ejecutar sincronización para el empleado específico
-        result = use_case.execute(employee_id)
+    # Ejecutar sincronización para el empleado específico
+    result = use_case.execute(employee_id)
 
-        return SingleUserSyncResponse(
-            success=result["success"],
-            message=result["message"],
-            user_updated=result["user_updated"],
-            current_data=result.get("current_data"),
-            changes_made=result.get("changes_made"),
-        )
+    return SingleUserSyncResponse(
+        success=result["success"],
+        message=result["message"],
+        user_updated=result["user_updated"],
+        current_data=result.get("current_data"),
+        changes_made=result.get("changes_made"),
+    )
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error al sincronizar empleado {employee_id}: {str(e)}",
-        )
+    
 
 
 @router.get("/employees", response_model=EmployeesListResponse)
@@ -72,35 +68,32 @@ async def get_all_employees(
     Obtiene todos los empleados registrados en Odoo.
     Retorna una lista completa de empleados con ID, email y nombre completo.
     """
-    try:
-        # Inicializar dependencias
-        odoo_client = get_odoo_connection()
-        employee_gateway = OdooEmployeeGateway(odoo_client)
 
-        # Crear y ejecutar caso de uso
-        use_case = GetAllEmployeesUseCase(employee_gateway=employee_gateway)
+    # Inicializar dependencias
+    odoo_client = get_odoo_connection()
+    employee_gateway = OdooEmployeeGateway(odoo_client)
 
-        # Ejecutar obtención de empleados
-        employees = use_case.execute()
+    # Crear y ejecutar caso de uso
+    use_case = GetAllEmployeesUseCase(employee_gateway=employee_gateway)
 
-        # Convertir Employee del dominio a EmployeeResponse del schema
-        employees_response = [
-            EmployeeResponse(
-                id=employee.id,
-                email=employee.email,
-                full_name=employee.full_name,
-            )
-            for employee in employees
-        ]
+    # Ejecutar obtención de empleados
+    employees = use_case.execute()
 
-        return EmployeesListResponse(
-            success=True,
-            message="Empleados obtenidos exitosamente",
-            employees=employees_response,
-            total_employees=len(employees_response),
+    # Convertir Employee del dominio a EmployeeResponse del schema
+    employees_response = [
+        EmployeeResponse(
+            id=employee.id,
+            email=employee.email,
+            full_name=employee.full_name,
         )
+        for employee in employees
+    ]
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error al obtener empleados: {str(e)}"
-        )
+    return EmployeesListResponse(
+        success=True,
+        message="Empleados obtenidos exitosamente",
+        employees=employees_response,
+        total_employees=len(employees_response),
+    )
+
+        

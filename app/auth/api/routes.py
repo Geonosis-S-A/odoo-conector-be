@@ -208,8 +208,6 @@ async def change_password(
         raise HTTPException(status_code=401, detail=str(e))
     except PasswordNotMatch as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except PasswordUpdateError as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/password-recovery/request")
@@ -247,8 +245,6 @@ async def request_otp_for_register(
         raise HTTPException(status_code=404, detail=str(e))
     except UserAlreadyExists as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Error al enviar OTP")
 
 
 @router.post("/password-recovery/verify")

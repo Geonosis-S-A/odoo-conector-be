@@ -56,18 +56,14 @@ async def get_projects(
     Returns:
         List[ProjectResponse]: Lista de proyectos
     """
-    try:
-        use_case = ObtenerProyectosUseCase(gateway)
-        projects = use_case.execute()
-        return [
-            ProjectResponse(
-                id=project.id,
-                name=project.name,
-            )
-            for project in projects
-        ]
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al obtener los proyectos",
+  
+    use_case = ObtenerProyectosUseCase(gateway)
+    projects = use_case.execute()
+    return [
+        ProjectResponse(
+            id=project.id,
+            name=project.name,
         )
+        for project in projects
+    ]
+   
