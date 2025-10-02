@@ -21,7 +21,7 @@ class OdooEmployeeGateway(EmployeeGateway):
 
         return Employee(
             id=employee_id,
-            email=work_email,
+            email=work_email.lower(),
             full_name=odoo_data.get("name", ""),
         )
 
@@ -37,7 +37,7 @@ class OdooEmployeeGateway(EmployeeGateway):
                     self.odoo_client["ODOO_PASSWORD"],
                     "res.users",
                     "search",
-                    [[["login", "=", email]]],
+                    [[["login", "ilike", email]]],
                 ),
             )
 
@@ -229,7 +229,7 @@ class OdooEmployeeGateway(EmployeeGateway):
                 self.odoo_client["ODOO_PASSWORD"],
                 "hr.employee",
                 "search",
-                [[["work_email", "=", email]]],
+                [[["work_email", "ilike", email]]],
             ),
         )
 

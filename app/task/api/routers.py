@@ -81,5 +81,4 @@ async def get_tasks(
         raise HTTPException(status_code=404, detail=e.message)
     except UserNotFound as e:
         raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
