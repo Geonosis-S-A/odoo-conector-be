@@ -149,10 +149,13 @@ class ExportTimesheetsByTeamUseCase:
 
         df["name"] = df["name"].apply(lambda x: "-" if x == "/" else x)
 
-        df = df.drop(columns=["employee_id", "project_id", "task_id"])
+        # Extraer mes y año de la fecha
+        df["mes"] = df["date"].apply(lambda x: pd.to_datetime(x).month)
+        df["año"] = df["date"].apply(lambda x: pd.to_datetime(x).year)
+
+        df = df.drop(columns=["employee_id", "project_id", "task_id", "id"])
         df = df.rename(
             columns={
-                "id": "id_carga",
                 "date": "fecha",
                 "unit_amount": "cantidad",
                 "name": "descripcion",
@@ -162,7 +165,7 @@ class ExportTimesheetsByTeamUseCase:
         reorder_columns = (
             ["empleado", "proyecto", "tarea"]
             + [f"subtarea_{i + 1}" for i in range(max_depth - 1)]
-            + ["fecha", "cantidad", "descripcion", "fecha de carga", "id_carga"]
+            + ["fecha", "mes", "año", "cantidad", "descripcion", "fecha de carga"]
         )
         df = df.sort_values(by="empleado")
         df = df.sort_values(by="fecha")
