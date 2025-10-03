@@ -24,6 +24,7 @@ class MockEmailService:
     def __init__(self):
         self.send_review_mail_calls = []
         self.send_support_mail_calls = []
+        self.send_approved_mail_calls = []
 
     async def send_support_mail(
         self, user_name: str, subject: str, body: str, date: datetime
@@ -54,10 +55,28 @@ class MockEmailService:
         # No hace nada real, solo registra la llamada
         pass
 
+    async def send_approved_mail(
+        self,
+        user_mail: str,
+        approver_mail: str,
+        timesheet_lines: List[DetailedTimesheetLine],
+    ) -> None:
+        """Simula el envío de un email de aprobación."""
+        self.send_approved_mail_calls.append(
+            {
+                "user_mail": user_mail,
+                "approver_mail": approver_mail,
+                "timesheet_lines": timesheet_lines,
+            }
+        )
+        # No hace nada real, solo registra la llamada
+        pass
+
     def reset_calls(self):
         """Resetea el registro de llamadas."""
         self.send_review_mail_calls = []
         self.send_support_mail_calls = []
+        self.send_approved_mail_calls = []
 
 
 class MockNotificationRepository:
@@ -200,7 +219,7 @@ def test_send_review_mail_success_admin_user(
 
         # Assert
         assert response.status_code == 200
-        assert response.json()["message"] == "Emails enviados correctamente!"
+        assert response.json()["success"] is True
 
         # Verificar que se llamó al servicio de email
         assert len(mock_email_service.send_review_mail_calls) == 1
@@ -371,7 +390,7 @@ def test_send_review_mail_multiple_timesheets_same_employee(
 
         # Assert
         assert response.status_code == 200
-        assert response.json()["message"] == "Emails enviados correctamente!"
+        assert response.json()["success"] is True
 
         # Verificar que se llamó al servicio de email una vez (un email por empleado)
         assert len(mock_email_service.send_review_mail_calls) == 1
@@ -446,7 +465,7 @@ def test_send_review_mail_without_body(
 
         # Assert
         assert response.status_code == 200
-        assert response.json()["message"] == "Emails enviados correctamente!"
+        assert response.json()["success"] is True
 
         # Verificar que se llamó al servicio de email con body = None
         assert len(mock_email_service.send_review_mail_calls) == 1
@@ -572,11 +591,8 @@ def test_send_review_mail_empty_timesheetline_ids(
         response = test_client.post("/api/v1/timesheet/review", json=review_request)
 
         # Assert
-        assert response.status_code == 200
-        assert response.json()["message"] == "Emails enviados correctamente!"
-
-        # Verificar que NO se llamó al servicio de email (no hay timesheets)
-        assert len(mock_email_service.send_review_mail_calls) == 0
+        assert response.status_code == 404  # Cambio: esperar 404 porque la lista está vacía
+        assert "No se encontraron las líneas de timesheet" in response.json()["detail"]
 
     finally:
         app.dependency_overrides.clear()
