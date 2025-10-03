@@ -164,3 +164,21 @@ class TimesheetValidateError(TimesheetDomainError):
         if details:
             message += f": {details}"
         super().__init__(message)
+
+
+class ApproverNotFoundError(TimesheetDomainError):
+    """Error cuando no se encuentra el approver."""
+
+    def __init__(self, approver_email: str):
+        message = f"El empleado que intenta enviar el correo de revisión no existe: {approver_email}"
+        super().__init__(message)
+
+
+class TimesheetReviewError(TimesheetDomainError):
+    """Error al enviar correos de revisión de timesheet."""
+
+    def __init__(self, details: str = ""):
+        message = "Error al enviar correos de revisión"
+        if details:
+            message += f": {details}"
+        super().__init__(message)

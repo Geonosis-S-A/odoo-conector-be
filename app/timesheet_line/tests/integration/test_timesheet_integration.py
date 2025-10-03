@@ -593,10 +593,21 @@ def test_validate_timesheet_lines_success(test_client):
     created_ids = [item["id"] for item in create_response.json()]
     assert len(created_ids) == 2
 
-    # Mock admin user for validation endpoint
+    # Mock admin user and dependencies for validation endpoint
     from app.main import app
     from app.shared.security.dependencies import get_current_user
     from app.shared.security.role_enums.dev import Roles
+    from app.timesheet_line.tests.integration.test_review_mail_integration import (
+        MockEmailService,
+        MockEmployeeGateway,
+        MockNotificationRepository,
+    )
+    from app.email.api.dependencies import get_common_email_service
+    from app.timesheet_line.api.routers import (
+        get_employee_gateway,
+        get_notification_repository,
+    )
+
     async def mock_admin_user():
         return {
             "user_id": 1,
@@ -605,12 +616,23 @@ def test_validate_timesheet_lines_success(test_client):
             "roles": [Roles.approver],  # Admin role
         }
 
+    mock_email_service = MockEmailService()
+    mock_employee_gateway = MockEmployeeGateway()
+    mock_notification_repo = MockNotificationRepository()
+
     app.dependency_overrides[get_current_user] = mock_admin_user
+    app.dependency_overrides[get_common_email_service] = lambda: mock_email_service
+    app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
+    app.dependency_overrides[get_notification_repository] = lambda: mock_notification_repo
 
     try:
         # Act - Validar las líneas
         validate_response = test_client.post(
-            "/api/v1/timesheet/validate", json={"timesheetline_ids": created_ids}
+            "/api/v1/timesheet/validate", 
+            json={
+                "timesheetline_ids": created_ids,
+                "approver_mail": "admin@example.com"
+            }
         )
 
         # Assert
@@ -648,7 +670,11 @@ def test_validate_timesheet_lines_permission_denied(test_client):
     # Act - Intentar validar con usuario normal (sin permisos de admin)
     # El test_client usa el usuario normal por defecto (sin rol 30)
     validate_response = test_client.post(
-        "/api/v1/timesheet/validate", json={"timesheetline_ids": [created_id]}
+        "/api/v1/timesheet/validate", 
+        json={
+            "timesheetline_ids": [created_id],
+            "approver_mail": "admin@example.com"
+        }
     )
 
     # Assert
@@ -701,7 +727,11 @@ def test_validate_timesheet_lines_not_found(test_client):
     try:
         # Act - Intentar validar líneas que no existen
         validate_response = test_client.post(
-            "/api/v1/timesheet/validate", json={"timesheetline_ids": [99999, 99998]}
+            "/api/v1/timesheet/validate", 
+            json={
+                "timesheetline_ids": [99999, 99998],
+                "approver_mail": "admin@example.com"
+            }
         )
 
         # Assert
@@ -736,7 +766,11 @@ def test_validate_timesheet_lines_empty_list(test_client):
     try:
         # Act - Intentar validar con lista vacía
         validate_response = test_client.post(
-            "/api/v1/timesheet/validate", json={"timesheetline_ids": []}
+            "/api/v1/timesheet/validate", 
+            json={
+                "timesheetline_ids": [],
+                "approver_mail": "admin@example.com"
+            }
         )
 
         # Assert
@@ -786,7 +820,10 @@ def test_validate_timesheet_lines_mixed_existing_and_nonexisting(test_client):
         # Act - Intentar validar con un ID existente y uno inexistente
         validate_response = test_client.post(
             "/api/v1/timesheet/validate",
-            json={"timesheetline_ids": [created_id, 99999]},
+            json={
+                "timesheetline_ids": [created_id, 99999],
+                "approver_mail": "admin@example.com"
+            },
         )
 
         # Assert

@@ -9,8 +9,9 @@ class SupportMailRequest(BaseModel):
     body: str
     date: datetime
 
-
-class ReviewMailRequest(BaseModel):
+class ApprovedMailRequest(BaseModel):
     approver_mail: str
-    body: Optional[str] = None
     timesheetline_ids: list[int]
+
+class ReviewMailRequest(ApprovedMailRequest):
+    body: Optional[str] = None
