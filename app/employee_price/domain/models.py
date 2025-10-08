@@ -14,8 +14,8 @@ class EmployeePrice:
     user_id: int
     email: str
     full_name: str
-    cost_per_hour: float
     date_from: date
+    cost_per_hour: Optional[float] = None
     date_to: Optional[date] = None
 
     @classmethod
@@ -24,8 +24,8 @@ class EmployeePrice:
         user_id: int,
         email: str,
         full_name: str,
-        cost_per_hour: float,
         date_from: date,
+        cost_per_hour: Optional[float] = None,
         date_to: Optional[date] = None,
     ) -> "EmployeePrice":
         """Crea una instancia desde datos de request"""
@@ -34,8 +34,8 @@ class EmployeePrice:
             user_id=user_id,
             email=email,
             full_name=full_name,
-            cost_per_hour=cost_per_hour,
             date_from=date_from,
+            cost_per_hour=cost_per_hour,
             date_to=date_to,
         )
 
