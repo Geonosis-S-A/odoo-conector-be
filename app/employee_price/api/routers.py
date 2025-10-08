@@ -103,14 +103,7 @@ async def set_active_employee_cost_per_hour(
 
     try:
         # Ejecutar actualización
-        try:
-            updated_price = use_case.execute(user_id, request.cost_per_hour)
-        except ValueError as e:
-            # Errores de validación de negocio (ej: cost_per_hour <= 0)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(e),
-            )
+        updated_price = use_case.execute(user_id, request.cost_per_hour)
 
         # Si no se encuentra el registro activo
         if not updated_price or updated_price.id is None:
@@ -136,6 +129,12 @@ async def set_active_employee_cost_per_hour(
             employee_price=employee_price_response,
         )
 
+    except ValueError as e:
+        # Errores de validación de negocio (ej: cost_per_hour <= 0)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
     except HTTPException:
         # Re-lanzar HTTPExceptions tal como están
         raise
