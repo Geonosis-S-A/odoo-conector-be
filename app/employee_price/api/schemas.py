@@ -113,7 +113,7 @@ class SetCostPerHourResponse(BaseModel):
 class CreateEmployeePriceRequest(BaseModel):
     """Schema para crear un nuevo registro de precio de empleado"""
 
-    user_id: int = Field(gt=0, description="ID del usuario/empleado")
+    employee_id: int = Field(gt=0, description="ID del usuario/empleado")
     date_from: date = Field(description="Fecha de inicio de vigencia del precio")
     cost_per_hour: Optional[float] = Field(
         default=None, gt=0, description="Costo por hora del empleado (opcional)"

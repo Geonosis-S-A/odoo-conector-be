@@ -19,7 +19,7 @@ class CreateEmployeePriceUseCase:
 
     def execute(
         self,
-        user_id: int,
+        employee_id: int,
         date_from: date,
         cost_per_hour: Optional[float] = None,
     ) -> EmployeePrice:
@@ -30,7 +30,7 @@ class CreateEmployeePriceUseCase:
         estableciendo su date_to al día anterior del nuevo registro.
 
         Args:
-            user_id: ID del usuario/empleado
+            employee_id: ID del usuario/empleado
             date_from: Fecha de inicio de vigencia del precio
             cost_per_hour: Costo por hora del empleado (opcional, debe ser mayor a 0)
 
@@ -48,7 +48,7 @@ class CreateEmployeePriceUseCase:
 
         # Buscar si existe un registro abierto (date_to = NULL) para este usuario
         open_record = self.employee_price_repository.get_open_record_by_user_id(
-            user_id=user_id
+            user_id=employee_id
         )
 
         # Si existe un registro abierto, validar y cerrarlo
@@ -58,7 +58,7 @@ class CreateEmployeePriceUseCase:
 
         # Crear la entidad de dominio para el nuevo registro
         employee_price = EmployeePrice.from_request(
-            user_id=user_id,
+            user_id=employee_id,
             date_from=date_from,
             cost_per_hour=cost_per_hour,
             date_to=None,

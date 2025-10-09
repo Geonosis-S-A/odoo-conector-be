@@ -101,7 +101,7 @@ async def list_team_employee_prices(
         raise
 
 
-@router.get("/history/{user_id}", response_model=list[EmployeePriceHistoryItem])
+@router.get("/history/{employee_id}", response_model=list[EmployeePriceHistoryItem])
 async def get_employee_price_history(
     employee_id: int,
     db: Session = Depends(get_db),
@@ -114,7 +114,7 @@ async def get_employee_price_history(
     ordenados por fecha de más reciente a más antiguo.
     
     Args:
-        user_id: ID del usuario/empleado del cual obtener el historial
+        employee_id: ID del usuario/empleado del cual obtener el historial
         db: Sesión de base de datos
         current_user: Usuario autenticado
     
@@ -122,8 +122,8 @@ async def get_employee_price_history(
         Lista de registros de precio del empleado ordenados por fecha (desc)
         
     Raises:
-        HTTPException 400: Si el user_id es inválido
-        HTTPException 404: Si el usuario no existe
+        HTTPException 400: Si el employee_id es inválido
+        HTTPException 404: Si el empleado no existe
     """
     # Verificar que el usuario existe
     user_repository = SQLModelUserRepository(db)
@@ -131,7 +131,7 @@ async def get_employee_price_history(
     if not employee_data:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Usuario con employee_id {employee_id} no encontrado",
+            detail=f"Empleado con employee_id {employee_id} no encontrado",
         )
 
     # Inicializar repositorio
@@ -190,11 +190,11 @@ async def create_employee_price(
     user_repository = SQLModelUserRepository(db)
 
     # Verificar que el usuario existe
-    user = user_repository.get_by_id(request.user_id)
+    user = user_repository.get_by_id(request.employee_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Usuario con ID {request.user_id} no encontrado",
+            detail=f"Usuario con ID {request.employee_id} no encontrado",
         )
 
     # Crear y ejecutar caso de uso
@@ -205,7 +205,7 @@ async def create_employee_price(
     try:
         # Ejecutar creación
         created_employee_price = use_case.execute(
-            user_id=request.user_id,
+            employee_id=request.employee_id,
             date_from=request.date_from,
             cost_per_hour=request.cost_per_hour,
         )
