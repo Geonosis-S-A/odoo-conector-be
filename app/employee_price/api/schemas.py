@@ -7,8 +7,6 @@ class EmployeePriceBase(BaseModel):
     """Schema base para EmployeePrice"""
 
     user_id: int
-    email: str
-    full_name: str
     date_from: date
     cost_per_hour: Optional[float] = Field(
         default=None, gt=0, description="Costo por hora del empleado"
@@ -25,8 +23,6 @@ class EmployeePriceCreate(EmployeePriceBase):
 class EmployeePriceUpdate(BaseModel):
     """Schema para actualizar un registro de precio de empleado"""
 
-    email: Optional[str] = None
-    full_name: Optional[str] = None
     cost_per_hour: Optional[float] = Field(default=None, gt=0)
     date_from: Optional[date] = None
     date_to: Optional[date] = None
@@ -36,6 +32,21 @@ class EmployeePriceResponse(EmployeePriceBase):
     """Schema de respuesta para un registro de precio de empleado"""
 
     id: int
+
+    class Config:
+        from_attributes = True
+
+
+class EmployeePriceWithUserResponse(BaseModel):
+    """Schema de respuesta para un registro de precio con datos del usuario"""
+
+    id: int
+    user_id: int
+    email: str
+    full_name: str
+    date_from: date
+    cost_per_hour: Optional[float] = None
+    date_to: Optional[date] = None
 
     class Config:
         from_attributes = True
@@ -67,8 +78,6 @@ class UserSyncDetail(BaseModel):
 
     id: Optional[int] = None
     user_id: int
-    email: str
-    full_name: str
 
 
 class SkippedUserDetail(BaseModel):
@@ -98,5 +107,20 @@ class SetCostPerHourResponse(BaseModel):
 
     success: bool
     message: str
-    employee_price: Optional[EmployeePriceResponse] = None
+    employee_price: Optional[EmployeePriceWithUserResponse] = None
 
+
+class CreateEmployeePriceRequest(BaseModel):
+    """Schema para crear un nuevo registro de precio de empleado"""
+
+    user_id: int = Field(gt=0, description="ID del usuario/empleado")
+    date_from: date = Field(description="Fecha de inicio de vigencia del precio")
+    cost_per_hour: float = Field(gt=0, description="Costo por hora del empleado (opcional)")
+
+
+class CreateEmployeePriceResponse(BaseModel):
+    """Schema de respuesta para crear un registro de precio de empleado"""
+
+    success: bool
+    message: str
+    employee_price: Optional[EmployeePriceWithUserResponse] = None

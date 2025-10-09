@@ -12,8 +12,6 @@ class EmployeePrice:
 
     id: Optional[int]
     user_id: int
-    email: str
-    full_name: str
     date_from: date
     cost_per_hour: Optional[float] = None
     date_to: Optional[date] = None
@@ -22,8 +20,6 @@ class EmployeePrice:
     def from_request(
         cls,
         user_id: int,
-        email: str,
-        full_name: str,
         date_from: date,
         cost_per_hour: Optional[float] = None,
         date_to: Optional[date] = None,
@@ -32,8 +28,6 @@ class EmployeePrice:
         return cls(
             id=None,
             user_id=user_id,
-            email=email,
-            full_name=full_name,
             date_from=date_from,
             cost_per_hour=cost_per_hour,
             date_to=date_to,

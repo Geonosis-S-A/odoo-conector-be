@@ -13,8 +13,6 @@ class EmployeePriceModel(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="usermodel.id", index=True)
-    email: str = Field(index=True)
-    full_name: str
     date_from: date = Field(index=True, description="Fecha de inicio de vigencia")
     cost_per_hour: Optional[float] = Field(
         default=None, gt=0, description="Costo por hora del empleado (opcional, debe ser mayor a 0 si se proporciona)"
@@ -23,14 +21,7 @@ class EmployeePriceModel(SQLModel, table=True):
         default=None, index=True, description="Fecha de fin de vigencia (opcional)"
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     # Relación con el usuario
     user: Optional["UserModel"] = Relationship()
-
-
-@event.listens_for(EmployeePriceModel, "before_update")
-def update_timestamp(mapper, connection, target):
-    """Actualiza automáticamente el timestamp de updated_at antes de cada actualización"""
-    target.updated_at = datetime.now(UTC)
 

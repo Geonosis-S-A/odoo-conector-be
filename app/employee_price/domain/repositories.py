@@ -34,6 +34,18 @@ class EmployeePriceRepository(ABC):
         ...
 
     @abstractmethod
+    def get_open_record_by_user_id(self, user_id: int) -> Optional[EmployeePrice]:
+        """
+        Obtiene el registro abierto (sin date_to) de un usuario.
+        Este método es útil para encontrar el registro que debe cerrarse
+        al crear un nuevo registro de precio.
+        
+        Returns:
+            El registro con date_to = NULL si existe, None en caso contrario
+        """
+        ...
+
+    @abstractmethod
     def get_all(self) -> List[EmployeePrice]:
         """Obtiene todos los registros de precios"""
         ...
