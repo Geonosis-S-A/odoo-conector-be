@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
+from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.auth.infra.auth_service import JWTPayload
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
@@ -10,12 +11,90 @@ from app.employee_price.api.schemas import (
     CreateEmployeePriceRequest,
     CreateEmployeePriceResponse,
     EmployeePriceWithUserResponse,
+    TeamEmployeePriceItem,
 )
 from app.employee_price.application.use_cases.create_employee_price import (
     CreateEmployeePriceUseCase,
 )
+from app.employee_price.application.use_cases.list_team_employee_prices import (
+    ListTeamEmployeePricesUseCase,
+)
+from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.shared.infra.external.odoo.odoo_client import (
+    get_odoo_connection_dependency,
+    OdooConnection,
+)
+from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
+    OdooTimesheetLineGateway,
+)
+from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 
 router = APIRouter(prefix="/employee-price", tags=["employee-price"])
+
+
+def get_timesheet_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> TimesheetLineGateway:
+    """Dependencia para obtener el gateway de timesheet"""
+    try:
+        return OdooTimesheetLineGateway(odoo_connection)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail="Error al conectar con el gateway de timesheet"
+        )
+
+
+@router.get("/team", response_model=list[TeamEmployeePriceItem])
+async def list_team_employee_prices(
+    db: Session = Depends(get_db),
+    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    """
+    Lista los precios por hora de los miembros del equipo del usuario autenticado.
+    
+    Obtiene todos los miembros del equipo usando la jerarquía de Odoo y retorna
+    únicamente sus registros abiertos (date_to = NULL).
+    
+    Args:
+        db: Sesión de base de datos
+        timesheet_gateway: Gateway para obtener información del equipo desde Odoo
+        current_user: Usuario autenticado
+    
+    Returns:
+        Lista de miembros del equipo con sus registros abiertos de precio
+    """
+    # Obtener datos del usuario autenticado
+    user_id = current_user["user_id"]
+
+
+    # Inicializar repositorio
+    employee_price_repository = SQLModelEmployeePriceRepository(db)
+    employee_gateway = OdooEmployeeGateway(get_odoo_connection())
+    # Crear y ejecutar caso de uso
+    use_case = ListTeamEmployeePricesUseCase(
+        employee_price_repository=employee_price_repository,
+        timesheet_line_gateway=timesheet_gateway,
+        employee_gateway=employee_gateway,
+    )
+
+    try:
+        team_prices = use_case.execute(
+            user_id=user_id
+        )
+
+        # Convertir a schema de respuesta
+        team_members = [TeamEmployeePriceItem(**item) for item in team_prices]
+
+        return team_members
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except HTTPException:
+        raise
 
 
 @router.post("/", response_model=CreateEmployeePriceResponse)

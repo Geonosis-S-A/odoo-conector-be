@@ -115,7 +115,12 @@ class CreateEmployeePriceRequest(BaseModel):
 
     user_id: int = Field(gt=0, description="ID del usuario/empleado")
     date_from: date = Field(description="Fecha de inicio de vigencia del precio")
-    cost_per_hour: float = Field(gt=0, description="Costo por hora del empleado (opcional)")
+    cost_per_hour: Optional[float] = Field(
+        default=None, gt=0, description="Costo por hora del empleado (opcional)"
+    )
+    date_to: Optional[date] = Field(
+        default=None, description="Fecha de fin de vigencia (opcional)"
+    )
 
 
 class CreateEmployeePriceResponse(BaseModel):
@@ -124,3 +129,24 @@ class CreateEmployeePriceResponse(BaseModel):
     success: bool
     message: str
     employee_price: Optional[EmployeePriceWithUserResponse] = None
+
+
+class TeamEmployeePriceItem(BaseModel):
+    """Schema para un item de precio de empleado del equipo"""
+
+    employee_id: int
+    name: str
+    work_email: str
+    cost_per_hour: Optional[float] = None
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    price_id: Optional[int] = None
+
+
+class ListTeamEmployeePricesResponse(BaseModel):
+    """Schema de respuesta para listar precios de empleados del equipo"""
+
+    success: bool
+    message: str
+    team_members: List[TeamEmployeePriceItem]
+    total: int
