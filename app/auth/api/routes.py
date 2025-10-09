@@ -272,6 +272,7 @@ async def reset_password(
     ),
 ):
     try:
+        dto.email = dto.email.lower()
         await password_recovery_use_case.reset_password(dto)
         return {"message": "Password reset successfully"}
     except PasswordNotMatch as e:
