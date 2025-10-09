@@ -140,7 +140,6 @@ class TeamEmployeePriceItem(BaseModel):
     cost_per_hour: Optional[float] = None
     date_from: Optional[date] = None
     date_to: Optional[date] = None
-    price_id: Optional[int] = None
 
 
 class ListTeamEmployeePricesResponse(BaseModel):

@@ -72,7 +72,6 @@ class ListTeamEmployeePricesUseCase:
                 "cost_per_hour": open_record.cost_per_hour if open_record else None,
                 "date_from": open_record.date_from if open_record else None,
                 "date_to": open_record.date_to if open_record else None,
-                "price_id": open_record.id if open_record else None,
             }
 
             result.append(employee_info)
