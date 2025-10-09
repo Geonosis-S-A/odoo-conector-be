@@ -150,3 +150,16 @@ class ListTeamEmployeePricesResponse(BaseModel):
     message: str
     team_members: List[TeamEmployeePriceItem]
     total: int
+
+
+class EmployeePriceHistoryItem(BaseModel):
+    """Schema para un item del historial de precios"""
+
+    id: int
+    user_id: int
+    date_from: date
+    cost_per_hour: Optional[float] = None
+    date_to: Optional[date] = None
+
+    class Config:
+        from_attributes = True

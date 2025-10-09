@@ -12,12 +12,16 @@ from app.employee_price.api.schemas import (
     CreateEmployeePriceResponse,
     EmployeePriceWithUserResponse,
     TeamEmployeePriceItem,
+    EmployeePriceHistoryItem,
 )
 from app.employee_price.application.use_cases.create_employee_price import (
     CreateEmployeePriceUseCase,
 )
 from app.employee_price.application.use_cases.list_team_employee_prices import (
     ListTeamEmployeePricesUseCase,
+)
+from app.employee_price.application.use_cases.get_employee_price_history import (
+    GetEmployeePriceHistoryUseCase,
 )
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import (
@@ -29,7 +33,7 @@ from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
 )
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 
-router = APIRouter(prefix="/employee-price", tags=["employee-price"])
+router = APIRouter(prefix="/employees-price", tags=["employees-price"])
 
 
 def get_timesheet_gateway(
@@ -44,7 +48,7 @@ def get_timesheet_gateway(
         )
 
 
-@router.get("/team", response_model=list[TeamEmployeePriceItem])
+@router.get("/", response_model=list[TeamEmployeePriceItem])
 async def list_team_employee_prices(
     db: Session = Depends(get_db),
     timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
@@ -87,6 +91,66 @@ async def list_team_employee_prices(
         team_members = [TeamEmployeePriceItem(**item) for item in team_prices]
 
         return team_members
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except HTTPException:
+        raise
+
+
+@router.get("/history/{user_id}", response_model=list[EmployeePriceHistoryItem])
+async def get_employee_price_history(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    """
+    Obtiene el historial completo de precios de un empleado específico.
+    
+    Retorna todos los registros de employee_price para el usuario,
+    ordenados por fecha de más reciente a más antiguo.
+    
+    Args:
+        user_id: ID del usuario/empleado del cual obtener el historial
+        db: Sesión de base de datos
+        current_user: Usuario autenticado
+    
+    Returns:
+        Lista de registros de precio del empleado ordenados por fecha (desc)
+        
+    Raises:
+        HTTPException 400: Si el user_id es inválido
+        HTTPException 404: Si el usuario no existe
+    """
+    # Verificar que el usuario existe
+    user_repository = SQLModelUserRepository(db)
+    employee_data = user_repository.get_by_id(employee_id)
+    if not employee_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Usuario con employee_id {employee_id} no encontrado",
+        )
+
+    # Inicializar repositorio
+    employee_price_repository = SQLModelEmployeePriceRepository(db)
+
+    # Crear y ejecutar caso de uso
+    use_case = GetEmployeePriceHistoryUseCase(
+        employee_price_repository=employee_price_repository
+    )
+
+    try:
+        price_history = use_case.execute(employee_id=employee_id)
+
+        # Convertir a schema de respuesta
+        history_items = [
+            EmployeePriceHistoryItem.model_validate(price) for price in price_history
+        ]
+
+        return history_items
 
     except ValueError as e:
         raise HTTPException(
