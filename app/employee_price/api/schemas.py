@@ -136,7 +136,7 @@ class TeamEmployeePriceItem(BaseModel):
 
     employee_id: int
     name: str
-    work_email: str
+    email: str
     cost_per_hour: Optional[float] = None
     date_from: Optional[date] = None
     date_to: Optional[date] = None

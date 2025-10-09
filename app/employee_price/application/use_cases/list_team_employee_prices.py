@@ -68,7 +68,7 @@ class ListTeamEmployeePricesUseCase:
             employee_info = {
                 "employee_id": employee_id,
                 "name": user_data.get("name", ""),
-                "work_email": user_data.get("work_email", ""),
+                "email": user_data.get("work_email", ""),
                 "cost_per_hour": open_record.cost_per_hour if open_record else None,
                 "date_from": open_record.date_from if open_record else None,
                 "date_to": open_record.date_to if open_record else None,
