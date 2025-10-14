@@ -101,7 +101,10 @@ class DashboardDataService(ABC):
 
     @abstractmethod
     def calculate_hierarchical_summary(
-        self, timesheet_data: List[DetailedTimesheetLine], task_gateway: TaskGateway
+        self,
+        timesheet_data: List[DetailedTimesheetLine],
+        task_gateway: TaskGateway,
+        timesheet_costs: Optional[Dict[int, float]] = None,
     ) -> HierarchicalSummary:
         """
         Calcula la estructura jerárquica de proyectos y tareas con casos borde.
@@ -109,6 +112,7 @@ class DashboardDataService(ABC):
         Args:
             timesheet_data: Lista de líneas de timesheet con información detallada
             task_gateway: Gateway de tareas para obtener información de parent_id
+            timesheet_costs: Diccionario opcional que mapea timesheet_line_id -> total_cost
 
         Returns:
             HierarchicalSummary con la estructura anidada completa
@@ -126,14 +130,14 @@ class DashboardDataService(ABC):
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
-        
+
         Args:
             task_id: ID de la tarea a filtrar (opcional)
             project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
             date_from: Fecha de inicio del período
             date_to: Fecha de fin del período
             timesheet_line_gateway: Gateway de líneas de timesheet
-            
+
         Returns:
             Lista de DetailedTimesheetLine que coinciden con los criterios
         """

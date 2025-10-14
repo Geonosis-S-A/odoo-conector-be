@@ -382,6 +382,17 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
     """Transforma el modelo de dominio al esquema de respuesta de la API."""
 
     # Transformar KPIs
+    total_cost_response = None
+    if (
+        "total_cost" in dashboard_summary.summary
+        and dashboard_summary.summary["total_cost"]
+    ):
+        total_cost_response = KPIResponse(
+            total=dashboard_summary.summary["total_cost"].total,
+            average_per_user=dashboard_summary.summary["total_cost"].average_per_user,
+            unit=dashboard_summary.summary["total_cost"].unit,
+        )
+
     summary_response = DashboardSummaryKPIsResponse(
         hours_selected_period=KPIResponse(
             total=dashboard_summary.summary["hours_selected_period"].total,
@@ -404,6 +415,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
             ].average_per_user,
             unit=dashboard_summary.summary["daily_average_hours"].unit,
         ),
+        total_cost=total_cost_response,
     )
 
     # Transformar totales
@@ -459,6 +471,7 @@ def _transform_hierarchical_summary(
     """Transforma la estructura jerárquica del dominio al schema de respuesta."""
     return HierarchicalSummaryResponse(
         total_hours=hierarchical_summary.total_hours,
+        total_cost=hierarchical_summary.total_cost,
         data=[_transform_hierarchical_item(item) for item in hierarchical_summary.data],
     )
 
@@ -476,6 +489,7 @@ def _transform_hierarchical_item(item) -> HierarchicalItemResponse:
         id=item.id,
         name=item.name,
         total_hours=item.total_hours,
+        total_cost=item.total_cost,
         data=data_field,
         is_artificial=item.is_artificial,
     )

@@ -1,8 +1,8 @@
 from datetime import date
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from collections import defaultdict
 
-from app.dashboard.domain.models import DashboardSummary
+from app.dashboard.domain.models import DashboardSummary, KPI
 from app.dashboard.domain.repositories import DashboardDataService
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -84,8 +84,6 @@ class GetDashboardSummaryUseCase:
                 }
             )
 
-        print(timesheet_costs)
-
         # 3. Calcular KPIs reales
         hours_kpi = self.dashboard_service.calculate_hours_kpi(
             timesheet_data, users_count
@@ -96,6 +94,9 @@ class GetDashboardSummaryUseCase:
         daily_average_kpi = self.dashboard_service.calculate_daily_average_kpi(
             timesheet_data, users_count, date_from, date_to
         )
+
+        # 3.1. Calcular KPI de costo total
+        total_cost_kpi = self._calculate_total_cost_kpi(timesheet_costs, users_count)
 
         # 4. Calcular totales desagregados
         by_project = self.dashboard_service.calculate_project_totals(timesheet_data)
@@ -114,9 +115,16 @@ class GetDashboardSummaryUseCase:
         "append de by_project_without_task a by_task"
         by_task.extend(by_project_without_task)
 
-        # 6. Calcular nueva estructura jerárquica
+        # 6. Calcular nueva estructura jerárquica con costos
+        # Crear diccionario de timesheet_line_id -> total_cost para búsqueda eficiente
+        timesheet_cost_map = {
+            cost_data["timesheet_line"].id: cost_data["total_cost"]
+            for cost_data in timesheet_costs
+            if cost_data["total_cost"] is not None
+        }
+
         hierarchical_summary = self.dashboard_service.calculate_hierarchical_summary(
-            timesheet_data, self.task_gateway
+            timesheet_data, self.task_gateway, timesheet_cost_map
         )
 
         # 7. Crear y retornar el resumen del dashboard
@@ -129,9 +137,41 @@ class GetDashboardSummaryUseCase:
             by_task=by_task,
             by_employee=by_employee,
             hierarchical_summary=hierarchical_summary,
+            total_cost=total_cost_kpi,
         )
 
         return dashboard_summary
+
+    def _calculate_total_cost_kpi(
+        self, timesheet_costs: List[Dict[str, Any]], users_count: int
+    ) -> Optional[KPI]:
+        """
+        Calcula el KPI de costo total del período.
+
+        Args:
+            timesheet_costs: Lista de timesheets con información de costos
+            users_count: Cantidad de usuarios únicos
+
+        Returns:
+            KPI con el costo total y promedio por usuario, o None si no hay datos
+        """
+        # Filtrar solo los costos que tienen valor
+        valid_costs = [
+            ts["total_cost"] for ts in timesheet_costs if ts["total_cost"] is not None
+        ]
+
+        if not valid_costs:
+            # Si no hay costos calculados, retornar None
+            return None
+
+        total_cost = sum(valid_costs)
+        average_per_user = total_cost / users_count if users_count > 0 else 0
+
+        return KPI(
+            total=round(total_cost, 2),
+            average_per_user=round(average_per_user, 2),
+            unit="currency",
+        )
 
     def _build_price_index(
         self, employee_prices: List[EmployeePrice]

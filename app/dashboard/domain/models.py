@@ -51,6 +51,7 @@ class HierarchicalItem:
     total_hours: float
     data: List["HierarchicalItem"]
     is_artificial: bool = False  # Flag para identificar entradas artificiales
+    total_cost: Optional[float] = None  # Costo total acumulado del nodo
 
 
 @dataclass
@@ -59,6 +60,7 @@ class HierarchicalSummary:
 
     total_hours: float
     data: List[HierarchicalItem]
+    total_cost: Optional[float] = None  # Costo total acumulado
 
 
 @dataclass
@@ -83,15 +85,22 @@ class DashboardSummary:
         by_task: List[TaskTotal],
         by_employee: List[EmployeeTotal],
         hierarchical_summary: Optional[HierarchicalSummary] = None,
+        total_cost: Optional[KPI] = None,
     ) -> "DashboardSummary":
         """Factory method para crear un DashboardSummary completo."""
+        summary_dict = {
+            "hours_selected_period": hours_selected_period,
+            "entries_selected_period": entries_selected_period,
+            "daily_average_hours": daily_average_hours,
+        }
+
+        # Agregar total_cost solo si existe
+        if total_cost is not None:
+            summary_dict["total_cost"] = total_cost
+
         return cls(
             meta={"users_count": users_count},
-            summary={
-                "hours_selected_period": hours_selected_period,
-                "entries_selected_period": entries_selected_period,
-                "daily_average_hours": daily_average_hours,
-            },
+            summary=summary_dict,
             totals={
                 "by_project": by_project,
                 "by_task": by_task,
