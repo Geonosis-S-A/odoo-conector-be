@@ -2,7 +2,7 @@ from datetime import date
 from typing import List, Optional, Dict, Any
 from collections import defaultdict
 
-from app.dashboard.domain.models import DashboardSummary, KPI
+from app.dashboard.domain.models import DashboardSummary, KPI, EmployeeWithoutPrice
 from app.dashboard.domain.repositories import DashboardDataService
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -109,6 +109,32 @@ class GetDashboardSummaryUseCase:
             if cost_data["total_cost"] is not None
         }
 
+        # 4.2. Identificar empleados sin precio configurado
+        employees_without_price = []
+
+        # Verificar cuáles empleados no tienen precio configurado
+        for cost_data in timesheet_costs:
+            if cost_data["total_cost"] is None:
+                employee_id = cost_data["timesheet_line"].employee_id
+                # Buscar el nombre del empleado en team_users
+                employee_name = next(
+                    (user["name"] for user in team_users if user["id"] == employee_id),
+                    f"Usuario {employee_id}",
+                )
+                employees_without_price.append(
+                    EmployeeWithoutPrice(
+                        user_id=employee_id, employee_name=employee_name
+                    )
+                )
+
+        # Eliminar duplicados por user_id
+        unique_employees_without_price = []
+        seen_ids = set()
+        for emp in employees_without_price:
+            if emp.user_id not in seen_ids:
+                unique_employees_without_price.append(emp)
+                seen_ids.add(emp.user_id)
+
         by_employee = self.dashboard_service.calculate_employee_totals(
             timesheet_data, team_users, timesheet_cost_map
         )
@@ -140,6 +166,9 @@ class GetDashboardSummaryUseCase:
             by_employee=by_employee,
             hierarchical_summary=hierarchical_summary,
             total_cost=total_cost_kpi,
+            employees_without_price=unique_employees_without_price
+            if unique_employees_without_price
+            else None,
         )
 
         return dashboard_summary

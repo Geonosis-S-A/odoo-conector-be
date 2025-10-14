@@ -37,6 +37,13 @@ class EmployeeTotalResponse(BaseModel):
     total_cost: Optional[float] = None
 
 
+class EmployeeWithoutPriceResponse(BaseModel):
+    """Schema de respuesta para empleados sin precio configurado."""
+
+    user_id: int
+    employee_name: str
+
+
 class HierarchicalItemResponse(BaseModel):
     """Schema de respuesta para elementos de la estructura jerárquica."""
 
@@ -97,6 +104,7 @@ class DashboardSummaryResponse(BaseModel):
     summary: DashboardSummaryKPIsResponse
     totals: DashboardSummaryTotalsResponse
     hierarchical_summary: Optional[HierarchicalSummaryResponse] = None
+    employees_without_price: Optional[List[EmployeeWithoutPriceResponse]] = None
 
     class Config:
         """Configuración del modelo Pydantic."""

@@ -43,6 +43,14 @@ class EmployeeTotal:
 
 
 @dataclass
+class EmployeeWithoutPrice:
+    """Empleado sin precio configurado."""
+
+    user_id: int
+    employee_name: str
+
+
+@dataclass
 class HierarchicalItem:
     """Elemento base de la estructura jerárquica."""
 
@@ -74,6 +82,7 @@ class DashboardSummary:
     hierarchical_summary: Optional[HierarchicalSummary] = (
         None  # Nueva estructura jerárquica
     )
+    employees_without_price: Optional[List[EmployeeWithoutPrice]] = None
 
     @classmethod
     def create(
@@ -87,6 +96,7 @@ class DashboardSummary:
         by_employee: List[EmployeeTotal],
         hierarchical_summary: Optional[HierarchicalSummary] = None,
         total_cost: Optional[KPI] = None,
+        employees_without_price: Optional[List[EmployeeWithoutPrice]] = None,
     ) -> "DashboardSummary":
         """Factory method para crear un DashboardSummary completo."""
         summary_dict = {
@@ -108,6 +118,7 @@ class DashboardSummary:
                 "by_employee": by_employee,
             },
             hierarchical_summary=hierarchical_summary,
+            employees_without_price=employees_without_price,
         )
 
 

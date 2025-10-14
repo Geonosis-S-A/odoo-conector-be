@@ -455,6 +455,18 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
             dashboard_summary.hierarchical_summary
         )
 
+    # Transformar employees_without_price si existe
+    employees_without_price_response = None
+    if dashboard_summary.employees_without_price:
+        from app.dashboard.api.schemas import EmployeeWithoutPriceResponse
+        employees_without_price_response = [
+            EmployeeWithoutPriceResponse(
+                user_id=emp.user_id,
+                employee_name=emp.employee_name,
+            )
+            for emp in dashboard_summary.employees_without_price
+        ]
+
     # Crear respuesta completa
     return DashboardSummaryResponse(
         meta=DashboardSummaryMetaResponse(
@@ -463,6 +475,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
         summary=summary_response,
         totals=totals_response,
         hierarchical_summary=hierarchical_summary_response,
+        employees_without_price=employees_without_price_response,
     )
 
 
