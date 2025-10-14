@@ -91,7 +91,7 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
         Obtiene el registro abierto (sin date_to) de un usuario.
         Este método es útil para encontrar el registro que debe cerrarse
         al crear un nuevo registro de precio.
-        
+
         Returns:
             El registro con date_to = NULL si existe, None en caso contrario
         """
@@ -99,7 +99,7 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
             select(EmployeePriceModel)
             .where(
                 EmployeePriceModel.user_id == user_id,
-                EmployeePriceModel.date_to.is_(None)
+                EmployeePriceModel.date_to.is_(None),
             )
             .order_by(EmployeePriceModel.date_from.desc())
         )
@@ -171,3 +171,18 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
         models = self.db.exec(statement).all()
         return [self._model_to_domain(model) for model in models]
 
+    def get_by_user_ids(self, user_ids: List[int]) -> List[EmployeePrice]:
+        """
+        Obtiene todos los registros de precio para múltiples usuarios.
+        Hace una sola query a la base de datos para mayor eficiencia.
+        """
+        if not user_ids:
+            return []
+
+        statement = (
+            select(EmployeePriceModel)
+            .where(EmployeePriceModel.user_id.in_(user_ids))
+            .order_by(EmployeePriceModel.user_id, EmployeePriceModel.date_from.desc())
+        )
+        models = self.db.exec(statement).all()
+        return [self._model_to_domain(model) for model in models]

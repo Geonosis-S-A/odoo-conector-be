@@ -1,18 +1,14 @@
 from datetime import date
-from typing import List
+from typing import List, Optional
+from collections import defaultdict
 
-from app.dashboard.domain.models import (
-    DashboardSummary,
-    KPI,
-    ProjectTotal,
-    TaskTotal,
-    EmployeeTotal,
-)
+from app.dashboard.domain.models import DashboardSummary
 from app.dashboard.domain.repositories import DashboardDataService
-from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.employee_price.domain.repositories import EmployeePriceRepository
+from app.employee_price.domain.models import EmployeePrice
 
 
 class GetDashboardSummaryUseCase:
@@ -24,11 +20,13 @@ class GetDashboardSummaryUseCase:
         employee_gateway: EmployeeGateway,
         task_gateway: TaskGateway,
         timesheet_line_gateway: TimesheetLineGateway,
+        employee_price_repository: EmployeePriceRepository,
     ):
         self.dashboard_service = dashboard_service
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
         self.timesheet_line_gateway = timesheet_line_gateway
+        self.employee_price_repository = employee_price_repository
 
     def execute(
         self, user_id: int, employee_id: int, date_from: date, date_to: date
@@ -45,11 +43,9 @@ class GetDashboardSummaryUseCase:
             DashboardSummary con todos los KPIs y totales calculados
         """
 
-        users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
+        team_users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
 
-        users_count = len(users)
-
-        ids = [user["id"] for user in users]
+        ids = [user["id"] for user in team_users]
 
         timesheet_data = self.dashboard_service.get_timesheet_summary(
             ids,
@@ -59,6 +55,36 @@ class GetDashboardSummaryUseCase:
             self.timesheet_line_gateway,
             user_id,
         )
+
+        # Calcular empleados únicos que realmente cargaron horas
+        # Esto incluye empleados del equipo + empleados externos que trabajaron en proyectos gestionados
+        unique_employee_ids = set(record.employee_id for record in timesheet_data)
+        users_count = len(unique_employee_ids)
+
+        # 2.1. Obtener precios solo para empleados únicos y construir índice
+        employee_prices = self.employee_price_repository.get_by_user_ids(
+            list(unique_employee_ids)
+        )
+        price_index = self._build_price_index(employee_prices)
+
+        # Opcional: Calcular costos para cada timesheet line
+        # timesheet_costs se puede usar para cálculos de facturación o reportes
+        timesheet_costs = []
+        for ts_line in timesheet_data:
+            cost_per_hour = self._get_cost_for_date(
+                ts_line.employee_id, ts_line.date, price_index
+            )
+            total_cost = (ts_line.hours * cost_per_hour) if cost_per_hour else None
+
+            timesheet_costs.append(
+                {
+                    "timesheet_line": ts_line,
+                    "cost_per_hour": cost_per_hour,
+                    "total_cost": total_cost,
+                }
+            )
+
+        print(timesheet_costs)
 
         # 3. Calcular KPIs reales
         hours_kpi = self.dashboard_service.calculate_hours_kpi(
@@ -75,7 +101,7 @@ class GetDashboardSummaryUseCase:
         by_project = self.dashboard_service.calculate_project_totals(timesheet_data)
         by_task = self.dashboard_service.calculate_task_totals(timesheet_data)
         by_employee = self.dashboard_service.calculate_employee_totals(
-            timesheet_data, users
+            timesheet_data, team_users
         )
 
         # 5. Calcular horas cargadas a proyectos sin tarea específica
@@ -106,3 +132,68 @@ class GetDashboardSummaryUseCase:
         )
 
         return dashboard_summary
+
+    def _build_price_index(
+        self, employee_prices: List[EmployeePrice]
+    ) -> dict[int, list[EmployeePrice]]:
+        """
+        Construye un índice de precios agrupados por employee_id.
+
+        Args:
+            employee_prices: Lista de precios de empleados
+
+        Returns:
+            Diccionario con user_id como clave y lista de precios como valor
+        """
+        index = defaultdict(list)
+        for price in employee_prices:
+            index[price.user_id].append(price)
+        return index
+
+    def _get_cost_for_date(
+        self,
+        employee_id: int,
+        check_date: date,
+        price_index: dict[int, list[EmployeePrice]],
+    ) -> Optional[float]:
+        """
+        Obtiene el costo por hora vigente para un empleado en una fecha específica.
+        Si no hay precio vigente, retorna el más cercano anterior.
+        Si no hay anteriores, retorna el más cercano futuro.
+
+        Args:
+            employee_id: ID del empleado
+            check_date: Fecha a verificar
+            price_index: Índice de precios pre-construido
+
+        Returns:
+            Costo por hora si existe un precio vigente o cercano, None si no hay precios
+        """
+        prices = price_index.get(employee_id, [])
+
+        if not prices:
+            return None
+
+        # 1. Primero buscar precio vigente en la fecha exacta
+        for price in prices:
+            if price.is_active_on(check_date):
+                return price.cost_per_hour
+
+        # 2. Si no hay precio vigente, buscar el más cercano anterior
+        # Filtrar precios que empezaron antes o en la fecha
+        previous_prices = [p for p in prices if p.date_from <= check_date]
+
+        if previous_prices:
+            # Ordenar por date_from descendente y tomar el más reciente
+            closest = max(previous_prices, key=lambda p: p.date_from)
+            return closest.cost_per_hour
+
+        # 3. Si no hay precios anteriores, tomar el más próximo futuro
+        future_prices = [p for p in prices if p.date_from > check_date]
+
+        if future_prices:
+            # Tomar el que empieza más pronto
+            closest = min(future_prices, key=lambda p: p.date_from)
+            return closest.cost_per_hour
+
+        return None

@@ -53,6 +53,8 @@ from app.timesheet_line.infra.db.repositories import (
     SQLModelTimesheetLineNotificationRepository,
 )
 from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
+from app.employee_price.domain.repositories import EmployeePriceRepository
+from app.employee_price.infra.db.repositories import SQLModelEmployeePriceRepository
 from app.shared.infra.db.session import get_db, Session
 import pandas as pd
 
@@ -115,6 +117,13 @@ def get_notification_repository(
     return SQLModelTimesheetLineNotificationRepository(db)
 
 
+def get_employee_price_repository(
+    db: Session = Depends(get_db),
+) -> EmployeePriceRepository:
+    """Dependencia para obtener el repositorio de precios de empleados."""
+    return SQLModelEmployeePriceRepository(db)
+
+
 @router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
@@ -123,6 +132,9 @@ async def get_dashboard_summary(
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     task_gateway: TaskGateway = Depends(get_task_gateway),
     timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_price_repository: EmployeePriceRepository = Depends(
+        get_employee_price_repository
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -160,7 +172,11 @@ async def get_dashboard_summary(
 
         # Crear y ejecutar caso de uso
         use_case = GetDashboardSummaryUseCase(
-            dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
+            dashboard_gateway,
+            employee_gateway,
+            task_gateway,
+            timesheet_line_gateway,
+            employee_price_repository,
         )
         dashboard_summary = use_case.execute(
             user_id, requester_employee_id, date_from, date_to

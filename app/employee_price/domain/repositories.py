@@ -39,7 +39,7 @@ class EmployeePriceRepository(ABC):
         Obtiene el registro abierto (sin date_to) de un usuario.
         Este método es útil para encontrar el registro que debe cerrarse
         al crear un nuevo registro de precio.
-        
+
         Returns:
             El registro con date_to = NULL si existe, None en caso contrario
         """
@@ -68,3 +68,16 @@ class EmployeePriceRepository(ABC):
         """
         ...
 
+    @abstractmethod
+    def get_by_user_ids(self, user_ids: List[int]) -> List[EmployeePrice]:
+        """
+        Obtiene todos los registros de precio para múltiples usuarios.
+        Útil para obtener precios en batch de forma eficiente.
+
+        Args:
+            user_ids: Lista de IDs de usuarios
+
+        Returns:
+            Lista de todos los registros de precio para los usuarios especificados
+        """
+        ...
