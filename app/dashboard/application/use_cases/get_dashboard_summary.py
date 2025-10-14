@@ -1,6 +1,5 @@
 from datetime import date
 from typing import List, Optional, Dict, Any
-from collections import defaultdict
 
 from app.dashboard.domain.models import DashboardSummary, KPI, EmployeeWithoutPrice
 from app.dashboard.domain.repositories import DashboardDataService
@@ -8,7 +7,7 @@ from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.employee_price.domain.repositories import EmployeePriceRepository
-from app.employee_price.domain.models import EmployeePrice
+from app.dashboard.application.price_utils import build_price_index, get_cost_for_date
 
 
 class GetDashboardSummaryUseCase:
@@ -65,13 +64,13 @@ class GetDashboardSummaryUseCase:
         employee_prices = self.employee_price_repository.get_by_user_ids(
             list(unique_employee_ids)
         )
-        price_index = self._build_price_index(employee_prices)
+        price_index = build_price_index(employee_prices)
 
         # Opcional: Calcular costos para cada timesheet line
         # timesheet_costs se puede usar para cálculos de facturación o reportes
         timesheet_costs = []
         for ts_line in timesheet_data:
-            cost_per_hour = self._get_cost_for_date(
+            cost_per_hour = get_cost_for_date(
                 ts_line.employee_id, ts_line.date, price_index
             )
             total_cost = (ts_line.hours * cost_per_hour) if cost_per_hour else None
@@ -203,68 +202,3 @@ class GetDashboardSummaryUseCase:
             average_per_user=round(average_per_user, 2),
             unit="currency",
         )
-
-    def _build_price_index(
-        self, employee_prices: List[EmployeePrice]
-    ) -> dict[int, list[EmployeePrice]]:
-        """
-        Construye un índice de precios agrupados por employee_id.
-
-        Args:
-            employee_prices: Lista de precios de empleados
-
-        Returns:
-            Diccionario con user_id como clave y lista de precios como valor
-        """
-        index = defaultdict(list)
-        for price in employee_prices:
-            index[price.user_id].append(price)
-        return index
-
-    def _get_cost_for_date(
-        self,
-        employee_id: int,
-        check_date: date,
-        price_index: dict[int, list[EmployeePrice]],
-    ) -> Optional[float]:
-        """
-        Obtiene el costo por hora vigente para un empleado en una fecha específica.
-        Si no hay precio vigente, retorna el más cercano anterior.
-        Si no hay anteriores, retorna el más cercano futuro.
-
-        Args:
-            employee_id: ID del empleado
-            check_date: Fecha a verificar
-            price_index: Índice de precios pre-construido
-
-        Returns:
-            Costo por hora si existe un precio vigente o cercano, None si no hay precios
-        """
-        prices = price_index.get(employee_id, [])
-
-        if not prices:
-            return None
-
-        # 1. Primero buscar precio vigente en la fecha exacta
-        for price in prices:
-            if price.is_active_on(check_date):
-                return price.cost_per_hour
-
-        # 2. Si no hay precio vigente, buscar el más cercano anterior
-        # Filtrar precios que empezaron antes o en la fecha
-        previous_prices = [p for p in prices if p.date_from <= check_date]
-
-        if previous_prices:
-            # Ordenar por date_from descendente y tomar el más reciente
-            closest = max(previous_prices, key=lambda p: p.date_from)
-            return closest.cost_per_hour
-
-        # 3. Si no hay precios anteriores, tomar el más próximo futuro
-        future_prices = [p for p in prices if p.date_from > check_date]
-
-        if future_prices:
-            # Tomar el que empieza más pronto
-            closest = min(future_prices, key=lambda p: p.date_from)
-            return closest.cost_per_hour
-
-        return None

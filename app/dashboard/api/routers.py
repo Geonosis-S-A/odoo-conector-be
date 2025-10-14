@@ -353,6 +353,9 @@ async def export_timesheets(
     current_user: JWTPayload = Depends(get_current_user),
     task_gateway: TaskGateway = Depends(get_task_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    employee_price_repository: EmployeePriceRepository = Depends(
+        get_employee_price_repository
+    ),
 ):
     roles = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
@@ -362,7 +365,11 @@ async def export_timesheets(
         )
 
     use_case = ExportTimesheetsByTeamUseCase(
-        timesheet_line_gateway, employee_gateway, task_gateway, current_user["user_id"]
+        timesheet_line_gateway, 
+        employee_gateway, 
+        task_gateway, 
+        current_user["user_id"],
+        employee_price_repository
     )
     timesheet_lines_df = use_case.execute(date_from, date_to)
     output = io.BytesIO()
