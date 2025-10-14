@@ -183,24 +183,35 @@ class OdooDashboardDataService(DashboardDataService):
         return task_list
 
     def calculate_employee_totals(
-        self, timesheet_data: List[DetailedTimesheetLine], team_users: List[dict]
+        self,
+        timesheet_data: List[DetailedTimesheetLine],
+        team_users: List[dict],
+        timesheet_cost_map: Optional[Dict[int, float]] = None,
     ) -> List[EmployeeTotal]:
-        """Calcula totales de horas por empleado con nombres obtenidos de Odoo.
+        """Calcula totales de horas y costos por empleado con nombres obtenidos de Odoo.
 
         Incluye todos los empleados del equipo, mostrando 0 horas para aquellos
         que no registraron tiempo en el período seleccionado.
         """
-        # Inicializar todos los empleados del equipo con 0 horas
+        # Inicializar todos los empleados del equipo con 0 horas y 0 costo
         employee_totals = {}
+        employee_costs = {}
         for user in team_users:
             employee_id = user["id"]
             employee_totals[employee_id] = 0.0
+            employee_costs[employee_id] = 0.0
 
-        # Agrupar horas por empleado (solo para los que tienen registros)
+        # Agrupar horas y costos por empleado (solo para los que tienen registros)
         for record in timesheet_data:
             employee_id = record.employee_id
             if employee_id in employee_totals:
                 employee_totals[employee_id] += record.hours
+
+                # Agregar costo si está disponible
+                if timesheet_cost_map and record.id in timesheet_cost_map:
+                    cost = timesheet_cost_map[record.id]
+                    if cost is not None:
+                        employee_costs[employee_id] += cost
 
         # Obtener nombres de empleados desde Odoo
         employee_names = self.get_employee_names(list(employee_totals.keys()))
@@ -213,6 +224,9 @@ class OdooDashboardDataService(DashboardDataService):
                     employee_id, f"Empleado {employee_id}"
                 ),
                 hours=hours,
+                total_cost=employee_costs.get(employee_id)
+                if timesheet_cost_map and employee_costs.get(employee_id, 0) > 0
+                else None,
             )
             for employee_id, hours in employee_totals.items()
         ]

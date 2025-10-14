@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
 from app.dashboard.domain.models import KPI, HierarchicalSummary
 from app.timesheet_line.domain.models import DetailedTimesheetLine
@@ -78,9 +78,12 @@ class DashboardDataService(ABC):
 
     @abstractmethod
     def calculate_employee_totals(
-        self, timesheet_data: List[DetailedTimesheetLine], team_users: List[dict]
+        self,
+        timesheet_data: List[DetailedTimesheetLine],
+        team_users: List[dict],
+        timesheet_cost_map: Optional[Dict[int, float]] = None,
     ) -> List[EmployeeTotal]:
-        """Calcula los totales de horas por empleado."""
+        """Calcula los totales de horas y costos por empleado."""
         pass
 
     @abstractmethod

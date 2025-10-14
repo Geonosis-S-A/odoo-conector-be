@@ -34,6 +34,7 @@ class EmployeeTotalResponse(BaseModel):
     user_id: int
     employee_name: str
     hours: float
+    total_cost: Optional[float] = None
 
 
 class HierarchicalItemResponse(BaseModel):

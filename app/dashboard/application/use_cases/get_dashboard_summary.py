@@ -101,8 +101,16 @@ class GetDashboardSummaryUseCase:
         # 4. Calcular totales desagregados
         by_project = self.dashboard_service.calculate_project_totals(timesheet_data)
         by_task = self.dashboard_service.calculate_task_totals(timesheet_data)
+
+        # 4.1. Crear mapa de costos de timesheets para cálculos
+        timesheet_cost_map = {
+            cost_data["timesheet_line"].id: cost_data["total_cost"]
+            for cost_data in timesheet_costs
+            if cost_data["total_cost"] is not None
+        }
+
         by_employee = self.dashboard_service.calculate_employee_totals(
-            timesheet_data, team_users
+            timesheet_data, team_users, timesheet_cost_map
         )
 
         # 5. Calcular horas cargadas a proyectos sin tarea específica
@@ -116,13 +124,7 @@ class GetDashboardSummaryUseCase:
         by_task.extend(by_project_without_task)
 
         # 6. Calcular nueva estructura jerárquica con costos
-        # Crear diccionario de timesheet_line_id -> total_cost para búsqueda eficiente
-        timesheet_cost_map = {
-            cost_data["timesheet_line"].id: cost_data["total_cost"]
-            for cost_data in timesheet_costs
-            if cost_data["total_cost"] is not None
-        }
-
+        # Usar el mismo timesheet_cost_map creado anteriormente
         hierarchical_summary = self.dashboard_service.calculate_hierarchical_summary(
             timesheet_data, self.task_gateway, timesheet_cost_map
         )

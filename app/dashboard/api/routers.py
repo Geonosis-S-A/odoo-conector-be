@@ -442,6 +442,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
                 user_id=employee.user_id,
                 employee_name=employee.employee_name,
                 hours=employee.hours,
+                total_cost=employee.total_cost,
             )
             for employee in dashboard_summary.totals["by_employee"]
         ],
@@ -549,6 +550,7 @@ def _transform_to_response_schema_by_employee(
                 user_id=employee.user_id,
                 employee_name=employee.employee_name,
                 hours=employee.hours,
+                total_cost=employee.total_cost,
             )
             for employee in dashboard_summary.totals["by_employee"]
         ],
