@@ -32,6 +32,7 @@ from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
+from app.shared.security.roles import user_has_role, Roles
 
 router = APIRouter(prefix="/employees-price", tags=["employees-price"])
 
@@ -56,21 +57,27 @@ async def list_team_employee_prices(
 ):
     """
     Lista los precios por hora de los miembros del equipo del usuario autenticado.
-    
+
     Obtiene todos los miembros del equipo usando la jerarquía de Odoo y retorna
     únicamente sus registros abiertos (date_to = NULL).
-    
+
     Args:
         db: Sesión de base de datos
         timesheet_gateway: Gateway para obtener información del equipo desde Odoo
         current_user: Usuario autenticado
-    
+
     Returns:
         Lista de miembros del equipo con sus registros abiertos de precio
     """
     # Obtener datos del usuario autenticado
+    roles: list[int] = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    if not is_approver:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver el listado de precios de empleados",
+        )
     user_id = current_user["user_id"]
-
 
     # Inicializar repositorio
     employee_price_repository = SQLModelEmployeePriceRepository(db)
@@ -83,9 +90,7 @@ async def list_team_employee_prices(
     )
 
     try:
-        team_prices = use_case.execute(
-            user_id=user_id
-        )
+        team_prices = use_case.execute(user_id=user_id)
 
         # Convertir a schema de respuesta
         team_members = [TeamEmployeePriceItem(**item) for item in team_prices]
@@ -109,23 +114,30 @@ async def get_employee_price_history(
 ):
     """
     Obtiene el historial completo de precios de un empleado específico.
-    
+
     Retorna todos los registros de employee_price para el usuario,
     ordenados por fecha de más reciente a más antiguo.
-    
+
     Args:
         employee_id: ID del usuario/empleado del cual obtener el historial
         db: Sesión de base de datos
         current_user: Usuario autenticado
-    
+
     Returns:
         Lista de registros de precio del empleado ordenados por fecha (desc)
-        
+
     Raises:
         HTTPException 400: Si el employee_id es inválido
         HTTPException 404: Si el empleado no existe
     """
     # Verificar que el usuario existe
+    roles: list[int] = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    if not is_approver:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para ver el historial de precios de un empleado",
+        )
     user_repository = SQLModelUserRepository(db)
     employee_data = user_repository.get_by_id(employee_id)
     if not employee_data:
@@ -169,23 +181,31 @@ async def create_employee_price(
 ):
     """
     Crea un nuevo registro de precio por hora para un empleado.
-    
+
     Si existe un registro activo previo (con date_to vacío), automáticamente
     se cerrará ese registro estableciendo su date_to.
-    
+
     Args:
         request: Datos del nuevo registro de precio de empleado
         db: Sesión de base de datos
         current_user: Usuario autenticado
-    
+
     Returns:
         CreateEmployeePriceResponse con el registro creado
-        
+
     Raises:
         HTTPException 400: Si los datos son inválidos (costo <= 0, fechas incorrectas, etc.)
         HTTPException 404: Si el usuario no existe
+        HTTPException 403: Si el usuario no tiene permisos para crear un registro de precio de empleado
     """
     # Inicializar repositorios
+    roles: list[int] = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    if not is_approver:
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para crear un registro de precio de empleado",
+        )
     employee_price_repository = SQLModelEmployeePriceRepository(db)
     user_repository = SQLModelUserRepository(db)
 
@@ -243,6 +263,3 @@ async def create_employee_price(
     except HTTPException:
         # Re-lanzar HTTPExceptions tal como están
         raise
-
-
-
