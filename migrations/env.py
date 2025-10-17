@@ -11,6 +11,7 @@ from app.auth.infra.db.models import (
     RefreshTokenModel,
     OTPModel,
 )  # Hay que importar los modelos que se van a usar para que los detecte, en env.py
+from app.employee_price.infra.db.models import EmployeePriceModel
 from app.shared.infra.db.config import settings
 
 # this is the Alembic Config object, which provides
