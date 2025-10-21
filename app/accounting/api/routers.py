@@ -53,11 +53,13 @@ async def export_facturas_pagos(
         StreamingResponse: Archivo Excel con las facturas y pagos
     """
     # Validar permisos - Solo usuarios con rol approver pueden exportar
-    mail = current_user["email"]
-    if (
-        mail != "cintia.papapietro@geonosis.com.ar"
-        or mail != "camila.perez@geonosis.com.ar"
-    ):
+    mail = current_user["user_email"]
+    mail = mail.lower().strip()
+    allowed_mails = [
+        "cintia.papapietro@geonosis.com.ar",
+        "camila.perez@geonosis.com.ar",
+    ]
+    if mail not in allowed_mails:
         raise HTTPException(
             status_code=403,
             detail="No tienes permisos para exportar facturas y pagos",
