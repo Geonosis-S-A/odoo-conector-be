@@ -32,7 +32,10 @@ class OdooProjectGateway(ProjectGateway):
             "project.project",
             "search_read",
             [domain],
-            {"fields": ["id", "name", "stage_id"]},
+            {
+                "fields": ["id", "name", "stage_id"],
+                "context": {"lang": "es_AR"},
+            },
         )
 
         if not projects:
