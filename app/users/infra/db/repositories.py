@@ -71,6 +71,7 @@ class SQLModelUserRepository(UserRepository):
         self.db.refresh(user_model)
 
     def get_by_email(self, email: str) -> User | None:
+        email = email.lower()
         statement = select(UserModel).where(UserModel.email == email)
         user_model = self.db.exec(statement).first()
         if user_model is None:

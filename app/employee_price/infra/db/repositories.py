@@ -17,8 +17,6 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
         return EmployeePrice(
             id=model.id,
             user_id=model.user_id,
-            email=model.email,
-            full_name=model.full_name,
             cost_per_hour=model.cost_per_hour,
             date_from=model.date_from,
             date_to=model.date_to,
@@ -29,8 +27,6 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
         return EmployeePriceModel(
             id=domain.id,
             user_id=domain.user_id,
-            email=domain.email,
-            full_name=domain.full_name,
             cost_per_hour=domain.cost_per_hour,
             date_from=domain.date_from,
             date_to=domain.date_to,
@@ -90,6 +86,29 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
             return None
         return self._model_to_domain(model)
 
+    def get_open_record_by_user_id(self, user_id: int) -> Optional[EmployeePrice]:
+        """
+        Obtiene el registro abierto (sin date_to) de un usuario.
+        Este método es útil para encontrar el registro que debe cerrarse
+        al crear un nuevo registro de precio.
+
+        Returns:
+            El registro con date_to = NULL si existe, None en caso contrario
+        """
+        statement = (
+            select(EmployeePriceModel)
+            .where(
+                EmployeePriceModel.user_id == user_id,
+                EmployeePriceModel.date_to.is_(None),
+            )
+            .order_by(EmployeePriceModel.date_from.desc())
+        )
+
+        model = self.db.exec(statement).first()
+        if model is None:
+            return None
+        return self._model_to_domain(model)
+
     def get_all(self) -> List[EmployeePrice]:
         """Obtiene todos los registros de precios"""
         statement = select(EmployeePriceModel).order_by(
@@ -112,8 +131,6 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
 
         # Actualizar campos
         model.user_id = employee_price.user_id
-        model.email = employee_price.email
-        model.full_name = employee_price.full_name
         model.cost_per_hour = employee_price.cost_per_hour
         model.date_from = employee_price.date_from
         model.date_to = employee_price.date_to
@@ -154,3 +171,18 @@ class SQLModelEmployeePriceRepository(EmployeePriceRepository):
         models = self.db.exec(statement).all()
         return [self._model_to_domain(model) for model in models]
 
+    def get_by_user_ids(self, user_ids: List[int]) -> List[EmployeePrice]:
+        """
+        Obtiene todos los registros de precio para múltiples usuarios.
+        Hace una sola query a la base de datos para mayor eficiencia.
+        """
+        if not user_ids:
+            return []
+
+        statement = (
+            select(EmployeePriceModel)
+            .where(EmployeePriceModel.user_id.in_(user_ids))
+            .order_by(EmployeePriceModel.user_id, EmployeePriceModel.date_from.desc())
+        )
+        models = self.db.exec(statement).all()
+        return [self._model_to_domain(model) for model in models]
