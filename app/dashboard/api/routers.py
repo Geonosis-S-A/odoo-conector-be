@@ -349,6 +349,7 @@ async def get_dashboard_summary_by_employee(
 async def export_timesheets(
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    dolar_value: float = Query(0, description="Valor del dólar"),
     timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: JWTPayload = Depends(get_current_user),
     task_gateway: TaskGateway = Depends(get_task_gateway),
@@ -365,11 +366,12 @@ async def export_timesheets(
         )
 
     use_case = ExportTimesheetsByTeamUseCase(
-        timesheet_line_gateway, 
-        employee_gateway, 
-        task_gateway, 
+        timesheet_line_gateway,
+        employee_gateway,
+        task_gateway,
         current_user["user_id"],
-        employee_price_repository
+        employee_price_repository,
+        dolar_value=dolar_value,
     )
     timesheet_lines_df = use_case.execute(date_from, date_to)
     output = io.BytesIO()
@@ -466,6 +468,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
     employees_without_price_response = None
     if dashboard_summary.employees_without_price:
         from app.dashboard.api.schemas import EmployeeWithoutPriceResponse
+
         employees_without_price_response = [
             EmployeeWithoutPriceResponse(
                 user_id=emp.user_id,

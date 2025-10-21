@@ -3,6 +3,7 @@
 from datetime import date
 from typing import Dict, List, Optional
 from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
+from app.shared.utils.dolar_utils import get_cotizacion_promedio_dolar
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -22,12 +23,14 @@ class ExportTimesheetsByTeamUseCase:
         task_gateway: TaskGateway,
         manager_employee_id: int,
         employee_price_repository: Optional[EmployeePriceRepository] = None,
+        dolar_value: float = 0,
     ):
         self.timesheet_line_gateway = timesheet_line_gateway
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
         self.manager_employee_id = manager_employee_id
         self.employee_price_repository = employee_price_repository
+        self.dolar_value = dolar_value
 
     def _build_task_hierarchy(
         self, task_info: TaskWithParentInfo, tasks_info: Dict[int, TaskWithParentInfo]
@@ -207,6 +210,13 @@ class ExportTimesheetsByTeamUseCase:
         # Agregar columna de costo por hora si existe
         if price_index:
             base_columns.append("costo_por_hora")
+
+        base_columns.append("costo_por_hora_en_dolares")
+
+        if self.dolar_value > 0:
+            df["costo_por_hora_en_dolares"] = df["costo_por_hora"] / self.dolar_value
+        else:
+            df["costo_por_hora_en_dolares"] = 0
 
         # Agregar columnas finales
         base_columns.extend(["descripcion", "fecha de carga"])
