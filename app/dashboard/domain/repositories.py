@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import date
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 
 from app.dashboard.domain.models import KPI, HierarchicalSummary
 from app.timesheet_line.domain.models import DetailedTimesheetLine
@@ -78,9 +78,12 @@ class DashboardDataService(ABC):
 
     @abstractmethod
     def calculate_employee_totals(
-        self, timesheet_data: List[DetailedTimesheetLine], team_users: List[dict]
+        self,
+        timesheet_data: List[DetailedTimesheetLine],
+        team_users: List[dict],
+        timesheet_cost_map: Optional[Dict[int, float]] = None,
     ) -> List[EmployeeTotal]:
-        """Calcula los totales de horas por empleado."""
+        """Calcula los totales de horas y costos por empleado."""
         pass
 
     @abstractmethod
@@ -101,7 +104,10 @@ class DashboardDataService(ABC):
 
     @abstractmethod
     def calculate_hierarchical_summary(
-        self, timesheet_data: List[DetailedTimesheetLine], task_gateway: TaskGateway
+        self,
+        timesheet_data: List[DetailedTimesheetLine],
+        task_gateway: TaskGateway,
+        timesheet_costs: Optional[Dict[int, float]] = None,
     ) -> HierarchicalSummary:
         """
         Calcula la estructura jerárquica de proyectos y tareas con casos borde.
@@ -109,6 +115,7 @@ class DashboardDataService(ABC):
         Args:
             timesheet_data: Lista de líneas de timesheet con información detallada
             task_gateway: Gateway de tareas para obtener información de parent_id
+            timesheet_costs: Diccionario opcional que mapea timesheet_line_id -> total_cost
 
         Returns:
             HierarchicalSummary con la estructura anidada completa
@@ -126,14 +133,14 @@ class DashboardDataService(ABC):
     ) -> List[DetailedTimesheetLine]:
         """
         Obtiene líneas de timesheet filtradas por tarea o proyecto en un período específico.
-        
+
         Args:
             task_id: ID de la tarea a filtrar (opcional)
             project_id: ID del proyecto a filtrar (opcional, usado cuando task_id es None)
             date_from: Fecha de inicio del período
             date_to: Fecha de fin del período
             timesheet_line_gateway: Gateway de líneas de timesheet
-            
+
         Returns:
             Lista de DetailedTimesheetLine que coinciden con los criterios
         """

@@ -1,12 +1,14 @@
 """Caso de uso para exportar timesheets como excel."""
 
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Optional
 from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
 from app.task.domain.models import TaskWithParentInfo
+from app.employee_price.domain.repositories import EmployeePriceRepository
+from app.dashboard.application.price_utils import build_price_index, get_cost_for_date
 import pandas as pd
 
 
@@ -19,11 +21,15 @@ class ExportTimesheetsByTeamUseCase:
         employee_gateway: EmployeeGateway,
         task_gateway: TaskGateway,
         manager_employee_id: int,
+        employee_price_repository: Optional[EmployeePriceRepository] = None,
+        dolar_value: float = 0,
     ):
         self.timesheet_line_gateway = timesheet_line_gateway
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
         self.manager_employee_id = manager_employee_id
+        self.employee_price_repository = employee_price_repository
+        self.dolar_value = dolar_value
 
     def _build_task_hierarchy(
         self, task_info: TaskWithParentInfo, tasks_info: Dict[int, TaskWithParentInfo]
@@ -71,6 +77,22 @@ class ExportTimesheetsByTeamUseCase:
             )
         )
 
+        # Obtener precios de empleados si el repositorio está disponible
+        price_index = {}
+        if self.employee_price_repository:
+            # Extraer employee_ids únicos de los timesheets
+            unique_employee_ids = set()
+            for line in timesheet_lines:
+                if "employee_id" in line and isinstance(line["employee_id"], list):
+                    unique_employee_ids.add(line["employee_id"][0])
+
+            # Obtener precios para estos empleados
+            if unique_employee_ids:
+                employee_prices = self.employee_price_repository.get_by_user_ids(
+                    list(unique_employee_ids)
+                )
+                price_index = build_price_index(employee_prices)
+
         # Extraer todos los task_ids únicos de los timesheets
         task_ids = set()
         for line in timesheet_lines:
@@ -109,6 +131,22 @@ class ExportTimesheetsByTeamUseCase:
 
         df["empleado"] = df["employee_id"].apply(lambda x: x[1])
         df["proyecto"] = df["project_id"].apply(lambda x: x[1])
+
+        # Agregar columna de costo por hora si hay datos de precios disponibles
+        if price_index:
+
+            def get_cost_per_hour_for_row(row):
+                employee_id = (
+                    row["employee_id"][0]
+                    if isinstance(row["employee_id"], list)
+                    else row["employee_id"]
+                )
+                check_date = pd.to_datetime(row["date"]).date()
+                return get_cost_for_date(employee_id, check_date, price_index)
+
+            df["costo_por_hora"] = df.apply(get_cost_per_hour_for_row, axis=1)
+        else:
+            df["costo_por_hora"] = 0
 
         # Calcular la profundidad máxima de jerarquía para crear las columnas necesarias
         max_depth = self._get_max_hierarchy_depth(tasks_info) if tasks_info else 1
@@ -162,11 +200,29 @@ class ExportTimesheetsByTeamUseCase:
                 "create_date": "fecha de carga",
             }
         )
-        reorder_columns = (
+
+        # Construir lista de columnas base
+        base_columns = (
             ["empleado", "proyecto", "tarea"]
             + [f"subtarea_{i + 1}" for i in range(max_depth - 1)]
-            + ["fecha", "mes", "año", "cantidad", "descripcion", "fecha de carga"]
+            + ["fecha", "mes", "año", "cantidad"]
         )
+
+        # Agregar columna de costo por hora si existe
+
+        base_columns.append("costo_por_hora")
+
+        base_columns.append("costo_por_hora_en_dolares")
+
+        if self.dolar_value > 0:
+            df["costo_por_hora_en_dolares"] = df["costo_por_hora"] / self.dolar_value
+        else:
+            df["costo_por_hora_en_dolares"] = 0
+
+        # Agregar columnas finales
+        base_columns.extend(["descripcion", "fecha de carga"])
+
+        reorder_columns = base_columns
         df = df.sort_values(by="empleado")
         df = df.sort_values(by="fecha")
         return df[reorder_columns]

@@ -34,6 +34,14 @@ class EmployeeTotalResponse(BaseModel):
     user_id: int
     employee_name: str
     hours: float
+    total_cost: Optional[float] = None
+
+
+class EmployeeWithoutPriceResponse(BaseModel):
+    """Schema de respuesta para empleados sin precio configurado."""
+
+    user_id: int
+    employee_name: str
 
 
 class HierarchicalItemResponse(BaseModel):
@@ -45,6 +53,7 @@ class HierarchicalItemResponse(BaseModel):
     total_hours: float
     data: Optional[List["HierarchicalItemResponse"]] = None
     is_artificial: bool = False
+    total_cost: Optional[float] = None
 
 
 class HierarchicalSummaryResponse(BaseModel):
@@ -52,6 +61,7 @@ class HierarchicalSummaryResponse(BaseModel):
 
     total_hours: float
     data: List[HierarchicalItemResponse]
+    total_cost: Optional[float] = None
 
 
 # Actualizar el modelo de HierarchicalItemResponse para manejar referencias circulares
@@ -76,6 +86,7 @@ class DashboardSummaryKPIsResponse(BaseModel):
     hours_selected_period: KPIResponse
     entries_selected_period: KPIResponse
     daily_average_hours: KPIResponse
+    total_cost: Optional[KPIResponse] = None
 
 
 class DashboardSummaryTotalsResponse(BaseModel):
@@ -93,6 +104,7 @@ class DashboardSummaryResponse(BaseModel):
     summary: DashboardSummaryKPIsResponse
     totals: DashboardSummaryTotalsResponse
     hierarchical_summary: Optional[HierarchicalSummaryResponse] = None
+    employees_without_price: Optional[List[EmployeeWithoutPriceResponse]] = None
 
     class Config:
         """Configuración del modelo Pydantic."""
@@ -118,7 +130,7 @@ class DashboardSummaryResponseByEmployee(BaseModel):
 
 class TaskDetailRequest(BaseModel):
     """Schema de request para obtener detalle de empleados por tarea."""
-    
+
     task_id: Optional[int] = None
     project_id: Optional[int] = None
     date_from: date
@@ -127,14 +139,14 @@ class TaskDetailRequest(BaseModel):
 
 class EmployeeInfoResponse(BaseModel):
     """Schema de respuesta para información del empleado."""
-    
+
     employee_id: int
     employee_name: str
 
 
 class SimpleTimesheetLineResponse(BaseModel):
     """Schema de respuesta simplificado para líneas de timesheet."""
-    
+
     id: int
     name: str
     employee: EmployeeInfoResponse
@@ -147,7 +159,7 @@ class SimpleTimesheetLineResponse(BaseModel):
 
 class TaskDetailResponse(BaseModel):
     """Schema de respuesta para detalle de empleados por tarea/proyecto."""
-    
+
     task_id: Optional[int] = None
     project_id: Optional[int] = None
     timesheet_lines: List[SimpleTimesheetLineResponse]
