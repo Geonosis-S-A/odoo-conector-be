@@ -116,15 +116,18 @@ class GetDashboardSummaryUseCase:
             if cost_data["total_cost"] is None:
                 employee_id = cost_data["timesheet_line"].employee_id
                 # Buscar el nombre del empleado en team_users
+                # Cuando el empleado no se haya registrado será None
                 employee_name = next(
                     (user["name"] for user in team_users if user["id"] == employee_id),
-                    f"Usuario {employee_id}",
+                    None,
                 )
-                employees_without_price.append(
-                    EmployeeWithoutPrice(
-                        user_id=employee_id, employee_name=employee_name
+                # Solo agregar si encontramos el nombre.
+                if employee_name:
+                    employees_without_price.append(
+                        EmployeeWithoutPrice(
+                            user_id=employee_id, employee_name=employee_name
+                        )
                     )
-                )
 
         # Eliminar duplicados por user_id
         unique_employees_without_price = []
