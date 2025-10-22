@@ -43,7 +43,7 @@ def get_timesheet_gateway(
     """Dependencia para obtener el gateway de timesheet"""
     try:
         return OdooTimesheetLineGateway(odoo_connection)
-    except Exception as e:
+    except Exception:
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de timesheet"
         )
@@ -214,7 +214,7 @@ async def create_employee_price(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Usuario con ID {request.employee_id} no encontrado",
+            detail=f"El empleado {request.employee_id} no se ha registrado en el sistema",
         )
 
     # Crear y ejecutar caso de uso
