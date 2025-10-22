@@ -3,7 +3,6 @@
 from datetime import date
 from typing import Dict, List, Optional
 from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
-from app.shared.utils.dolar_utils import get_cotizacion_promedio_dolar
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -146,6 +145,8 @@ class ExportTimesheetsByTeamUseCase:
                 return get_cost_for_date(employee_id, check_date, price_index)
 
             df["costo_por_hora"] = df.apply(get_cost_per_hour_for_row, axis=1)
+        else:
+            df["costo_por_hora"] = 0
 
         # Calcular la profundidad máxima de jerarquía para crear las columnas necesarias
         max_depth = self._get_max_hierarchy_depth(tasks_info) if tasks_info else 1
@@ -208,8 +209,8 @@ class ExportTimesheetsByTeamUseCase:
         )
 
         # Agregar columna de costo por hora si existe
-        if price_index:
-            base_columns.append("costo_por_hora")
+
+        base_columns.append("costo_por_hora")
 
         base_columns.append("costo_por_hora_en_dolares")
 
