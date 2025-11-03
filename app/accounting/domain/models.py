@@ -28,6 +28,8 @@ class Invoice:
     move_type: str
     state: str
     payments: list[Payment]
+    currency_id: Optional[int] = None
+    currency_name: Optional[str] = None
 
 
 @dataclass
@@ -41,3 +43,4 @@ class ProcessedInvoiceRow:
     fecha_cobro: str
     monto_factura: float
     monto_cobrado: float
+    moneda: str

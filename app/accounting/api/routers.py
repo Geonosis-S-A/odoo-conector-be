@@ -58,6 +58,7 @@ async def export_facturas_pagos(
     allowed_mails = [
         "cintia.papapietro@geonosis.com.ar",
         "camila.perez@geonosis.com.ar",
+        "felipe.paparelo@geonosis.com.ar",
     ]
     if mail not in allowed_mails:
         raise HTTPException(

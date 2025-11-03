@@ -62,6 +62,7 @@ class ObtenerFacturasPagosUseCase:
                         fecha_cobro=payment.date,
                         monto_factura=invoice.amount_total,
                         monto_cobrado=payment.amount,
+                        moneda=invoice.currency_name or "",
                     )
                     rows.append(row)
             else:
@@ -74,6 +75,7 @@ class ObtenerFacturasPagosUseCase:
                     fecha_cobro="",
                     monto_factura=invoice.amount_total,
                     monto_cobrado=0.0,
+                    moneda=invoice.currency_name or "",
                 )
                 rows.append(row)
 
@@ -103,6 +105,7 @@ class ObtenerFacturasPagosUseCase:
         headers = [
             "Cliente",
             "Número de Factura",
+            "Moneda",
             "Fecha Factura",
             "Fecha Vencimiento",
             "Fecha Cobro",
@@ -168,8 +171,15 @@ class ObtenerFacturasPagosUseCase:
             cell.border = thin_border
             cell.fill = fill
 
+            # Moneda
+            cell = ws.cell(row=row_num, column=3, value=row_data.moneda)
+            cell.font = data_font
+            cell.alignment = data_alignment_center
+            cell.border = thin_border
+            cell.fill = fill
+
             # Fecha Factura
-            cell = ws.cell(row=row_num, column=3, value=row_data.fecha_factura)
+            cell = ws.cell(row=row_num, column=4, value=row_data.fecha_factura)
             cell.font = data_font
             cell.alignment = data_alignment_center
             cell.border = thin_border
@@ -178,7 +188,7 @@ class ObtenerFacturasPagosUseCase:
                 cell.number_format = "DD/MM/YYYY"
 
             # Fecha Vencimiento
-            cell = ws.cell(row=row_num, column=4, value=row_data.fecha_vencimiento)
+            cell = ws.cell(row=row_num, column=5, value=row_data.fecha_vencimiento)
             cell.font = data_font
             cell.alignment = data_alignment_center
             cell.border = thin_border
@@ -187,7 +197,7 @@ class ObtenerFacturasPagosUseCase:
                 cell.number_format = "DD/MM/YYYY"
 
             # Fecha Cobro
-            cell = ws.cell(row=row_num, column=5, value=row_data.fecha_cobro)
+            cell = ws.cell(row=row_num, column=6, value=row_data.fecha_cobro)
             cell.font = data_font
             cell.alignment = data_alignment_center
             cell.border = thin_border
@@ -196,7 +206,7 @@ class ObtenerFacturasPagosUseCase:
                 cell.number_format = "DD/MM/YYYY"
 
             # Monto Factura
-            cell = ws.cell(row=row_num, column=6, value=row_data.monto_factura)
+            cell = ws.cell(row=row_num, column=7, value=row_data.monto_factura)
             cell.font = data_font
             cell.alignment = data_alignment_right
             cell.border = thin_border
@@ -204,7 +214,7 @@ class ObtenerFacturasPagosUseCase:
             cell.number_format = "$#,##0.00"
 
             # Monto Cobrado
-            cell = ws.cell(row=row_num, column=7, value=row_data.monto_cobrado)
+            cell = ws.cell(row=row_num, column=8, value=row_data.monto_cobrado)
             cell.font = data_font
             cell.alignment = data_alignment_right
             cell.border = thin_border
@@ -215,11 +225,12 @@ class ObtenerFacturasPagosUseCase:
         column_widths = {
             "A": 40,  # Cliente
             "B": 25,  # Número de factura
-            "C": 18,  # Fecha Factura
-            "D": 20,  # Fecha Vencimiento
-            "E": 18,  # Fecha Cobro
-            "F": 18,  # Monto Factura
-            "G": 18,  # Monto Cobrado
+            "C": 12,  # Moneda
+            "D": 18,  # Fecha Factura
+            "E": 20,  # Fecha Vencimiento
+            "F": 18,  # Fecha Cobro
+            "G": 18,  # Monto Factura
+            "H": 18,  # Monto Cobrado
         }
 
         for col, width in column_widths.items():
@@ -230,7 +241,7 @@ class ObtenerFacturasPagosUseCase:
 
         # Aplicar autofiltro
         if rows:
-            ws.auto_filter.ref = f"A1:G{len(rows) + 1}"
+            ws.auto_filter.ref = f"A1:H{len(rows) + 1}"
 
         # Agregar fila de totales al final
         if rows:
@@ -245,9 +256,9 @@ class ObtenerFacturasPagosUseCase:
             ws.cell(row=total_row, column=1).border = thin_border
 
             # Suma de Monto Factura
-            total_factura_cell = ws.cell(row=total_row, column=6)
+            total_factura_cell = ws.cell(row=total_row, column=7)
             total_factura_cell.value = (  # type: ignore
-                f"=SUMIF(B2:B{len(rows) + 1},B2:B{len(rows) + 1},F2:F{len(rows) + 1})"
+                f"=SUMIF(B2:B{len(rows) + 1},B2:B{len(rows) + 1},G2:G{len(rows) + 1})"
             )
             total_factura_cell.font = Font(name="Calibri", size=11, bold=True)
             total_factura_cell.fill = PatternFill(
@@ -258,8 +269,8 @@ class ObtenerFacturasPagosUseCase:
             total_factura_cell.number_format = "$#,##0.00"
 
             # Suma de Monto Cobrado
-            total_cobrado_cell = ws.cell(row=total_row, column=7)
-            total_cobrado_cell.value = f"=SUM(G2:G{len(rows) + 1})"  # type: ignore
+            total_cobrado_cell = ws.cell(row=total_row, column=8)
+            total_cobrado_cell.value = f"=SUM(H2:H{len(rows) + 1})"  # type: ignore
             total_cobrado_cell.font = Font(name="Calibri", size=11, bold=True)
             total_cobrado_cell.fill = PatternFill(
                 start_color="FFD966", end_color="FFD966", fill_type="solid"
@@ -269,7 +280,7 @@ class ObtenerFacturasPagosUseCase:
             total_cobrado_cell.number_format = "$#,##0.00"
 
             # Rellenar celdas vacías de la fila de totales
-            for col in range(2, 6):
+            for col in range(2, 7):
                 cell = ws.cell(row=total_row, column=col)
                 cell.fill = PatternFill(
                     start_color="FFD966", end_color="FFD966", fill_type="solid"
