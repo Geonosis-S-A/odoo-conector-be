@@ -72,7 +72,6 @@ def get_employee_gateway(
             status_code=500, detail="Error al conectar con el gateway de empleados"
         )
 
-
 def get_timesheet_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
 ) -> TimesheetLineGateway:
