@@ -108,9 +108,10 @@ def search_project_by_name(name: str) -> str:
         projects_list = [{"id": project.id, "name": project.name} for project in projects]
         
         # Usar fuzzy matching para encontrar coincidencias
-        choices = [p["name"] for p in projects_list]
+        # Normalizar a minúsculas para comparación insensible a mayúsculas
+        choices = [p["name"].lower() for p in projects_list]
         matches = process.extract(
-            name,
+            name.lower(),
             choices,
             scorer=fuzz.WRatio,  # Muy bueno para búsquedas generales
             limit=10
@@ -231,9 +232,10 @@ def search_task_in_project(project_id: int, task_name: str) -> str:
         all_tasks = _flatten_tasks(transformed_tasks)
         
         # Usar fuzzy matching para encontrar coincidencias
-        choices = [t["name"] for t in all_tasks]
+        # Normalizar a minúsculas para comparación insensible a mayúsculas
+        choices = [t["name"].lower() for t in all_tasks]
         matches = process.extract(
-            task_name,
+            task_name.lower(),
             choices,
             scorer=fuzz.WRatio,  # Muy bueno para búsquedas generales
             limit=10
