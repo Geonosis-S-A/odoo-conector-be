@@ -4,6 +4,7 @@ from agent.services.cargar_horas import run_agent_service
 from app.shared.security.dependencies import get_current_user
 from app.auth.infra.auth_service import JWTPayload
 from pydantic import BaseModel
+import json
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -37,12 +38,11 @@ async def cargar_horas_agent(
         """Generador asíncrono que envía chunks al cliente en formato SSE."""
         try:
             for chunk in run_agent_service(request.prompt, request.conversation_id, employee_id):
-                # Formatear como evento SSE
-                # Formato: data: <contenido>\n\n
-                yield f"data: {chunk}\n\n"
+                chunk_json = json.dumps(chunk)
+                yield f"data: {chunk_json}\n\n"
         except Exception as e:
             # En caso de error, enviar mensaje de error como evento SSE
-            error_msg = f"❌ Error: {str(e)}"
+            error_msg = json.dumps(f"❌ Error: {str(e)}")
             yield f"data: {error_msg}\n\n"
             yield "data: [DONE]\n\n"
     
