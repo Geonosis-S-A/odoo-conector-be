@@ -33,6 +33,7 @@ class ObtenerFacturasPagosUseCase:
             BytesIO: Buffer con el archivo Excel generado
         """
         # Obtener facturas del gateway
+
         invoices = self.accounting_gateway.get_customer_invoices(
             date_from=date_from,
             date_to=date_to,

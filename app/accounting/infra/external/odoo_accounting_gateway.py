@@ -47,38 +47,48 @@ class OdooAccountingGateway(AccountingGateway):
 
     def _parse_payment_widget(self, widget_data: Any) -> List[Payment]:
         """
-        Parsea el campo invoice_payments_widget para extraer información de pagos.
-
-        Args:
-            widget_data: Datos del widget (puede ser string JSON, dict o None)
-
-        Returns:
-            Lista de pagos aplicados a la factura
+        Devuelve solo pagos reales y excluye diferencias de cambio.
+        Identifica diferencias de cambio por 'is_exchange' o por
+        'journal_name' == 'Exchange Difference'.
         """
         if not widget_data:
             return []
 
         try:
-            # Si viene como string, parsearlo como JSON
-            if isinstance(widget_data, str):
-                widget = json.loads(widget_data)
-            else:
-                widget = widget_data
+            widget = json.loads(widget_data) if isinstance(widget_data, str) else widget_data
+            content = widget.get("content") if isinstance(widget, dict) else None
+            if not isinstance(content, list):
+                return []
 
-            # Extraer la lista de pagos del contenido
-            if isinstance(widget, dict) and "content" in widget:
-                payments_data = widget["content"]
-                return [
-                    Payment(
-                        date=payment.get("date", ""),
-                        amount=payment.get("amount", 0.0),
-                        payment_id=payment.get("payment_id"),
+            payments: List[Payment] = []
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+
+                # Excluir diferencias de cambio
+                if item.get("is_exchange") is True:
+                    continue
+                if (item.get("journal_name") or "").strip().lower() == "exchange difference".lower():
+                    continue
+
+                # Mantener pagos reales (tienen account_payment_id)
+                if item.get("account_payment_id"):
+                    payments.append(
+                        Payment(
+                            date=item.get("date", ""),
+                            amount=float(item.get("amount", 0.0) or 0.0),
+                            payment_id=item.get("account_payment_id"),
+                        )
                     )
-                    for payment in payments_data
-                ]
+                    continue
 
-            return []
-        except (json.JSONDecodeError, TypeError, KeyError):
+                # Si NO quieres incluir notas de crédito ni otros asientos,
+                # no agregues nada más aquí. Si en el futuro quieres incluir
+                # NC aplicadas, aquí podrías detectar por ref/name o
+                # consultando el move_id.
+            return payments
+
+        except (json.JSONDecodeError, TypeError, KeyError, ValueError):
             return []
 
     def get_customer_invoices(
