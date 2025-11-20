@@ -21,7 +21,7 @@ def run_agent_service(prompt: str, conversation_id: str, employee_id: int):
         employee_id: ID del empleado que hace la consulta
     
     Yields:
-        str: Chunks de texto de la respuesta del agente
+        dict: Diccionario con 'type' ('text' o 'event') y 'content'
     """
     # Obtener el agente (se crea solo la primera vez)
     agent = get_agent()

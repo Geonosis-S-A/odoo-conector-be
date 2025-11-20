@@ -35,11 +35,21 @@ async def cargar_horas_agent(
     # Crear generador para streaming con SSE (Server-Sent Events)
     async def generate():
         """Generador asíncrono que envía chunks al cliente en formato SSE."""
+        import json
+        
         try:
             for chunk in run_agent_service(request.prompt, request.conversation_id, employee_id):
-                # Formatear como evento SSE
-                # Formato: data: <contenido>\n\n
-                yield f"data: {chunk}\n\n"
+                # Verificar el tipo de chunk
+                if chunk['type'] == 'event':
+                    # Enviar evento especial (ej: timesheet_created)
+                    # Formato SSE: event: <nombre>\ndata: <datos>\n\n
+                    event_name = chunk.get('event', 'message')
+                    event_data = json.dumps(chunk.get('content', {}))
+                    yield f"event: {event_name}\ndata: {event_data}\n\n"
+                else:
+                    # Enviar texto normal
+                    # Formato: data: <contenido>\n\n
+                    yield f"data: {chunk['content']}\n\n"
         except Exception as e:
             # En caso de error, enviar mensaje de error como evento SSE
             error_msg = f"❌ Error: {str(e)}"

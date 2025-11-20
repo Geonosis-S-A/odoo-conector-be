@@ -120,8 +120,10 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
         employee_id: ID del empleado que hace la consulta
     
     Yields:
-        str: Chunks de texto de la respuesta del agente
+        dict: Diccionario con 'type' ('text' o 'event') y 'content'
     """
+    import json
+    
     # Configurar el contexto de la conversación
     config: RunnableConfig = {"configurable": {"thread_id": conversation_id}}
     
@@ -132,9 +134,10 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
         context=Context(employee_id=employee_id),
         stream_mode="messages"
     ):
-        # Solo procesar chunks del nodo 'model' (respuesta del agente)
+        # Obtener el nombre del nodo actual
         node = metadata.get('langgraph_node') if isinstance(metadata, dict) else None
         
+        # Procesar respuestas del modelo (texto)
         if node == 'model':
             # Procesar los content_blocks (basado en el ejemplo del usuario)
             content_blocks = getattr(token, 'content_blocks', [])
@@ -144,4 +147,22 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                 if isinstance(block, dict) and block.get('type') == 'text':
                     text_chunk = block.get('text', '')
                     if text_chunk:
-                        yield text_chunk
+                        yield {'type': 'text', 'content': text_chunk}
+        
+        # Detectar cuando se ejecutan herramientas y verificar si se creó un timesheet
+        elif node == 'tools':
+            # El token contiene el resultado de la herramienta
+            content = getattr(token, 'content', None)
+            
+            if content:
+                try:
+                    # Intentar parsear el contenido como JSON
+                    result = json.loads(content) if isinstance(content, str) else content
+                    
+                    # Verificar si es una respuesta exitosa de creación de timesheet
+                    if isinstance(result, dict) and result.get('success') is True:
+                        # Enviar evento especial al frontend
+                        yield {'type': 'event', 'event': 'timesheet_created', 'content': {'success': True}}
+                except (json.JSONDecodeError, AttributeError):
+                    # Si no se puede parsear, ignorar
+                    pass
