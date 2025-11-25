@@ -16,6 +16,7 @@ from app.dashboard.api.routers import router as dashboard_router
 from app.employee_price.api.routers import router as employee_price_router
 from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
+from app.saved_prompts.api.routers import router as saved_prompts_router
 import logging
 
 
@@ -125,6 +126,8 @@ app.include_router(dashboard_router, prefix=API_PREFIX)
 app.include_router(employee_price_router, prefix=API_PREFIX)
 app.include_router(accounting_router, prefix=API_PREFIX)
 app.include_router(agent_router, prefix=API_PREFIX)
+app.include_router(saved_prompts_router, prefix=API_PREFIX)
+
 
 @app.get("/")
 async def root():
