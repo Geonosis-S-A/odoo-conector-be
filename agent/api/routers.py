@@ -38,6 +38,12 @@ async def cargar_horas_agent(
     async def generate():
         """Generador asíncrono que envía chunks al cliente en formato JSON."""
         try:
+            # Enviar un chunk inicial vacío inmediatamente para activar el streaming
+            # Esto fuerza a los proxies a comenzar a transmitir
+            yield (
+                json.dumps({"type": "start", "content": ""}, ensure_ascii=False) + "\n"
+            )
+
             for chunk in run_agent_service(
                 request.prompt, request.conversation_id, employee_id
             ):
@@ -51,13 +57,15 @@ async def cargar_horas_agent(
             done_chunk = {"type": "done"}
             yield json.dumps(done_chunk, ensure_ascii=False) + "\n"
 
-    # Retornar streaming response con JSON
+    # Retornar streaming response con JSON y headers adicionales
     return StreamingResponse(
         generate(),
         media_type="application/x-ndjson",  # Newline Delimited JSON
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
+            "Content-Encoding": "none",  # Previene compresión que puede causar buffering
             "X-Accel-Buffering": "no",  # Deshabilita buffering en nginx
+            "X-Content-Type-Options": "nosniff",  # Previene que el navegador bufferice
         },
     )
