@@ -12,6 +12,7 @@ from app.auth.infra.db.models import (
     OTPModel,
 )  # Hay que importar los modelos que se van a usar para que los detecte, en env.py
 from app.employee_price.infra.db.models import EmployeePriceModel
+from app.saved_prompts.infra.db.models import SavedPromptModel
 from app.shared.infra.db.config import settings
 
 # this is the Alembic Config object, which provides
