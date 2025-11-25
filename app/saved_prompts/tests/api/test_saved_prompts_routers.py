@@ -312,6 +312,243 @@ class TestListSavedPrompts:
         assert "detail" in data
 
 
+class TestUpdateSavedPrompt:
+    def test_update_saved_prompt_success(self, mock_repository, test_client):
+        """Test que verifica la actualización exitosa de un prompt."""
+        # Arrange
+        prompt_id = 1
+        existing_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text="texto original",
+            created_at=datetime(2024, 11, 25, 10, 0, 0),
+        )
+        updated_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text="texto actualizado",
+            created_at=datetime(2024, 11, 25, 10, 0, 0),
+        )
+        mock_repository.get_by_id.return_value = existing_prompt
+        mock_repository.update.return_value = updated_prompt
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": "texto actualizado"},
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == prompt_id
+        assert data["user_id"] == 1
+        assert data["prompt_text"] == "texto actualizado"
+        mock_repository.get_by_id.assert_called_once_with(prompt_id)
+        mock_repository.update.assert_called_once()
+
+    def test_update_saved_prompt_not_found_returns_404(
+        self, mock_repository, test_client
+    ):
+        """Test que verifica que prompt inexistente retorna 404."""
+        # Arrange
+        prompt_id = 999
+        mock_repository.get_by_id.return_value = None
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": "nuevo texto"},
+        )
+
+        # Assert
+        assert response.status_code == 404
+        data = response.json()
+        assert "detail" in data
+        assert "no existe" in data["detail"]
+
+    def test_update_saved_prompt_from_different_user_returns_403(
+        self, mock_repository, test_client
+    ):
+        """Test que verifica que no se puede actualizar prompt de otro usuario."""
+        # Arrange
+        prompt_id = 1
+        existing_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=999,  # Usuario diferente
+            prompt_text="texto original",
+            created_at=datetime.now(),
+        )
+        mock_repository.get_by_id.return_value = existing_prompt
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": "nuevo texto"},
+        )
+
+        # Assert
+        assert response.status_code == 403
+        data = response.json()
+        assert "detail" in data
+        assert "no pertenece al usuario" in data["detail"]
+
+    def test_update_saved_prompt_empty_text_returns_422(
+        self, mock_repository, test_client
+    ):
+        """Test que verifica que texto vacío retorna error 422."""
+        # Arrange
+        prompt_id = 1
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": ""},
+        )
+
+        # Assert
+        assert response.status_code == 422
+        data = response.json()
+        assert "detail" in data
+
+    def test_update_saved_prompt_with_long_text(self, mock_repository, test_client):
+        """Test que verifica la actualización con texto largo."""
+        # Arrange
+        prompt_id = 1
+        long_text = "a" * 1000
+        existing_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text="texto original",
+            created_at=datetime.now(),
+        )
+        updated_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text=long_text,
+            created_at=datetime.now(),
+        )
+        mock_repository.get_by_id.return_value = existing_prompt
+        mock_repository.update.return_value = updated_prompt
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": long_text},
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["prompt_text"]) == 1000
+
+    def test_update_saved_prompt_with_special_characters(
+        self, mock_repository, test_client
+    ):
+        """Test que verifica la actualización con caracteres especiales."""
+        # Arrange
+        prompt_id = 1
+        special_text = "texto con áéíóú ñ @#$% 'comillas'"
+        existing_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text="texto original",
+            created_at=datetime.now(),
+        )
+        updated_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text=special_text,
+            created_at=datetime.now(),
+        )
+        mock_repository.get_by_id.return_value = existing_prompt
+        mock_repository.update.return_value = updated_prompt
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": special_text},
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["prompt_text"] == special_text
+
+    def test_update_saved_prompt_response_format(self, mock_repository, test_client):
+        """Test que verifica el formato de respuesta del endpoint."""
+        # Arrange
+        prompt_id = 1
+        existing_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text="texto original",
+            created_at=datetime(2024, 11, 25, 10, 0, 0),
+        )
+        updated_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text="texto actualizado",
+            created_at=datetime(2024, 11, 25, 10, 0, 0),
+        )
+        mock_repository.get_by_id.return_value = existing_prompt
+        mock_repository.update.return_value = updated_prompt
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": "texto actualizado"},
+        )
+
+        # Assert
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+        data = response.json()
+        assert set(data.keys()) == {"id", "user_id", "prompt_text", "created_at"}
+
+    def test_update_saved_prompt_repository_error_returns_500(
+        self, mock_repository, test_client
+    ):
+        """Test que verifica que errores del repositorio retornan 500."""
+        # Arrange
+        prompt_id = 1
+        existing_prompt = SavedPrompt(
+            id=prompt_id,
+            user_id=1,
+            prompt_text="texto original",
+            created_at=datetime.now(),
+        )
+        mock_repository.get_by_id.return_value = existing_prompt
+        mock_repository.update.side_effect = Exception("Database connection failed")
+
+        # Act
+        headers = {"Authorization": "Bearer testtoken"}
+        response = test_client.put(
+            f"/api/v1/saved-prompts/{prompt_id}",
+            headers=headers,
+            json={"prompt_text": "nuevo texto"},
+        )
+
+        # Assert
+        assert response.status_code == 500
+        data = response.json()
+        assert "detail" in data
+
+
 class TestDeleteSavedPrompt:
     def test_delete_saved_prompt_success(self, mock_repository, test_client):
         """Test que verifica la eliminación exitosa de un prompt."""

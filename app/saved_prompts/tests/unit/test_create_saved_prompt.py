@@ -132,6 +132,7 @@ class TestCreateSavedPromptUseCase:
         # Assert
         assert result is not None
         assert len(result.prompt_text) == 1000
+        assert result.prompt_text == prompt_text
         mock_repository.create.assert_called_once()
 
     def test_execute_with_special_characters_in_prompt(self, use_case, mock_repository):

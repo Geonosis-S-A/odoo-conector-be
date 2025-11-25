@@ -57,3 +57,18 @@ class SavedPromptRepository(ABC):
             SavedPrompt | None: El prompt o None si no existe
         """
         pass
+
+    @abstractmethod
+    def update(self, saved_prompt: SavedPrompt) -> SavedPrompt:
+        """Actualiza un prompt guardado existente.
+
+        Args:
+            saved_prompt: El prompt con los datos actualizados
+
+        Returns:
+            SavedPrompt: El prompt actualizado
+
+        Raises:
+            ValueError: Si el prompt no existe
+        """
+        pass

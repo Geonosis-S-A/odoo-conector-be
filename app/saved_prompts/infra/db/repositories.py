@@ -64,6 +64,28 @@ class SQLModelSavedPromptRepository(SavedPromptRepository):
 
         return self._to_domain(db_prompt)
 
+    def update(self, saved_prompt: SavedPrompt) -> SavedPrompt:
+        """Actualiza un prompt guardado existente."""
+        if saved_prompt.id is None:
+            raise ValueError("El prompt debe tener un ID para ser actualizado")
+
+        statement = select(SavedPromptModel).where(
+            SavedPromptModel.id == saved_prompt.id
+        )
+        db_prompt = self.session.exec(statement).first()
+
+        if not db_prompt:
+            raise ValueError(f"Prompt con ID {saved_prompt.id} no existe")
+
+        # Actualizar solo el texto del prompt
+        db_prompt.prompt_text = saved_prompt.prompt_text
+
+        self.session.add(db_prompt)
+        self.session.commit()
+        self.session.refresh(db_prompt)
+
+        return self._to_domain(db_prompt)
+
     def _to_domain(self, db_prompt: SavedPromptModel) -> SavedPrompt:
         """Convierte un modelo de DB a entidad de dominio."""
         return SavedPrompt(

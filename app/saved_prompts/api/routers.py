@@ -4,6 +4,7 @@ from sqlmodel import Session
 
 from app.saved_prompts.api.schemas import (
     CreateSavedPromptRequest,
+    UpdateSavedPromptRequest,
     SavedPromptResponse,
 )
 from app.saved_prompts.application.use_cases.create_saved_prompt import (
@@ -14,6 +15,9 @@ from app.saved_prompts.application.use_cases.list_saved_prompts import (
 )
 from app.saved_prompts.application.use_cases.delete_saved_prompt import (
     DeleteSavedPromptUseCase,
+)
+from app.saved_prompts.application.use_cases.update_saved_prompt import (
+    UpdateSavedPromptUseCase,
 )
 from app.saved_prompts.domain.repositories import SavedPromptRepository
 from app.saved_prompts.infra.db.repositories import SQLModelSavedPromptRepository
@@ -104,6 +108,56 @@ async def list_saved_prompts(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Error al listar los prompts: {str(e)}"
+        )
+
+
+@router.put("/{prompt_id}", response_model=SavedPromptResponse)
+async def update_saved_prompt(
+    prompt_id: int,
+    request: UpdateSavedPromptRequest,
+    repository: SavedPromptRepository = Depends(get_saved_prompt_repository),
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    """
+    Actualiza un prompt guardado del usuario autenticado.
+
+    Args:
+        prompt_id: ID del prompt a actualizar
+        request: Datos con el nuevo texto del prompt
+        repository: Repositorio de prompts (inyectado)
+        current_user: Usuario autenticado (inyectado)
+
+    Returns:
+        SavedPromptResponse: El prompt actualizado
+    """
+    try:
+        user_id = current_user["user_id"]
+        use_case = UpdateSavedPromptUseCase(repository)
+        updated_prompt = use_case.execute(prompt_id, user_id, request.prompt_text)
+
+        if updated_prompt.id is None:
+            raise HTTPException(
+                status_code=500, detail="Error: prompt actualizado sin ID"
+            )
+
+        return SavedPromptResponse(
+            id=updated_prompt.id,
+            user_id=updated_prompt.user_id,
+            prompt_text=updated_prompt.prompt_text,
+            created_at=updated_prompt.created_at,
+        )
+    except ValueError as e:
+        # Determinar si es 404 (no existe) o 403 (no pertenece al usuario)
+        error_msg = str(e)
+        if "no existe" in error_msg:
+            raise HTTPException(status_code=404, detail=error_msg)
+        elif "no pertenece al usuario" in error_msg:
+            raise HTTPException(status_code=403, detail=error_msg)
+        else:
+            raise HTTPException(status_code=400, detail=error_msg)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Error al actualizar el prompt: {str(e)}"
         )
 
 

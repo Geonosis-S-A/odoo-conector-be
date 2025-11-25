@@ -10,6 +10,12 @@ class CreateSavedPromptRequest(BaseModel):
     )
 
 
+class UpdateSavedPromptRequest(BaseModel):
+    """Schema para actualizar un prompt guardado."""
+
+    prompt_text: str = Field(..., description="Nuevo texto del prompt", min_length=1)
+
+
 class SavedPromptResponse(BaseModel):
     """Schema de respuesta para un prompt guardado."""
 
