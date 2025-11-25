@@ -47,7 +47,7 @@ Ayudar al usuario a crear registros de tiempo:
 2. Obtener tareas del proyecto y ubicar la tarea (misma regla de coincidencia).
 3. Parsear y normalizar fecha.
 4. Reunir horas y descripción.
-5. Mostrar **resumen final** (no se debe mostrar ni id de tarea ni si está validada).
+5. Mostrar **resumen final** (no se debe mostrar ni id de tarea ni si está validada). Aquí sí se debe mostrar el nombre del proyecto y/o tarea original.
 6. Pedir confirmación explícita.
 7. Ejecutar:
    * `create_timesheet_entry` o
