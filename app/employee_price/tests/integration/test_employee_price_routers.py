@@ -209,7 +209,7 @@ def test_create_employee_price_closes_previous_open_record(
 
     # Refrescar la sesión para obtener el estado actual
     local_db_session.expire_all()
-    
+
     # Contar registros abiertos antes
     open_records_count_before = (
         local_db_session.query(EmployeePriceModel)
@@ -236,7 +236,7 @@ def test_create_employee_price_closes_previous_open_record(
 
     # Refrescar la sesión después del cambio
     local_db_session.expire_all()
-    
+
     # Verificar que se agregó un nuevo registro
     total_records_after = (
         local_db_session.query(EmployeePriceModel)
@@ -274,7 +274,7 @@ def test_create_employee_price_employee_not_found(client_admin):
     # Assert
     assert response.status_code == 404
     error_detail = response.json()["detail"]
-    assert "Usuario con ID 99999 no encontrado" in error_detail
+    assert "El empleado 99999 no se ha registrado en el sistema" in error_detail
 
 
 @pytest.mark.integration
@@ -544,7 +544,9 @@ def test_get_employee_price_history_with_open_and_closed_records(
 
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
-@patch("app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users")
+@patch(
+    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+)
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_success(
     mock_get_by_id,
@@ -591,7 +593,9 @@ def test_list_team_employee_prices_success(
 
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
-@patch("app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users")
+@patch(
+    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+)
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_empty_team(
     mock_get_by_id, mock_get_team_users, mock_odoo_connection, client_admin
@@ -640,7 +644,9 @@ def test_list_team_employee_prices_user_without_employee(
 
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
-@patch("app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users")
+@patch(
+    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+)
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_with_members_without_prices(
     mock_get_by_id,
@@ -679,7 +685,9 @@ def test_list_team_employee_prices_with_members_without_prices(
 
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
-@patch("app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users")
+@patch(
+    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+)
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_response_structure(
     mock_get_by_id,
@@ -855,4 +863,3 @@ def test_employee_price_endpoints_content_type(client_admin, sample_users):
     # Act & Assert - GET history
     response_history = client_admin.get("/employees-price/history/2")
     assert response_history.headers["content-type"] == "application/json"
-
