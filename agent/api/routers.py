@@ -34,36 +34,42 @@ async def cargar_horas_agent(
     # Obtener employee_id del usuario autenticado
     employee_id = current_user["user_id"]
 
-    # Crear generador para streaming con JSON
+    # Crear generador para streaming con SSE (Server-Sent Events)
     async def generate():
-        """Generador asíncrono que envía chunks al cliente en formato JSON."""
+        """Generador asíncrono que envía chunks al cliente en formato SSE."""
         try:
-            # Enviar un chunk inicial vacío inmediatamente para activar el streaming
-            # Esto fuerza a los proxies a comenzar a transmitir
-            yield (
-                json.dumps({"type": "start", "content": ""}, ensure_ascii=False) + "\n"
-            )
+            # Enviar comentario inicial para establecer la conexión SSE inmediatamente
+            # Esto es crítico para Railway y otros proxies que buferizan
+            yield ": SSE connection established\n\n"
+
+            # Enviar evento de inicio
+            yield f"data: {json.dumps({'type': 'start', 'content': ''}, ensure_ascii=False)}\n\n"
 
             for chunk in run_agent_service(
                 request.prompt, request.conversation_id, employee_id
             ):
-                # Enviar cada chunk como JSON completo
-                yield json.dumps(chunk, ensure_ascii=False) + "\n"
-        except Exception as e:
-            # En caso de error, enviar mensaje de error como JSON
-            error_chunk = {"type": "error", "content": f"❌ Error: {str(e)}"}
-            yield json.dumps(error_chunk, ensure_ascii=False) + "\n"
-            # Enviar señal de finalización
-            done_chunk = {"type": "done"}
-            yield json.dumps(done_chunk, ensure_ascii=False) + "\n"
+                # Enviar cada chunk en formato SSE
+                # Formato: "data: {json}\n\n"
+                yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
-    # Retornar streaming response con JSON y headers adicionales
+        except Exception as e:
+            # En caso de error, enviar mensaje de error en formato SSE
+            error_chunk = {"type": "error", "content": f"❌ Error: {str(e)}"}
+            yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
+
+        finally:
+            # Siempre enviar señal de finalización
+            done_chunk = {"type": "done"}
+            yield f"data: {json.dumps(done_chunk, ensure_ascii=False)}\n\n"
+
+    # Retornar streaming response con formato SSE
     return StreamingResponse(
         generate(),
-        media_type="application/x-ndjson",  # Newline Delimited JSON
+        media_type="text/event-stream",  # SSE es mejor reconocido por proxies
         headers={
-            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0, no-transform",
-            "Pragma": "no-cache",
-            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Accel-Buffering": "no",  # Para nginx
+            "Connection": "keep-alive",
+            "Content-Encoding": "none",  # Evitar compresión que causa buffering
         },
     )
