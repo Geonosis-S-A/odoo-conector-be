@@ -62,10 +62,8 @@ async def cargar_horas_agent(
         generate(),
         media_type="application/x-ndjson",  # Newline Delimited JSON
         headers={
-            "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
-            "Content-Encoding": "none",  # Previene compresión que puede causar buffering
-            "X-Accel-Buffering": "no",  # Deshabilita buffering en nginx
-            "X-Content-Type-Options": "nosniff",  # Previene que el navegador bufferice
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0, no-transform",
+            "Pragma": "no-cache",
+            "X-Accel-Buffering": "no",
         },
     )
