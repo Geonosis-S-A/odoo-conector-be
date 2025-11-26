@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from agent.services.cargar_horas import run_agent_service
+from agent.services.cargar_horas import run_agent_service, delete_conversation
 from app.shared.security.dependencies import get_current_user
 from app.auth.infra.auth_service import JWTPayload
 from pydantic import BaseModel
@@ -100,3 +100,34 @@ async def cargar_horas_agent(
             "Connection": "keep-alive",
         },
     )
+
+
+@router.delete("/conversation/{conversation_id}")
+async def delete_conversation_endpoint(
+    conversation_id: str,
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    """
+    Endpoint para eliminar una conversación del agente.
+
+    Este endpoint debe ser llamado por el frontend cuando el usuario
+    cierra el diálogo de chat para liberar memoria en Redis.
+
+    Args:
+        conversation_id: ID único de la conversación a eliminar
+        current_user: Usuario autenticado (inyectado automáticamente)
+
+    Returns:
+        dict: Resultado de la operación de eliminación
+    """
+    result = delete_conversation(conversation_id)
+
+    if not result["success"]:
+        raise HTTPException(
+            status_code=500, detail=result.get("message", "Error al eliminar conversación")
+        )
+
+    return {
+        "message": result["message"],
+        "deleted_count": result.get("deleted_count", 0),
+    }
