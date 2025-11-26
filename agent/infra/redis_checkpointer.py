@@ -80,8 +80,6 @@ class RedisCheckpointer(BaseCheckpointSaver):
         thread_id = configurable.get("thread_id", "")
         checkpoint_id = checkpoint.get("id", "")
         
-        print(f"📝 Saving checkpoint for thread {thread_id}, checkpoint {checkpoint_id}")
-        
         # Serialize checkpoint and metadata
         try:
             serialized_checkpoint = self._serialize_checkpoint(checkpoint)
@@ -94,12 +92,8 @@ class RedisCheckpointer(BaseCheckpointSaver):
             key = self._make_key(thread_id, checkpoint_id)
             self.redis_client.hset(key, mapping=data)
             self.redis_client.expire(key, self.ttl_seconds)
-            
-            print(f"✅ Checkpoint saved successfully: {key}")
         except Exception as e:
-            print(f"❌ Error saving checkpoint: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error saving checkpoint: {e}")
             raise
         
         return config
@@ -117,33 +111,25 @@ class RedisCheckpointer(BaseCheckpointSaver):
         configurable = config.get("configurable", {})
         thread_id = configurable.get("thread_id", "")
         
-        print(f"🔍 get_tuple called for thread {thread_id}")
-        
         try:
             # Find all checkpoints for this thread
             pattern = self._make_thread_key(thread_id)
             keys = list(self.redis_client.scan_iter(match=pattern))
             
             if not keys:
-                print(f"ℹ️  No existing checkpoints found for thread {thread_id}")
                 return None
-            
-            print(f"📦 Found {len(keys)} checkpoint(s) for thread {thread_id}")
             
             # Get the most recent checkpoint
             latest_key = max(keys)
             
             data = self.redis_client.hgetall(latest_key)  # type: ignore
             if not data:
-                print(f"⚠️  Checkpoint key exists but no data: {latest_key}")
                 return None
             
             # Deserialize
             checkpoint = self._deserialize_checkpoint(data.get("checkpoint", ""))  # type: ignore
             metadata_str = data.get("metadata", "{}")  # type: ignore
             metadata = json.loads(metadata_str) if metadata_str else {}  # type: ignore
-            
-            print(f"✅ Checkpoint tuple loaded successfully from {latest_key}")
             
             # Return tuple format expected by LangGraph
             return CheckpointTuple(
@@ -154,9 +140,7 @@ class RedisCheckpointer(BaseCheckpointSaver):
             )
             
         except Exception as e:
-            print(f"❌ Error in get_tuple: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error in get_tuple: {e}")
             return None
     
     def get(self, config: RunnableConfig) -> Optional[Checkpoint]:
@@ -172,18 +156,13 @@ class RedisCheckpointer(BaseCheckpointSaver):
         configurable = config.get("configurable", {})
         thread_id = configurable.get("thread_id", "")
         
-        print(f"🔍 Loading checkpoint for thread {thread_id}")
-        
         try:
             # Find all checkpoints for this thread
             pattern = self._make_thread_key(thread_id)
             keys = list(self.redis_client.scan_iter(match=pattern))
             
             if not keys:
-                print(f"ℹ️  No existing checkpoints found for thread {thread_id}")
                 return None
-            
-            print(f"📦 Found {len(keys)} checkpoint(s) for thread {thread_id}")
             
             # Get the most recent checkpoint
             # Keys are in format: langgraph:checkpoint:{thread_id}:{checkpoint_id}
@@ -192,18 +171,14 @@ class RedisCheckpointer(BaseCheckpointSaver):
             
             data = self.redis_client.hgetall(latest_key)  # type: ignore
             if not data:
-                print(f"⚠️  Checkpoint key exists but no data: {latest_key}")
                 return None
             
             # Deserialize and return
             checkpoint = self._deserialize_checkpoint(data.get("checkpoint", ""))  # type: ignore
-            print(f"✅ Checkpoint loaded successfully from {latest_key}")
             return checkpoint
             
         except Exception as e:
-            print(f"❌ Error loading checkpoint: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error loading checkpoint: {e}")
             return None
     
     def list(
@@ -268,7 +243,6 @@ class RedisCheckpointer(BaseCheckpointSaver):
         
         if keys:
             deleted = self.redis_client.delete(*keys)
-            print(f"🗑️  Deleted {deleted} checkpoints for thread {thread_id}")
             return int(deleted) if deleted else 0  # type: ignore
         
         return 0
@@ -290,9 +264,7 @@ class RedisCheckpointer(BaseCheckpointSaver):
             encoded = base64.b64encode(pickled).decode('utf-8')
             return encoded
         except Exception as e:
-            print(f"❌ Error serializing checkpoint: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error serializing checkpoint: {e}")
             # Return empty dict as fallback
             return base64.b64encode(pickle.dumps({})).decode('utf-8')
     
@@ -313,9 +285,7 @@ class RedisCheckpointer(BaseCheckpointSaver):
             checkpoint = pickle.loads(decoded)
             return checkpoint
         except Exception as e:
-            print(f"❌ Error deserializing checkpoint: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"Error deserializing checkpoint: {e}")
             return {}
     
     def put_writes(

@@ -8,11 +8,7 @@ def get_agent():
     """Obtiene o crea la instancia del agente (patrón singleton)."""
     global _agent, _checkpointer
     if _agent is None:
-        print("🔄 Agent not initialized, creating new instance...")
         _agent, _checkpointer = create_timesheet_agent()
-        print("✅ Agent singleton created")
-    else:
-        print("♻️  Reusing existing agent instance")
     return _agent
 
 def get_checkpointer():
@@ -70,21 +66,9 @@ def run_agent_service(prompt: str, conversation_id: str, employee_id: int):
     Yields:
         dict: Diccionario con 'type' ('text' o 'event') y 'content'
     """
-    print(f"🚀 Starting agent service - conversation_id: {conversation_id}, employee_id: {employee_id}")
-    print(f"📨 Prompt: {prompt}")
-    
     # Obtener el agente (se crea solo la primera vez)
-    print("🔧 Getting agent instance...")
     agent = get_agent()
-    print("✅ Agent instance obtained")
     
     # Ejecutar el agente con streaming
-    print("▶️  Starting agent stream...")
-    chunk_count = 0
     for chunk in run_agent_stream(agent, prompt, conversation_id, employee_id):
-        chunk_count += 1
-        if chunk_count == 1:
-            print(f"📦 First chunk received")
         yield chunk
-    
-    print(f"✅ Agent stream completed - {chunk_count} chunks sent")
