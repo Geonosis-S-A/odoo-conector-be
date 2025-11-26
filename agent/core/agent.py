@@ -22,14 +22,10 @@ def create_timesheet_agent():
     Returns:
         tuple: (agent, checkpointer) - El agente configurado y el checkpointer para mantener estado
     """
-    print("🔨 Creating timesheet agent...")
-    
     # Configurar el modelo
-    print("🤖 Initializing chat model...")
     model = init_chat_model(
         model="openai:gpt-5-mini",
     )
-    print("✅ Chat model initialized")
     
     # Configurar locale para fechas en español
     try:
@@ -49,12 +45,9 @@ def create_timesheet_agent():
     
     # Crear checkpointer Redis para mantener el estado de las conversaciones
     # Las conversaciones expiran automáticamente después del TTL configurado
-    print("💾 Creating Redis checkpointer...")
     checkpointer = RedisCheckpointer()
-    print("✅ Redis checkpointer created")
     
     # Crear el agente con todas las herramientas
-    print("🛠️  Creating agent with tools...")
     agent = create_agent(
         model=model,
         system_prompt=prompt,
@@ -69,7 +62,6 @@ def create_timesheet_agent():
         context_schema=Context,
         checkpointer=checkpointer
     )
-    print("✅ Agent created successfully")
     
     return agent, checkpointer
 
@@ -133,28 +125,17 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
     """
     import json
     
-    print(f"🎬 run_agent_stream called - conversation_id: {conversation_id}")
-    
     # Configurar el contexto de la conversación
     config: RunnableConfig = {"configurable": {"thread_id": conversation_id}}
-    print(f"⚙️  Config created: {config}")
-    
-    print(f"🔄 Starting agent.stream()...")
     
     try:
         # Ejecutar el agente en modo streaming
-        token_count = 0
         for token, metadata in agent.stream(
             {"messages": [{"role": "user", "content": message}]},
             config=config,
             context=Context(employee_id=employee_id),
             stream_mode="messages"
         ):
-            token_count += 1
-            if token_count == 1:
-                print(f"📥 First token received from agent.stream()")
-            if token_count % 10 == 0:
-                print(f"📊 Processed {token_count} tokens so far...")
             
             # Obtener el nombre del nodo actual
             node = metadata.get('langgraph_node') if isinstance(metadata, dict) else None
@@ -190,7 +171,6 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                         pass
     
     except Exception as e:
-        print(f"❌ ERROR in agent.stream(): {e}")
-        import traceback
-        traceback.print_exc()
+        # Log error but don't print stack trace in production
+        print(f"Error in agent stream: {e}")
         raise
