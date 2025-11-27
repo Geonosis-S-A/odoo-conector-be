@@ -11,6 +11,49 @@ def get_agent():
         _agent, _checkpointer = create_timesheet_agent()
     return _agent
 
+def get_checkpointer():
+    """Obtiene la instancia del checkpointer."""
+    global _agent, _checkpointer
+    if _checkpointer is None:
+        # Asegurar que el agente esté inicializado
+        get_agent()
+    return _checkpointer
+
+def delete_conversation(conversation_id: str) -> dict:
+    """
+    Elimina una conversación del checkpointer.
+    
+    Debe llamarse cuando el usuario cierra el diálogo de chat.
+    
+    Args:
+        conversation_id: ID único de la conversación a eliminar
+    
+    Returns:
+        dict: Diccionario con el resultado de la operación
+    """
+    checkpointer = get_checkpointer()
+    
+    if checkpointer is None:
+        return {
+            "success": False,
+            "error": "Checkpointer not initialized",
+            "message": "Error: El checkpointer no está inicializado"
+        }
+    
+    try:
+        deleted_count = checkpointer.delete(conversation_id)
+        return {
+            "success": True,
+            "deleted_count": deleted_count,
+            "message": f"Conversación {conversation_id} eliminada exitosamente"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": f"Error al eliminar conversación: {str(e)}"
+        }
+
 def run_agent_service(prompt: str, conversation_id: str, employee_id: int):
     """
     Ejecuta el agente con streaming y genera chunks de la respuesta en tiempo real.
