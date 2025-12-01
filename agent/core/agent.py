@@ -14,6 +14,20 @@ import locale
 
 load_dotenv()
 
+# Configurar locale para fechas en español (una sola vez al cargar el módulo)
+try:
+    locale.setlocale(locale.LC_TIME, "es_ES.UTF-8")
+except:
+    try:
+        locale.setlocale(locale.LC_TIME, "es_ES")
+    except:
+        pass  # Si no se puede configurar, continuar con el locale por defecto
+
+
+def get_current_date_formatted() -> str:
+    """Obtiene la fecha actual formateada en español."""
+    return datetime.now().strftime("%d/%m/%Y, %A")
+
 
 def create_timesheet_agent():
     """
@@ -27,21 +41,9 @@ def create_timesheet_agent():
         model="openai:gpt-5-mini",
     )
     
-    # Configurar locale para fechas en español
-    try:
-        locale.setlocale(locale.LC_TIME, "es_ES.UTF-8")
-    except:
-        try:
-            locale.setlocale(locale.LC_TIME, "es_ES")
-        except:
-            pass  # Si no se puede configurar, continuar con el locale por defecto
-    
-    # Obtener fecha actual formateada
-    hoy = datetime.now()
-    formateada = hoy.strftime("%d/%m/%Y, %A")
-    
-    # Formatear el prompt del sistema con la fecha actual
-    prompt = PromptTemplate.from_template(TIMESHEET_AGENT_SYSTEM_PROMPT).format(today_date=formateada)
+    # Formatear el prompt del sistema con un placeholder para la fecha
+    # La fecha real se inyectará en cada invocación
+    prompt = PromptTemplate.from_template(TIMESHEET_AGENT_SYSTEM_PROMPT).format(today_date="{dynamic_date}")
     
     # Crear checkpointer Redis para mantener el estado de las conversaciones
     # Las conversaciones expiran automáticamente después del TTL configurado
@@ -81,9 +83,16 @@ def run_agent(agent, message: str, conversation_id: str, employee_id: int) -> st
     # Configurar el contexto de la conversación
     config: RunnableConfig = {"configurable": {"thread_id": conversation_id}}
     
-    # Ejecutar el agente
+    # Inyectar la fecha actual en cada invocación para evitar fechas stale
+    current_date = get_current_date_formatted()
+    date_context = f"[Fecha actual del sistema: {current_date}]"
+    
+    # Ejecutar el agente con la fecha actual inyectada
     response = agent.invoke(
-        {"messages": [{"role": "user", "content": message}]},
+        {"messages": [
+            {"role": "system", "content": date_context},
+            {"role": "user", "content": message}
+        ]},
         config=config,
         context=Context(employee_id=employee_id)
     )
@@ -128,10 +137,17 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
     # Configurar el contexto de la conversación
     config: RunnableConfig = {"configurable": {"thread_id": conversation_id}}
     
+    # Inyectar la fecha actual en cada invocación para evitar fechas stale
+    current_date = get_current_date_formatted()
+    date_context = f"[Fecha actual del sistema: {current_date}]"
+    
     try:
-        # Ejecutar el agente en modo streaming
+        # Ejecutar el agente en modo streaming con la fecha actual inyectada
         for token, metadata in agent.stream(
-            {"messages": [{"role": "user", "content": message}]},
+            {"messages": [
+                {"role": "system", "content": date_context},
+                {"role": "user", "content": message}
+            ]},
             config=config,
             context=Context(employee_id=employee_id),
             stream_mode="messages"
