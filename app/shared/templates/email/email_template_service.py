@@ -72,18 +72,21 @@ class EmailTemplateService:
             
             template_content = template_content.replace("{{TIMESHEET_RECORDS}}", timesheet_html)
             
+            # Determinar el mensaje según el tipo de template
+            count = len(timesheet_data)
             if "review_mail" == template_name:
-                count = len(timesheet_data)
                 if count == 1:
                     context["TIMESHEET_MESSAGE"] = "uno de tus registros de horas ha sido marcado"
                 else:
                     context["TIMESHEET_MESSAGE"] = f"{count} de tus registros de horas han sido marcados"
             elif "approved_mail" == template_name:
-                count = len(timesheet_data)
                 if count == 1:
                     context["TIMESHEET_MESSAGE"] = "uno de tus registros de horas ha sido aprobado"
                 else:
                     context["TIMESHEET_MESSAGE"] = f"{count} de tus registros de horas han sido aprobados"
+            elif "eliminated_mail" == template_name:
+                # No necesita TIMESHEET_MESSAGE ya que el template tiene un mensaje fijo
+                pass
         
         return template_content
 
