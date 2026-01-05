@@ -10,6 +10,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetNotFoundError,
     TimesheetReviewError,
 )
+from app.email.domain.email_types import TimesheetEmailType
 
 
 class ReviewTimesheetsUseCase:
@@ -26,14 +27,19 @@ class ReviewTimesheetsUseCase:
         self.notification_repository = notification_repository
 
     async def execute(
-        self, timesheet_ids: list[int], approver_mail: str, body: str | None = None
+        self, 
+        timesheet_ids: list[int], 
+        approver_mail: str, 
+        body: str | None = None,
+        email_type: TimesheetEmailType = TimesheetEmailType.REVIEW
     ) -> bool:
-        """Ejecuta el caso de uso para enviar correos de revisión de timesheets.
+        """Ejecuta el caso de uso para enviar correos de revisión/eliminación de timesheets.
 
         Args:
-            timesheet_ids: Lista de IDs de las líneas de timesheet a revisar
-            approver_mail: Email del aprobador que envía la revisión
+            timesheet_ids: Lista de IDs de las líneas de timesheet a revisar/eliminar
+            approver_mail: Email del aprobador que envía la revisión/eliminación
             body: Mensaje opcional para incluir en el correo
+            email_type: Tipo de email a enviar (REVIEW o ELIMINATED)
 
         Returns:
             bool: True si el envío fue exitoso
@@ -71,20 +77,23 @@ class ReviewTimesheetsUseCase:
         # Enviar correos y crear notificaciones
         try:
             for receiver_mail, employee_data in employees_bucket.items():
-                await self.email_service.send_review_mail(
+                await self.email_service.send_timesheet_mail(
+                    email_type,
                     receiver_mail,
                     approver_mail,
                     employee_data["timesheets"],
                     body,
                 )
-                for timesheet_line in employee_data["timesheets"]:
-                    self.notification_repository.create(
-                        CreateTimesheetLineNotification(
-                            timesheet_line_id=timesheet_line.id,
-                            approver_id=approver_id,
-                            receiver_id=employee_data["employee_id"],
+                # Solo crear notificaciones si es REVIEW (no para ELIMINATED)
+                if email_type == TimesheetEmailType.REVIEW:
+                    for timesheet_line in employee_data["timesheets"]:
+                        self.notification_repository.create(
+                            CreateTimesheetLineNotification(
+                                timesheet_line_id=timesheet_line.id,
+                                approver_id=approver_id,
+                                receiver_id=employee_data["employee_id"],
+                            )
                         )
-                    )
 
             return True
         except Exception as e:
