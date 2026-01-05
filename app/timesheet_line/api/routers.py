@@ -8,6 +8,7 @@ from sqlmodel import Session
 from app.email.api.dependencies import get_common_email_service
 from app.email.api.schemas import ApprovedMailRequest, ReviewMailRequest
 from app.email.infra.email_service import CommonResendEmailService
+from app.email.domain.email_types import TimesheetEmailType
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import Roles, user_has_role
@@ -355,10 +356,10 @@ async def review_mail(
     ),
 ):
     """
-    Envía correos de revisión a los empleados sobre sus timesheets.
+    Envía correos de revisión o eliminación a los empleados sobre sus timesheets.
 
     Args:
-        request: Objeto con lista de IDs de timesheets, email del aprobador y mensaje opcional
+        request: Objeto con lista de IDs de timesheets, email del aprobador, mensaje opcional y tipo de email
         email_service: Servicio de email (inyectado)
         employee_gateway: Gateway de empleados (inyectado)
         timesheet_gateway: Gateway de timesheet (inyectado)
@@ -379,8 +380,13 @@ async def review_mail(
         use_case = ReviewTimesheetsUseCase(
             employee_gateway, timesheet_gateway, email_service, notification_repository
         )
+        # Obtener el tipo de email del request (por defecto REVIEW)
+        email_type = request.email_type or TimesheetEmailType.REVIEW
         success = await use_case.execute(
-            request.timesheetline_ids, request.approver_mail, request.body
+            request.timesheetline_ids, 
+            request.approver_mail, 
+            request.body,
+            email_type
         )
         return {"success": success}
     except ApproverNotFoundError as e:
