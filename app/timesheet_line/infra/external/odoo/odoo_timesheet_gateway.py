@@ -153,8 +153,11 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if employee_id is not None and team is None:
             domain.append(("employee_id", "=", employee_id))
 
+        # Excluir proyectos internos
+        proyecto_interno = [3, 1, 87, 2]
+        domain.append(("project_id", "not in", proyecto_interno))
+
         if team and user_id is not None:
-            # Aquí aplicamos el filtro de equipo como se ve en la petición web
             team_domain = [
                 ("employee_id", "in", team_members_ids),
             ]
