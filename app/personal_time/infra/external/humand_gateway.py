@@ -39,6 +39,7 @@ class HumandAPIGateway(HumandGateway):
     def get_all_timeoff_requests(
         self,
         page: int = 1,
+        limit: int = 500,
         states: Optional[List[str]] = None,
         policy_type_ids: Optional[List[str]] = None,
         from_date: Optional[date] = None,
@@ -51,6 +52,7 @@ class HumandAPIGateway(HumandGateway):
 
         Args:
             page: Página para paginación (default: 1)
+            limit: Límite de resultados por página (default: 50)
             states: Lista de estados para filtrar (ej: ["approved", "pending", "rejected"])
             policy_type_ids: Lista de IDs de tipos de política para filtrar
             from_date: Fecha de inicio del filtro
@@ -70,6 +72,7 @@ class HumandAPIGateway(HumandGateway):
             params: dict = {
                 "page": page,
             }
+
 
             # Agregar filtros opcionales
             if states:
@@ -92,6 +95,8 @@ class HumandAPIGateway(HumandGateway):
 
             if created_at_since:
                 params["createdAtSince"] = created_at_since.strftime("%Y-%m-%d")
+
+            params["limit"] = limit
 
             # Realizar la petición a HUMAND
             response = requests.get(
@@ -166,11 +171,13 @@ class HumandAPIGateway(HumandGateway):
         resolution_from_date: Optional[date] = None,
         resolution_to_date: Optional[date] = None,
         created_at_since: Optional[date] = None,
+        limit: int = 500,
         max_pages: int = 100,
     ) -> List[HumandTimeOffRequest]:
         """Obtiene todas las solicitudes paginando automáticamente hasta obtener todos los resultados.
 
         Args:
+            limit: Límite de resultados por página (default: 50)
             states: Lista de estados para filtrar
             policy_type_ids: Lista de IDs de tipos de política para filtrar
             from_date: Fecha de inicio del filtro
@@ -193,6 +200,7 @@ class HumandAPIGateway(HumandGateway):
             try:
                 requests_page = self.get_all_timeoff_requests(
                     page=page,
+                    limit=limit,
                     states=states,
                     policy_type_ids=policy_type_ids,
                     from_date=from_date,

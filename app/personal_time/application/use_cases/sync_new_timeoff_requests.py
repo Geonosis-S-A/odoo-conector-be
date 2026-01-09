@@ -144,19 +144,19 @@ class SyncNewTimeOffRequestsUseCase:
             List[HumandTimeOffRequest]: Lista de solicitudes desde Humand
         """
         try:
-            # Filtrar solo solicitudes aprobadas (fuente de verdad)
-            # Puedes ajustar los estados según tus necesidades
-            states = ["approved"]
+
             
             # Convertir datetime a date si es necesario
             created_date = created_at_since.date() if created_at_since else None
             
             requests = self.humand_gateway.get_all_timeoff_requests(
                 page=1,
-                states=states,
+                limit=100,  # Límite por página
+                states=None,  # No filtrar por estado para evitar errores
                 created_at_since=created_date,
             )
-            
+        
+            print("DATA DE HUMAND: ", requests)
             return requests
             
         except Exception as e:
@@ -213,7 +213,7 @@ class SyncNewTimeOffRequestsUseCase:
                 employee_id=employee.id,
             )
             
-            odoo_result = self.odoo_gateway.create_timeoff_request(odoo_request)
+            odoo_result = self.odoo_gateway.create_timeoff_request(odoo_request) # TODO:cambiar, esto debe crear el timeoff request con el mismo estado que el de humand
             
             if not odoo_result.success or not odoo_result.request_id:
                 error_msg = f"Error al crear en Odoo: {odoo_result.message}"
