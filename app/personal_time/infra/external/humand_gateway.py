@@ -39,7 +39,6 @@ class HumandAPIGateway(HumandGateway):
     def get_all_timeoff_requests(
         self,
         page: int = 1,
-        limit: int = 10,
         states: Optional[List[str]] = None,
         policy_type_ids: Optional[List[str]] = None,
         from_date: Optional[date] = None,
@@ -52,7 +51,6 @@ class HumandAPIGateway(HumandGateway):
 
         Args:
             page: Página para paginación (default: 1)
-            limit: Límite de resultados por página (default: 10)
             states: Lista de estados para filtrar (ej: ["approved", "pending", "rejected"])
             policy_type_ids: Lista de IDs de tipos de política para filtrar
             from_date: Fecha de inicio del filtro
@@ -71,7 +69,6 @@ class HumandAPIGateway(HumandGateway):
             # Construir parámetros de la petición
             params: dict = {
                 "page": page,
-                "limit": limit,
             }
 
             # Agregar filtros opcionales
@@ -191,13 +188,11 @@ class HumandAPIGateway(HumandGateway):
         """
         all_requests = []
         page = 1
-        limit = 100  # Usar un límite alto para reducir peticiones
 
         while page <= max_pages:
             try:
                 requests_page = self.get_all_timeoff_requests(
                     page=page,
-                    limit=limit,
                     states=states,
                     policy_type_ids=policy_type_ids,
                     from_date=from_date,
@@ -212,10 +207,6 @@ class HumandAPIGateway(HumandGateway):
                     break
 
                 all_requests.extend(requests_page)
-
-                # Si recibimos menos resultados que el límite, es la última página
-                if len(requests_page) < limit:
-                    break
 
                 page += 1
 

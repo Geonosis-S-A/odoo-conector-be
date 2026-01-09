@@ -11,7 +11,6 @@ class HumandGateway(ABC):
     def get_all_timeoff_requests(
         self,
         page: int = 1,
-        limit: int = 10,
         states: Optional[List[str]] = None,
         policy_type_ids: Optional[List[str]] = None,
         from_date: Optional[date] = None,
@@ -24,7 +23,6 @@ class HumandGateway(ABC):
 
         Args:
             page: Página para paginación (default: 1)
-            limit: Límite de resultados por página (default: 10)
             states: Lista de estados para filtrar (ej: ["approved", "pending", "rejected"])
             policy_type_ids: Lista de IDs de tipos de política para filtrar
             from_date: Fecha de inicio del filtro

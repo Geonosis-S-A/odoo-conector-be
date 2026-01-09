@@ -1,7 +1,7 @@
 # Entidades del dominio para personal_time, desacopladas del ORM
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 
@@ -231,3 +231,109 @@ class TimeOffRequestInfo:
             state=safe_string_value(odoo_data.get("state", "draft")),
             number_of_days=float(odoo_data.get("number_of_days", 0)),
         )
+
+
+@dataclass
+class TimeOffSyncMapping:
+    """
+    Representa el mapeo entre una solicitud de licencia en Humand y Odoo.
+    
+    Esta entidad del dominio permite rastrear la relación entre los sistemas,
+    facilitando las operaciones de sincronización y actualización.
+    """
+    
+    humand_request_id: str  # ID de la solicitud en Humand (fuente de verdad)
+    odoo_request_id: int  # ID de la solicitud en Odoo
+    humand_user_email: str  # Email del usuario en Humand
+    odoo_employee_id: int  # ID del empleado en Odoo
+    sync_status: str = "synced"  # Estado: synced, error, pending
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    last_sync_error: Optional[str] = None
+    id: Optional[int] = None  # ID en la base de datos local
+    
+    @classmethod
+    def from_humand_and_odoo(
+        cls,
+        humand_request: "HumandTimeOffRequest",
+        odoo_request_id: int,
+        odoo_employee_id: int,
+    ) -> "TimeOffSyncMapping":
+        """
+        Crea un mapeo desde una solicitud de Humand y el ID de Odoo.
+        
+        Args:
+            humand_request: Solicitud desde Humand
+            odoo_request_id: ID de la solicitud creada en Odoo
+            odoo_employee_id: ID del empleado en Odoo
+            
+        Returns:
+            TimeOffSyncMapping: Nueva instancia del mapeo
+        """
+        return cls(
+            humand_request_id=humand_request.id,
+            odoo_request_id=odoo_request_id,
+            humand_user_email=humand_request.user_email,
+            odoo_employee_id=odoo_employee_id,
+            sync_status="synced",
+        )
+
+
+@dataclass
+class TimeOffSyncLog:
+    """
+    Representa un registro de ejecución del job de sincronización.
+    
+    Esta entidad del dominio mantiene un historial de las ejecuciones,
+    permitiendo rastrear éxitos, errores y métricas de sincronización.
+    """
+    
+    started_at: datetime
+    status: str = "running"  # running, success, error, partial_success
+    finished_at: Optional[datetime] = None
+    last_successful_run: Optional[datetime] = None
+    new_requests_synced: int = 0
+    status_updates_synced: int = 0
+    errors_count: int = 0
+    error_message: Optional[str] = None
+    execution_time_seconds: Optional[float] = None
+    id: Optional[int] = None  # ID en la base de datos local
+    
+    @classmethod
+    def create_new_run(cls, last_successful_run: Optional[datetime] = None) -> "TimeOffSyncLog":
+        """
+        Crea un nuevo log de ejecución.
+        
+        Args:
+            last_successful_run: Fecha de la última ejecución exitosa
+            
+        Returns:
+            TimeOffSyncLog: Nueva instancia del log
+        """
+        return cls(
+            started_at=datetime.now(),
+            status="running",
+            last_successful_run=last_successful_run,
+        )
+    
+    def mark_as_success(self) -> None:
+        """Marca la ejecución como exitosa."""
+        self.status = "success"
+        self.finished_at = datetime.now()
+        if self.started_at:
+            self.execution_time_seconds = (self.finished_at - self.started_at).total_seconds()
+    
+    def mark_as_error(self, error_message: str) -> None:
+        """Marca la ejecución como fallida."""
+        self.status = "error"
+        self.finished_at = datetime.now()
+        self.error_message = error_message
+        if self.started_at:
+            self.execution_time_seconds = (self.finished_at - self.started_at).total_seconds()
+    
+    def mark_as_partial_success(self) -> None:
+        """Marca la ejecución como parcialmente exitosa (con algunos errores)."""
+        self.status = "partial_success"
+        self.finished_at = datetime.now()
+        if self.started_at:
+            self.execution_time_seconds = (self.finished_at - self.started_at).total_seconds()
