@@ -313,7 +313,6 @@ class OdooTimeOffeGateway(TimeOffGateway):
                         "has_valid_allocation",
                         "allows_negative",
                     ],
-                    "limit": 1,
                 },
             )
             

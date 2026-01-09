@@ -58,7 +58,7 @@ class SyncResult:
             f"Errores: {self.errors_count}"
         )
 
-
+#TODO: REVISAR CONFIGURACION DE LIMITES Y PAGINACION, SE DEBE DETERMINAR CUAL VA A SER LA CONSULTA FIJA QUE VA A HACER EL JOB SIEMPRE, REVISAR PARAMETROS PARA CONSULTAR AL HUMAND_GATEWAY
 class SyncNewTimeOffRequestsUseCase:
     """
     Caso de uso para sincronizar nuevas solicitudes de licencias desde Humand a Odoo.
@@ -111,7 +111,7 @@ class SyncNewTimeOffRequestsUseCase:
         )
         
         try:
-            # 1. Obtener nuevas solicitudes desde Humand
+
             humand_requests = self._fetch_new_requests_from_humand(
                 created_at_since
             )
@@ -146,13 +146,13 @@ class SyncNewTimeOffRequestsUseCase:
         try:
 
             
-            # Convertir datetime a date si es necesario
+
             created_date = created_at_since.date() if created_at_since else None
             
             requests = self.humand_gateway.get_all_timeoff_requests(
                 page=1,
-                limit=100,  # Límite por página
-                states=None,  # No filtrar por estado para evitar errores
+                limit=100,  
+                states=None,  
                 created_at_since=created_date,
             )
         
@@ -182,7 +182,7 @@ class SyncNewTimeOffRequestsUseCase:
                 result.add_skipped()
                 return
             
-            # 2. Obtener el employee_id de Odoo usando el email
+           
             employee = self.employee_gateway.get_by_email(humand_request.user_email)
             
             if not employee:
@@ -191,9 +191,7 @@ class SyncNewTimeOffRequestsUseCase:
                 result.add_error(humand_request.id, error_msg)
                 return
             
-            # 3. Mapear el tipo de licencia de Humand a Odoo
-            # NOTA: Aquí necesitas implementar tu lógica de mapeo
-            # Por ahora, usamos un ID por defecto o puedes crear un método
+        
             odoo_holiday_status_id = self._map_policy_type_to_odoo(
                 humand_request.policy_type_id, humand_request.policy_type_name
             )
@@ -204,7 +202,6 @@ class SyncNewTimeOffRequestsUseCase:
                 result.add_error(humand_request.id, error_msg)
                 return
             
-            # 4. Crear la solicitud en Odoo
             odoo_request = TimeOffRequest(
                 holiday_status_id=odoo_holiday_status_id,
                 name=humand_request.reason or f"Licencia desde Humand: {humand_request.policy_type_name}",
@@ -221,7 +218,6 @@ class SyncNewTimeOffRequestsUseCase:
                 result.add_error(humand_request.id, error_msg)
                 return
             
-            # 5. Crear el mapeo en la Bridge Table
             mapping = TimeOffSyncMapping.from_humand_and_odoo(
                 humand_request=humand_request,
                 odoo_request_id=odoo_result.request_id,
@@ -245,7 +241,7 @@ class SyncNewTimeOffRequestsUseCase:
     
     def _map_policy_type_to_odoo(
         self, policy_type_id: str, policy_type_name: str
-    ) -> Optional[int]:
+    ) -> Optional[int]: #TODO: revisar mapeo por nombres de policy(funciona pero hay nombres que no coinciden).
         """
         Mapea un tipo de política de Humand a un tipo de licencia en Odoo.
         
@@ -279,3 +275,5 @@ class SyncNewTimeOffRequestsUseCase:
                 f"Error al mapear tipo de licencia '{policy_type_name}': {str(e)}"
             )
             return None
+
+
