@@ -280,3 +280,53 @@ class OdooTimeOffeGateway(TimeOffGateway):
             raise Exception(
                 f"Error al obtener solicitudes de tiempo personal desde Odoo: {str(e)}"
             )
+
+    def get_timeoff_type_by_name(self, name: str) -> Optional[TimeOffType]:
+        """Busca un tipo de licencia por su nombre exacto en Odoo.
+        
+        Args:
+            name: Nombre del tipo de licencia a buscar
+            
+        Returns:
+            Optional[TimeOffType]: Tipo de licencia encontrado o None
+            
+        Raises:
+            Exception: Si hay un error al consultar Odoo
+        """
+        try:
+            # Buscar el tipo de licencia por nombre exacto
+            domain = [["name", "=", name]]
+            
+            result = self.odoo_connection["models"].execute_kw(
+                self.odoo_connection["ODOO_DB"],
+                self.odoo_connection["uid"],
+                self.odoo_connection["ODOO_PASSWORD"],
+                "hr.leave.type",
+                "search_read",
+                [domain],
+                {
+                    "fields": [
+                        "id",
+                        "name",
+                        "virtual_remaining_leaves",
+                        "requires_allocation",
+                        "has_valid_allocation",
+                        "allows_negative",
+                    ],
+                    "limit": 1,
+                },
+            )
+            
+            # Validar que el resultado sea una lista
+            if not isinstance(result, list):
+                raise Exception("Respuesta inesperada de Odoo: se esperaba una lista")
+            
+            # Si no se encontró, retornar None
+            if not result:
+                return None
+            
+            # Convertir el primer resultado a modelo de dominio
+            return TimeOffType.from_odoo_data(result[0])
+            
+        except Exception as e:
+            raise Exception(f"Error al buscar tipo de licencia por nombre en Odoo: {str(e)}")

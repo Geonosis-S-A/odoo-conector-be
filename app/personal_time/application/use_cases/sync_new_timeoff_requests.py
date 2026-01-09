@@ -249,31 +249,33 @@ class SyncNewTimeOffRequestsUseCase:
         """
         Mapea un tipo de política de Humand a un tipo de licencia en Odoo.
         
-        IMPORTANTE: Debes implementar tu lógica de mapeo aquí.
-        Puede ser mediante:
-        - Una tabla de mapeo en la BD
-        - Un diccionario hardcodeado
-        - Una consulta a Odoo por nombre
+        El mapeo se realiza buscando en Odoo por el nombre exacto de la política,
+        ya que los nombres en Humand y Odoo son idénticos.
         
         Args:
-            policy_type_id: ID del tipo de política en Humand
+            policy_type_id: ID del tipo de política en Humand (no usado)
             policy_type_name: Nombre del tipo de política en Humand
             
         Returns:
             Optional[int]: ID del tipo de licencia en Odoo, o None si no se encuentra
         """
-        # TODO: Implementar lógica de mapeo
-        # Por ahora, retornamos un ID por defecto o None
-        
-        # Ejemplo de mapeo hardcodeado (ajusta según tu caso):
-        policy_mapping = {
-            "vacation": 1,  # ID de "Vacaciones" en Odoo
-            "sick_leave": 2,  # ID de "Enfermedad" en Odoo
-            "personal": 3,  # ID de "Licencia Personal" en Odoo
-            # Agrega más mapeos según tus necesidades
-        }
-        
-        # Intenta mapear por ID o nombre (convertido a minúsculas sin espacios)
-        normalized_name = policy_type_name.lower().replace(" ", "_")
-        
-        return policy_mapping.get(policy_type_id) or policy_mapping.get(normalized_name)
+        try:
+            # Buscar el tipo de licencia en Odoo por nombre exacto
+            timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(policy_type_name)
+            
+            if timeoff_type:
+                logger.debug(
+                    f"Tipo de licencia mapeado: '{policy_type_name}' -> ID {timeoff_type.id}"
+                )
+                return timeoff_type.id
+            
+            logger.warning(
+                f"No se encontró tipo de licencia en Odoo con nombre: '{policy_type_name}'"
+            )
+            return None
+            
+        except Exception as e:
+            logger.error(
+                f"Error al mapear tipo de licencia '{policy_type_name}': {str(e)}"
+            )
+            return None

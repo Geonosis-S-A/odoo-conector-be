@@ -84,3 +84,18 @@ class TimeOffGateway(ABC):
     def get_timeoff_request_state(self, request_id: int) -> str:
         """Obtiene el estado de una solicitud de tiempo personal específica desde Odoo."""
         pass
+
+    @abstractmethod
+    def get_timeoff_type_by_name(self, name: str) -> Optional[TimeOffType]:
+        """Busca un tipo de licencia por su nombre exacto.
+        
+        Args:
+            name: Nombre del tipo de licencia a buscar
+            
+        Returns:
+            Optional[TimeOffType]: Tipo de licencia encontrado o None
+            
+        Raises:
+            Exception: Si hay un error al consultar Odoo
+        """
+        pass
