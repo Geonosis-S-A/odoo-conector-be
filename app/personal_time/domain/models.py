@@ -89,6 +89,70 @@ class TimeOffRequestResult:
 
 
 @dataclass
+class HumandTimeOffRequest:
+    """Representa una solicitud de tiempo personal desde HUMAND."""
+
+    id: str  # ID en HUMAND
+    policy_type_id: str
+    policy_type_name: str
+    user_id: str
+    user_email: str
+    user_name: str
+    from_date: date
+    to_date: date
+    status: str  # approved, pending, rejected
+    days: float
+    reason: Optional[str]
+    created_at: date
+    resolution_date: Optional[date]
+
+    @classmethod
+    def from_humand_data(cls, humand_data: dict) -> "HumandTimeOffRequest":
+        """Crea un HumandTimeOffRequest desde los datos de HUMAND API.
+
+        Args:
+            humand_data: Diccionario con datos de HUMAND API
+
+        Returns:
+            HumandTimeOffRequest: Instancia de la solicitud
+        """
+        # Extraer información del usuario (issuer en la API)
+        issuer_data = humand_data.get("issuer", {})
+        policy_type_data = humand_data.get("policyType", {})
+        
+        # Extraer fechas de los objetos from/to
+        from_obj = humand_data.get("from", {})
+        to_obj = humand_data.get("to", {})
+        from_date_str = from_obj.get("date") if isinstance(from_obj, dict) else None
+        to_date_str = to_obj.get("date") if isinstance(to_obj, dict) else None
+        
+        # Fechas de sistema
+        created_at_str = humand_data.get("createdAt")
+        resolution_date_str = humand_data.get("resolutionDate")
+        
+        # Construir nombre completo del usuario
+        first_name = issuer_data.get("firstName", "")
+        last_name = issuer_data.get("lastName", "")
+        user_name = f"{first_name} {last_name}".strip()
+
+        return cls(
+            id=str(humand_data.get("id", "")),
+            policy_type_id=str(policy_type_data.get("id", "")),
+            policy_type_name=policy_type_data.get("name", ""),
+            user_id=str(issuer_data.get("id", "")),
+            user_email=issuer_data.get("email", ""),
+            user_name=user_name or issuer_data.get("email", ""),
+            from_date=date.fromisoformat(from_date_str) if from_date_str else date.today(),
+            to_date=date.fromisoformat(to_date_str) if to_date_str else date.today(),
+            status=humand_data.get("state", "pending"),
+            days=float(humand_data.get("amountInTime", 0)),
+            reason=humand_data.get("description"),
+            created_at=date.fromisoformat(created_at_str.split("T")[0]) if created_at_str else date.today(),
+            resolution_date=date.fromisoformat(resolution_date_str.split("T")[0]) if resolution_date_str else None,
+        )
+
+
+@dataclass
 class TimeOffRequestInfo:
     """Representa información de una solicitud de tiempo personal existente."""
 
