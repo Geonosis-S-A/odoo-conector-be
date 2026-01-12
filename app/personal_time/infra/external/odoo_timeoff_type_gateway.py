@@ -120,7 +120,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
 
             # Aplicar el estado deseado si se especificó y no es draft (que ya lo está)
             if desired_state and desired_state != "draft":
-                self._set_timeoff_request_state(request_id, desired_state)
+                self.set_timeoff_request_state(request_id, desired_state)
 
             return TimeOffRequestResult.success_result(request_id)
 
@@ -128,7 +128,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
             # Propagar directamente el error original
             raise
     
-    def _set_timeoff_request_state(self, request_id: int, state: str):
+    def set_timeoff_request_state(self, request_id: int, state: str):
         """Cambia el estado de una solicitud de licencia en Odoo.
         
         Args:
@@ -159,7 +159,6 @@ class OdooTimeOffeGateway(TimeOffGateway):
                     "action_refuse",
                     [[request_id]],
                 )
-            
             elif state == "draft":
                 # Ya se crea en draft por defecto, no hacer nada
                 pass
@@ -216,7 +215,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
             request_id: ID de la solicitud de tiempo personal
 
         Returns:
-            str: Estado de la solicitud (draft, confirm, validate, refuse, cancel)
+            str: Estado de la solicitud (draft, validate, refuse, cancel)
 
         Raises:
             Exception: Si hay un error al conectar con Odoo o procesar los datos

@@ -32,6 +32,7 @@ class SyncResult:
         self.errors_count = 0
         self.errors: List[Tuple[str, str]] = []  # (humand_request_id, error_message)
         self.skipped_count = 0  # Ya existían en la BD
+        self.status_updates_count = 0  # Estados actualizados
     
     def add_success(self):
         """Registra una sincronización exitosa."""
@@ -49,11 +50,17 @@ class SyncResult:
         self.total_processed += 1
         self.skipped_count += 1
     
+    def add_status_update(self):
+        """Registra una actualización de estado exitosa."""
+        self.total_processed += 1
+        self.status_updates_count += 1
+    
     def get_summary(self) -> str:
         """Retorna un resumen de la sincronización."""
         return (
             f"Total procesadas: {self.total_processed}, "
             f"Sincronizadas: {self.successfully_synced}, "
+            f"Actualizadas: {self.status_updates_count}, "
             f"Saltadas: {self.skipped_count}, "
             f"Errores: {self.errors_count}"
         )
@@ -127,6 +134,57 @@ class SyncNewTimeOffRequestsUseCase:
             
         except Exception as e:
             logger.error(f"Error general en la sincronización: {str(e)}")
+            raise
+        
+        return result
+    
+    def execute_status_sync(
+        self,
+        resolution_from_date: Optional[datetime] = None
+    ) -> SyncResult:
+        """
+        Ejecuta la sincronización de estados de solicitudes modificadas en Humand.
+        
+        Este método detecta las solicitudes que han cambiado de estado en Humand
+        (usando el parámetro resolutionFromDate) y actualiza sus estados en Odoo
+        utilizando la tabla de mapeo previamente poblada.
+        
+        Args:
+            resolution_from_date: Fecha desde la cual buscar solicitudes resueltas/modificadas.
+                                Si es None, busca todas las solicitudes.
+            
+        Returns:
+            SyncResult: Resultado de la sincronización con métricas de actualizaciones
+        """
+        result = SyncResult()
+        
+        logger.info(
+            f"Iniciando sincronización de estados desde: "
+            f"{resolution_from_date or 'inicio'}"
+        )
+        
+        try:
+            # 1. Obtener solicitudes modificadas desde Humand
+            resolution_date = resolution_from_date.date() if resolution_from_date else None
+            
+            humand_requests = self.humand_gateway.get_all_timeoff_requests(
+                resolution_from_date=resolution_date
+            )
+            
+            logger.info(
+                f"Obtenidas {len(humand_requests)} solicitudes modificadas desde Humand"
+            )
+            
+            # 2. Procesar cada solicitud para actualizar su estado
+            for humand_request in humand_requests:
+                self._process_single_status_update(humand_request, result)
+            
+            logger.info(
+                f"Sincronización de estados completada: {result.get_summary()}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error general en la sincronización de estados: {str(e)}")
             raise
         
         return result
@@ -238,12 +296,11 @@ class SyncNewTimeOffRequestsUseCase:
             logger.error(
                 f"Error procesando solicitud {humand_request.id}: {error_msg}"
             )
-            print("EL USUARIO SOLICITANTE ES: ", humand_request.user_email, "Y EL TIEMPO PERSONAL SOLICITADO ES: ", humand_request.from_date, "HASTA: ", humand_request.to_date, "PARA EL TIPO DE LICENCIA: ", humand_request.policy_type_name)
             result.add_error(humand_request.id, error_msg)
     
     def _map_policy_type_to_odoo(
         self, policy_type_id: str, policy_type_name: str
-    ) -> Optional[int]:
+    ) -> Optional[int]: #TODO: revisar mapeo por nombres de policy(funciona pero hay nombres que no coinciden).
         """
         Mapea un tipo de política de Humand a un tipo de licencia en Odoo.
         
@@ -258,20 +315,17 @@ class SyncNewTimeOffRequestsUseCase:
             Optional[int]: ID del tipo de licencia en Odoo, o None si no se encuentra
         """
         try:
-            # Limpiar el nombre (trim espacios) para evitar problemas de mapeo
-            clean_name = policy_type_name.strip()
-            
             # Buscar el tipo de licencia en Odoo por nombre exacto
-            timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(clean_name)
+            timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(policy_type_name)
             
             if timeoff_type:
                 logger.debug(
-                    f"Tipo de licencia mapeado: '{clean_name}' -> ID {timeoff_type.id}"
+                    f"Tipo de licencia mapeado: '{policy_type_name}' -> ID {timeoff_type.id}"
                 )
                 return timeoff_type.id
             
             logger.warning(
-                f"No se encontró tipo de licencia en Odoo con nombre: '{clean_name}'"
+                f"No se encontró tipo de licencia en Odoo con nombre: '{policy_type_name}'"
             )
             return None
             
@@ -286,7 +340,7 @@ class SyncNewTimeOffRequestsUseCase:
         Mapea un estado de solicitud de Humand a un estado de Odoo.
         
         Humand States → Odoo States:
-        - IN_PROGRESS → confirm (esperando aprobación)
+        - IN_PROGRESS → draft (esperando aprobación)
         - APPROVED → validate (aprobado)
         - REJECTED → refuse (rechazado)
         
@@ -312,5 +366,109 @@ class SyncNewTimeOffRequestsUseCase:
         )
         
         return odoo_state
+    
+    def _update_odoo_request_state(
+        self, odoo_request_id: int, new_state: str
+    ) -> bool:
+        """
+        Actualiza solo el estado de una solicitud en Odoo.
+        
+        Args:
+            odoo_request_id: ID de la solicitud en Odoo
+            new_state: Nuevo estado a aplicar (confirm, validate, refuse)
+            
+        Returns:
+            bool: True si la actualización fue exitosa, False en caso contrario
+        """
+        try:
+            logger.info(
+                f"Actualizando estado de solicitud Odoo ID {odoo_request_id} a '{new_state}'"
+            )
+            
+            # Llamar al método del gateway que cambia el estado
+            self.odoo_gateway.set_timeoff_request_state(odoo_request_id, new_state)
+            
+            logger.info(
+                f"Estado actualizado exitosamente: Odoo ID {odoo_request_id} → '{new_state}'"
+            )
+            return True
+            
+        except Exception as e:
+            logger.error(
+                f"Error al actualizar estado de solicitud Odoo ID {odoo_request_id}: {str(e)}"
+            )
+            return False
+    
+    def _process_single_status_update(
+        self, humand_request: HumandTimeOffRequest, result: SyncResult
+    ):
+        """
+        Procesa la actualización de estado de una solicitud individual desde Humand.
+        
+        Args:
+            humand_request: Solicitud desde Humand con estado potencialmente actualizado
+            result: Objeto para acumular resultados
+        """
+        try:
+            # 1. Buscar el mapping en la tabla de sincronización
+            mapping = self.mapping_repository.get_by_humand_id(humand_request.id)
+            
+            if not mapping:
+                logger.debug(
+                    f"Solicitud Humand ID {humand_request.id} no tiene mapping, saltando..."
+                )
+                result.add_skipped()
+                return
+            
+            # 2. Obtener el estado actual desde Odoo
+            try:
+                current_odoo_state = self.odoo_gateway.get_timeoff_request_state(
+                    mapping.odoo_request_id
+                )
+            except Exception as e:
+                error_msg = f"Error al obtener estado desde Odoo: {str(e)}"
+                logger.warning(error_msg)
+                result.add_error(humand_request.id, error_msg)
+                return
+            
+            # 3. Mapear el estado de Humand a Odoo
+            desired_odoo_state = self._map_humand_state_to_odoo(humand_request.status)
+            
+            # 4. Comparar estados
+            if current_odoo_state == desired_odoo_state:
+                logger.debug(
+                    f"Estado ya sincronizado para Humand ID {humand_request.id}: "
+                    f"Odoo '{current_odoo_state}' == Humand '{humand_request.status}' → '{desired_odoo_state}'"
+                )
+                result.add_skipped()
+                return
+            
+            # 5. Actualizar el estado en Odoo
+            logger.info(
+                f"Actualizando estado: Humand ID {humand_request.id} → "
+                f"Odoo ID {mapping.odoo_request_id} de '{current_odoo_state}' a '{desired_odoo_state}'"
+            )
+            
+            success = self._update_odoo_request_state(
+                mapping.odoo_request_id, desired_odoo_state
+            )
+            
+            if success:
+                logger.info(
+                    f"Estado actualizado exitosamente: Humand ID {humand_request.id} → "
+                    f"Odoo ID {mapping.odoo_request_id} → '{desired_odoo_state}'"
+                )
+                result.add_status_update()
+            else:
+                error_msg = "Error al actualizar estado en Odoo"
+                logger.warning(error_msg)
+                result.add_error(humand_request.id, error_msg)
+            
+        except Exception as e:
+            error_msg = f"Error inesperado al procesar actualización de estado: {str(e)}"
+            logger.error(
+                f"Error procesando actualización para Humand ID {humand_request.id}: {error_msg}"
+            )
+            result.add_error(humand_request.id, error_msg)
 
 
