@@ -297,7 +297,7 @@ class SyncNewTimeOffRequestsUseCase:
             str: Estado correspondiente en Odoo
         """
         state_mapping = {
-            "IN_PROGRESS": "confirm",  # En progreso → Esperando aprobación
+            "IN_PROGRESS": "draft",  # En progreso → Esperando aprobación
             "APPROVED": "validate",     # Aprobado → Validado/Aprobado
             "REJECTED": "refuse",       # Rechazado → Rechazado
         }
@@ -305,7 +305,7 @@ class SyncNewTimeOffRequestsUseCase:
         # Normalizar el estado (mayúsculas, sin espacios)
         normalized_state = humand_state.upper().strip()
         
-        odoo_state = state_mapping.get(normalized_state, "confirm")
+        odoo_state = state_mapping.get(normalized_state, "draft")
         
         logger.debug(
             f"Estado mapeado: Humand '{humand_state}' → Odoo '{odoo_state}'"

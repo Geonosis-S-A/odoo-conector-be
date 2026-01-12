@@ -139,45 +139,8 @@ class OdooTimeOffeGateway(TimeOffGateway):
             Exception: Si hay un error al cambiar el estado
         """
         try:
-            # Obtener el estado actual de la solicitud
-            current_state = self.get_timeoff_request_state(request_id)
             
-            # Si ya está en el estado deseado o más avanzado, no hacer nada
-            state_order = ["draft", "confirm", "validate"]
-            if state in state_order and current_state in state_order:
-                current_index = state_order.index(current_state)
-                desired_index = state_order.index(state)
-                
-                if current_index >= desired_index:
-                    # Ya está en el estado deseado o más avanzado
-                    return
-            
-            # Mapeo de estados a métodos/acciones de Odoo
-            # En Odoo, los cambios de estado se hacen mediante métodos específicos
-            
-            if state == "confirm":
-                # Confirmar la solicitud (enviar a aprobación)
-                self.odoo_connection["models"].execute_kw(
-                    self.odoo_connection["ODOO_DB"],
-                    self.odoo_connection["uid"],
-                    self.odoo_connection["ODOO_PASSWORD"],
-                    "hr.leave",
-                    "action_confirm",
-                    [[request_id]],
-                )
-            
-            elif state == "validate":
-                # Primero confirmar si no está confirmado
-                if current_state == "draft":
-                    self.odoo_connection["models"].execute_kw(
-                        self.odoo_connection["ODOO_DB"],
-                        self.odoo_connection["uid"],
-                        self.odoo_connection["ODOO_PASSWORD"],
-                        "hr.leave",
-                        "action_confirm",
-                        [[request_id]],
-                    )
-                # Luego aprobar
+            if state == "validate":
                 self.odoo_connection["models"].execute_kw(
                     self.odoo_connection["ODOO_DB"],
                     self.odoo_connection["uid"],
@@ -186,7 +149,6 @@ class OdooTimeOffeGateway(TimeOffGateway):
                     "action_approve",
                     [[request_id]],
                 )
-            
             elif state == "refuse":
                 # Rechazar la solicitud
                 self.odoo_connection["models"].execute_kw(
