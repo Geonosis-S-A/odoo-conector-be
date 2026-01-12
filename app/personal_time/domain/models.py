@@ -47,8 +47,11 @@ class TimeOffRequest:
     employee_id: int  # ID del empleado
     state: Optional[str] = None  # Estado deseado en Odoo (draft, confirm, validate, refuse, cancel)
 
-    def to_odoo_data(self) -> dict:
+    def to_odoo_data(self, include_state: bool = False) -> dict:
         """Convierte la solicitud a formato de Odoo.
+        
+        Args:
+            include_state: Si True, incluye el campo state (solo para referencia, no para create)
 
         Returns:
             dict: Datos en formato esperado por Odoo hr.leave
@@ -61,9 +64,8 @@ class TimeOffRequest:
             "employee_id": self.employee_id,
         }
         
-        # Agregar estado si se especificó
-        if self.state:
-            data["state"] = self.state
+        # NO incluir estado en create() - se debe cambiar después con métodos de acción
+        # El estado se guarda en el objeto pero no se pasa a Odoo en el create
         
         return data
 

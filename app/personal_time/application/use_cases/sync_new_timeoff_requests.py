@@ -238,11 +238,12 @@ class SyncNewTimeOffRequestsUseCase:
             logger.error(
                 f"Error procesando solicitud {humand_request.id}: {error_msg}"
             )
+            print("EL USUARIO SOLICITANTE ES: ", humand_request.user_email, "Y EL TIEMPO PERSONAL SOLICITADO ES: ", humand_request.from_date, "HASTA: ", humand_request.to_date, "PARA EL TIPO DE LICENCIA: ", humand_request.policy_type_name)
             result.add_error(humand_request.id, error_msg)
     
     def _map_policy_type_to_odoo(
         self, policy_type_id: str, policy_type_name: str
-    ) -> Optional[int]: #TODO: revisar mapeo por nombres de policy(funciona pero hay nombres que no coinciden).
+    ) -> Optional[int]:
         """
         Mapea un tipo de política de Humand a un tipo de licencia en Odoo.
         
@@ -257,17 +258,20 @@ class SyncNewTimeOffRequestsUseCase:
             Optional[int]: ID del tipo de licencia en Odoo, o None si no se encuentra
         """
         try:
+            # Limpiar el nombre (trim espacios) para evitar problemas de mapeo
+            clean_name = policy_type_name.strip()
+            
             # Buscar el tipo de licencia en Odoo por nombre exacto
-            timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(policy_type_name)
+            timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(clean_name)
             
             if timeoff_type:
                 logger.debug(
-                    f"Tipo de licencia mapeado: '{policy_type_name}' -> ID {timeoff_type.id}"
+                    f"Tipo de licencia mapeado: '{clean_name}' -> ID {timeoff_type.id}"
                 )
                 return timeoff_type.id
             
             logger.warning(
-                f"No se encontró tipo de licencia en Odoo con nombre: '{policy_type_name}'"
+                f"No se encontró tipo de licencia en Odoo con nombre: '{clean_name}'"
             )
             return None
             

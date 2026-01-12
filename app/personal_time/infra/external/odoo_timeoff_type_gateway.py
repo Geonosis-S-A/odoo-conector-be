@@ -97,10 +97,11 @@ class OdooTimeOffeGateway(TimeOffGateway):
         """
         try:
             # Convertir la solicitud al formato esperado por Odoo
-            odoo_data = timeoff_request.to_odoo_data()
+            # NO incluir el estado en el create - se aplicará después
+            odoo_data = timeoff_request.to_odoo_data(include_state=False)
             
-            # Guardar el estado deseado antes de eliminar del dict
-            desired_state = odoo_data.pop("state", None)
+            # Guardar el estado deseado del objeto
+            desired_state = timeoff_request.state
 
             # Ejecutar la creación en Odoo usando el modelo hr.leave
             # Se crea en estado draft por defecto
@@ -117,8 +118,8 @@ class OdooTimeOffeGateway(TimeOffGateway):
             if not isinstance(request_id, int) or request_id <= 0:
                 raise Exception(f"Respuesta inválida de Odoo: ID={request_id}")
 
-            # Aplicar el estado deseado si se especificó
-            if desired_state:
+            # Aplicar el estado deseado si se especificó y no es draft (que ya lo está)
+            if desired_state and desired_state != "draft":
                 self._set_timeoff_request_state(request_id, desired_state)
 
             return TimeOffRequestResult.success_result(request_id)
@@ -138,6 +139,19 @@ class OdooTimeOffeGateway(TimeOffGateway):
             Exception: Si hay un error al cambiar el estado
         """
         try:
+            # Obtener el estado actual de la solicitud
+            current_state = self.get_timeoff_request_state(request_id)
+            
+            # Si ya está en el estado deseado o más avanzado, no hacer nada
+            state_order = ["draft", "confirm", "validate"]
+            if state in state_order and current_state in state_order:
+                current_index = state_order.index(current_state)
+                desired_index = state_order.index(state)
+                
+                if current_index >= desired_index:
+                    # Ya está en el estado deseado o más avanzado
+                    return
+            
             # Mapeo de estados a métodos/acciones de Odoo
             # En Odoo, los cambios de estado se hacen mediante métodos específicos
             
@@ -153,15 +167,16 @@ class OdooTimeOffeGateway(TimeOffGateway):
                 )
             
             elif state == "validate":
-                # Primero confirmar
-                self.odoo_connection["models"].execute_kw(
-                    self.odoo_connection["ODOO_DB"],
-                    self.odoo_connection["uid"],
-                    self.odoo_connection["ODOO_PASSWORD"],
-                    "hr.leave",
-                    "action_confirm",
-                    [[request_id]],
-                )
+                # Primero confirmar si no está confirmado
+                if current_state == "draft":
+                    self.odoo_connection["models"].execute_kw(
+                        self.odoo_connection["ODOO_DB"],
+                        self.odoo_connection["uid"],
+                        self.odoo_connection["ODOO_PASSWORD"],
+                        "hr.leave",
+                        "action_confirm",
+                        [[request_id]],
+                    )
                 # Luego aprobar
                 self.odoo_connection["models"].execute_kw(
                     self.odoo_connection["ODOO_DB"],

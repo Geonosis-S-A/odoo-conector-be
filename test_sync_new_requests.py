@@ -27,7 +27,7 @@ def main():
     # Fecha de prueba: usar una fecha histórica real (2024)
     # para evitar problemas con fechas futuras en el API de Humand
     from datetime import timedelta
-    search_from = date(2024, 12, 1)  # Diciembre 2024
+    search_from = date(2026, 1, 12)  # Diciembre 2024
     created_at_since = datetime.combine(search_from, datetime.min.time())
     
     print(f"\nBuscando solicitudes creadas desde: {search_from}")
