@@ -58,7 +58,8 @@ class SyncResult:
             f"Errores: {self.errors_count}"
         )
 
-#TODO: REVISAR CONFIGURACION DE LIMITES Y PAGINACION, SE DEBE DETERMINAR CUAL VA A SER LA CONSULTA FIJA QUE VA A HACER EL JOB SIEMPRE, REVISAR PARAMETROS PARA CONSULTAR AL HUMAND_GATEWAY
+
+#TODO: ALMACENAR CADA RUN DEL JOB EN LA TABLA DE LOG DE SINCRONIZACIONES
 class SyncNewTimeOffRequestsUseCase:
     """
     Caso de uso para sincronizar nuevas solicitudes de licencias desde Humand a Odoo.
@@ -149,14 +150,10 @@ class SyncNewTimeOffRequestsUseCase:
 
             created_date = created_at_since.date() if created_at_since else None
             
-            requests = self.humand_gateway.get_all_timeoff_requests(
-                page=1,
-                limit=100,  
-                states=None,  
+            requests = self.humand_gateway.get_all_timeoff_requests( 
                 created_at_since=created_date,
             )
         
-            print("DATA DE HUMAND: ", requests)
             return requests
             
         except Exception as e:
@@ -202,15 +199,19 @@ class SyncNewTimeOffRequestsUseCase:
                 result.add_error(humand_request.id, error_msg)
                 return
             
+            # Mapear el estado de Humand a Odoo
+            odoo_state = self._map_humand_state_to_odoo(humand_request.status)
+            
             odoo_request = TimeOffRequest(
                 holiday_status_id=odoo_holiday_status_id,
                 name=humand_request.reason or f"Licencia desde Humand: {humand_request.policy_type_name}",
                 request_date_from=humand_request.from_date,
                 request_date_to=humand_request.to_date,
                 employee_id=employee.id,
+                state=odoo_state,  # Estado mapeado desde Humand
             )
             
-            odoo_result = self.odoo_gateway.create_timeoff_request(odoo_request) # TODO:cambiar, esto debe crear el timeoff request con el mismo estado que el de humand
+            odoo_result = self.odoo_gateway.create_timeoff_request(odoo_request)
             
             if not odoo_result.success or not odoo_result.request_id:
                 error_msg = f"Error al crear en Odoo: {odoo_result.message}"
@@ -275,5 +276,37 @@ class SyncNewTimeOffRequestsUseCase:
                 f"Error al mapear tipo de licencia '{policy_type_name}': {str(e)}"
             )
             return None
+    
+    def _map_humand_state_to_odoo(self, humand_state: str) -> str:
+        """
+        Mapea un estado de solicitud de Humand a un estado de Odoo.
+        
+        Humand States → Odoo States:
+        - IN_PROGRESS → confirm (esperando aprobación)
+        - APPROVED → validate (aprobado)
+        - REJECTED → refuse (rechazado)
+        
+        Args:
+            humand_state: Estado de la solicitud en Humand
+            
+        Returns:
+            str: Estado correspondiente en Odoo
+        """
+        state_mapping = {
+            "IN_PROGRESS": "confirm",  # En progreso → Esperando aprobación
+            "APPROVED": "validate",     # Aprobado → Validado/Aprobado
+            "REJECTED": "refuse",       # Rechazado → Rechazado
+        }
+        
+        # Normalizar el estado (mayúsculas, sin espacios)
+        normalized_state = humand_state.upper().strip()
+        
+        odoo_state = state_mapping.get(normalized_state, "confirm")
+        
+        logger.debug(
+            f"Estado mapeado: Humand '{humand_state}' → Odoo '{odoo_state}'"
+        )
+        
+        return odoo_state
 
 

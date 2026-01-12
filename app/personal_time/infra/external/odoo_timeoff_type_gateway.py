@@ -84,7 +84,7 @@ class OdooTimeOffeGateway(TimeOffGateway):
     def create_timeoff_request(
         self, timeoff_request: TimeOffRequest
     ) -> TimeOffRequestResult:
-        """Crea una nueva solicitud de licencia en Odoo.
+        """Crea una nueva solicitud de licencia en Odoo con el estado especificado.
 
         Args:
             timeoff_request: Solicitud de licencia a crear
@@ -98,8 +98,12 @@ class OdooTimeOffeGateway(TimeOffGateway):
         try:
             # Convertir la solicitud al formato esperado por Odoo
             odoo_data = timeoff_request.to_odoo_data()
+            
+            # Guardar el estado deseado antes de eliminar del dict
+            desired_state = odoo_data.pop("state", None)
 
             # Ejecutar la creación en Odoo usando el modelo hr.leave
+            # Se crea en estado draft por defecto
             request_id = self.odoo_connection["models"].execute_kw(
                 self.odoo_connection["ODOO_DB"],
                 self.odoo_connection["uid"],
@@ -113,11 +117,81 @@ class OdooTimeOffeGateway(TimeOffGateway):
             if not isinstance(request_id, int) or request_id <= 0:
                 raise Exception(f"Respuesta inválida de Odoo: ID={request_id}")
 
+            # Aplicar el estado deseado si se especificó
+            if desired_state:
+                self._set_timeoff_request_state(request_id, desired_state)
+
             return TimeOffRequestResult.success_result(request_id)
 
         except Exception as e:
             # Propagar directamente el error original
             raise
+    
+    def _set_timeoff_request_state(self, request_id: int, state: str):
+        """Cambia el estado de una solicitud de licencia en Odoo.
+        
+        Args:
+            request_id: ID de la solicitud en Odoo
+            state: Estado deseado (draft, confirm, validate, refuse, cancel)
+            
+        Raises:
+            Exception: Si hay un error al cambiar el estado
+        """
+        try:
+            # Mapeo de estados a métodos/acciones de Odoo
+            # En Odoo, los cambios de estado se hacen mediante métodos específicos
+            
+            if state == "confirm":
+                # Confirmar la solicitud (enviar a aprobación)
+                self.odoo_connection["models"].execute_kw(
+                    self.odoo_connection["ODOO_DB"],
+                    self.odoo_connection["uid"],
+                    self.odoo_connection["ODOO_PASSWORD"],
+                    "hr.leave",
+                    "action_confirm",
+                    [[request_id]],
+                )
+            
+            elif state == "validate":
+                # Primero confirmar
+                self.odoo_connection["models"].execute_kw(
+                    self.odoo_connection["ODOO_DB"],
+                    self.odoo_connection["uid"],
+                    self.odoo_connection["ODOO_PASSWORD"],
+                    "hr.leave",
+                    "action_confirm",
+                    [[request_id]],
+                )
+                # Luego aprobar
+                self.odoo_connection["models"].execute_kw(
+                    self.odoo_connection["ODOO_DB"],
+                    self.odoo_connection["uid"],
+                    self.odoo_connection["ODOO_PASSWORD"],
+                    "hr.leave",
+                    "action_approve",
+                    [[request_id]],
+                )
+            
+            elif state == "refuse":
+                # Rechazar la solicitud
+                self.odoo_connection["models"].execute_kw(
+                    self.odoo_connection["ODOO_DB"],
+                    self.odoo_connection["uid"],
+                    self.odoo_connection["ODOO_PASSWORD"],
+                    "hr.leave",
+                    "action_refuse",
+                    [[request_id]],
+                )
+            
+            elif state == "draft":
+                # Ya se crea en draft por defecto, no hacer nada
+                pass
+            
+            else:
+                raise ValueError(f"Estado no soportado: {state}")
+                
+        except Exception as e:
+            raise Exception(f"Error al cambiar estado de solicitud a '{state}': {str(e)}")
 
     def update_timeoff_request(
         self, request_id: int, timeoff_request: TimeOffRequest

@@ -45,6 +45,7 @@ class TimeOffRequest:
     request_date_from: date  # Fecha de inicio
     request_date_to: date  # Fecha de fin
     employee_id: int  # ID del empleado
+    state: Optional[str] = None  # Estado deseado en Odoo (draft, confirm, validate, refuse, cancel)
 
     def to_odoo_data(self) -> dict:
         """Convierte la solicitud a formato de Odoo.
@@ -52,13 +53,19 @@ class TimeOffRequest:
         Returns:
             dict: Datos en formato esperado por Odoo hr.leave
         """
-        return {
+        data = {
             "holiday_status_id": self.holiday_status_id,
             "name": self.name or "",
             "request_date_from": self.request_date_from.strftime("%Y-%m-%d"),
             "request_date_to": self.request_date_to.strftime("%Y-%m-%d"),
             "employee_id": self.employee_id,
         }
+        
+        # Agregar estado si se especificó
+        if self.state:
+            data["state"] = self.state
+        
+        return data
 
 
 @dataclass
