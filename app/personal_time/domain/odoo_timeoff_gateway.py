@@ -9,7 +9,7 @@ from app.personal_time.domain.models import (
 )
 
 
-class TimeOffGateway(ABC):
+class OdooTimeOffGateway(ABC):
     """Gateway abstracto para operaciones con tipos de licencias."""
 
     @abstractmethod

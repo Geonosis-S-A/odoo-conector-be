@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import date
-from app.personal_time.domain.gateway import TimeOffGateway
+from app.personal_time.domain.odoo_timeoff_gateway import OdooTimeOffGateway
 from app.personal_time.domain.models import (
     TimeOffType,
     TimeOffRequest,
@@ -10,7 +10,7 @@ from app.personal_time.domain.models import (
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
 
 
-class OdooTimeOffeGateway(TimeOffGateway):
+class OdooTimeOffeGateway(OdooTimeOffGateway):
     """Implementación del gateway para tipos de licencias usando Odoo."""
 
     def __init__(self, odoo_connection: OdooConnection):
