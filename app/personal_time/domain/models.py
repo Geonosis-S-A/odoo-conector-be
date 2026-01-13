@@ -306,6 +306,7 @@ class TimeOffSyncLog:
     errors_count: int = 0
     error_message: Optional[str] = None
     execution_time_seconds: Optional[float] = None
+    run_details: Optional[dict] = None  # Detalles completos de la ejecución en formato JSON
     id: Optional[int] = None  # ID en la base de datos local
     
     @classmethod

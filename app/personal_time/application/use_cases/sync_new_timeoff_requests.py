@@ -113,27 +113,19 @@ class SyncNewTimeOffRequestsUseCase:
         """
         result = SyncResult()
         
-        logger.info(
-            f"Iniciando sincronización de nuevas solicitudes desde: "
-            f"{created_at_since or 'inicio'}"
-        )
-        
         try:
 
             humand_requests = self._fetch_new_requests_from_humand(
                 created_at_since
             )
             
-            logger.info(f"Obtenidas {len(humand_requests)} solicitudes desde Humand")
             
             # 2. Procesar cada solicitud
             for humand_request in humand_requests:
                 self._process_single_request(humand_request, result)
             
-            logger.info(f"Sincronización completada: {result.get_summary()}")
             
         except Exception as e:
-            logger.error(f"Error general en la sincronización: {str(e)}")
             raise
         
         return result
@@ -158,11 +150,6 @@ class SyncNewTimeOffRequestsUseCase:
         """
         result = SyncResult()
         
-        logger.info(
-            f"Iniciando sincronización de estados desde: "
-            f"{resolution_from_date or 'inicio'}"
-        )
-        
         try:
             # 1. Obtener solicitudes modificadas desde Humand
             resolution_date = resolution_from_date.date() if resolution_from_date else None
@@ -171,20 +158,11 @@ class SyncNewTimeOffRequestsUseCase:
                 resolution_from_date=resolution_date
             )
             
-            logger.info(
-                f"Obtenidas {len(humand_requests)} solicitudes modificadas desde Humand"
-            )
-            
             # 2. Procesar cada solicitud para actualizar su estado
             for humand_request in humand_requests:
                 self._process_single_status_update(humand_request, result)
             
-            logger.info(
-                f"Sincronización de estados completada: {result.get_summary()}"
-            )
-            
         except Exception as e:
-            logger.error(f"Error general en la sincronización de estados: {str(e)}")
             raise
         
         return result
@@ -215,7 +193,6 @@ class SyncNewTimeOffRequestsUseCase:
             return requests
             
         except Exception as e:
-            logger.error(f"Error al obtener solicitudes desde Humand: {str(e)}")
             raise Exception(f"Error al consultar Humand API: {str(e)}")
     
     def _process_single_request(
@@ -231,9 +208,6 @@ class SyncNewTimeOffRequestsUseCase:
         try:
             # 1. Verificar si ya existe en la BD
             if self.mapping_repository.exists_by_humand_id(humand_request.id):
-                logger.debug(
-                    f"Solicitud {humand_request.id} ya existe, saltando..."
-                )
                 result.add_skipped()
                 return
             
@@ -241,8 +215,12 @@ class SyncNewTimeOffRequestsUseCase:
             employee = self.employee_gateway.get_by_email(humand_request.user_email)
             
             if not employee:
-                error_msg = f"Empleado no encontrado en Odoo para email: {humand_request.user_email}"
-                logger.warning(error_msg)
+                error_msg = (
+                    f"Empleado no encontrado en Odoo | "
+                    f"Email: {humand_request.user_email} | "
+                    f"Nombre: {humand_request.user_name} | "
+                    f"Humand User ID: {humand_request.user_id}"
+                )
                 result.add_error(humand_request.id, error_msg)
                 return
             
@@ -252,8 +230,12 @@ class SyncNewTimeOffRequestsUseCase:
             )
             
             if not odoo_holiday_status_id:
-                error_msg = f"No se pudo mapear tipo de licencia: {humand_request.policy_type_name}"
-                logger.warning(error_msg)
+                error_msg = (
+                    f"No se pudo mapear tipo de licencia | "
+                    f"Tipo en Humand: '{humand_request.policy_type_name}' | "
+                    f"ID Humand: {humand_request.policy_type_id} | "
+                    f"Sugerencia: Verificar que el tipo de licencia existe en Odoo con ese nombre exacto"
+                )
                 result.add_error(humand_request.id, error_msg)
                 return
             
@@ -272,8 +254,13 @@ class SyncNewTimeOffRequestsUseCase:
             odoo_result = self.odoo_gateway.create_timeoff_request(odoo_request)
             
             if not odoo_result.success or not odoo_result.request_id:
-                error_msg = f"Error al crear en Odoo: {odoo_result.message}"
-                logger.warning(error_msg)
+                error_msg = (
+                    f"Error al crear en Odoo | "
+                    f"Mensaje: {odoo_result.message} | "
+                    f"Usuario: {humand_request.user_email} | "
+                    f"Fechas: {humand_request.from_date} a {humand_request.to_date} | "
+                    f"Tipo: {humand_request.policy_type_name}"
+                )
                 result.add_error(humand_request.id, error_msg)
                 return
             
@@ -285,17 +272,40 @@ class SyncNewTimeOffRequestsUseCase:
             
             self.mapping_repository.save(mapping)
             
-            logger.info(
-                f"Solicitud sincronizada: Humand ID {humand_request.id} -> "
-                f"Odoo ID {odoo_result.request_id}"
-            )
             result.add_success()
             
         except Exception as e:
-            error_msg = f"Error inesperado: {str(e)}"
-            logger.error(
-                f"Error procesando solicitud {humand_request.id}: {error_msg}"
-            )
+            # Capturar información detallada del error
+            import traceback
+            from xmlrpc.client import Fault
+            
+            error_type = type(e).__name__
+            error_detail = str(e)
+            error_traceback = traceback.format_exc()
+            
+            # Si es un Fault de Odoo, extraer información específica
+            if isinstance(e, Fault):
+                fault_code = e.faultCode
+                fault_string = e.faultString
+                error_msg = (
+                    f"Error de Odoo (Código {fault_code}) | "
+                    f"Mensaje: {fault_string} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Fechas: {humand_request.from_date} a {humand_request.to_date} | "
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id}) | "
+                    f"Estado Humand: {humand_request.status}"
+                )
+            else:
+                error_msg = (
+                    f"Error {error_type}: {error_detail} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Fechas: {humand_request.from_date} a {humand_request.to_date} | "
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id}) | "
+                    f"Estado Humand: {humand_request.status}"
+                )
+            
             result.add_error(humand_request.id, error_msg)
     
     def _map_policy_type_to_odoo(
@@ -319,20 +329,11 @@ class SyncNewTimeOffRequestsUseCase:
             timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(policy_type_name)
             
             if timeoff_type:
-                logger.debug(
-                    f"Tipo de licencia mapeado: '{policy_type_name}' -> ID {timeoff_type.id}"
-                )
                 return timeoff_type.id
             
-            logger.warning(
-                f"No se encontró tipo de licencia en Odoo con nombre: '{policy_type_name}'"
-            )
             return None
             
         except Exception as e:
-            logger.error(
-                f"Error al mapear tipo de licencia '{policy_type_name}': {str(e)}"
-            )
             return None
     
     def _map_humand_state_to_odoo(self, humand_state: str) -> str:
@@ -361,10 +362,6 @@ class SyncNewTimeOffRequestsUseCase:
         
         odoo_state = state_mapping.get(normalized_state, "draft")
         
-        logger.debug(
-            f"Estado mapeado: Humand '{humand_state}' → Odoo '{odoo_state}'"
-        )
-        
         return odoo_state
     
     def _update_odoo_request_state(
@@ -381,22 +378,12 @@ class SyncNewTimeOffRequestsUseCase:
             bool: True si la actualización fue exitosa, False en caso contrario
         """
         try:
-            logger.info(
-                f"Actualizando estado de solicitud Odoo ID {odoo_request_id} a '{new_state}'"
-            )
-            
             # Llamar al método del gateway que cambia el estado
             self.odoo_gateway.set_timeoff_request_state(odoo_request_id, new_state)
             
-            logger.info(
-                f"Estado actualizado exitosamente: Odoo ID {odoo_request_id} → '{new_state}'"
-            )
             return True
             
         except Exception as e:
-            logger.error(
-                f"Error al actualizar estado de solicitud Odoo ID {odoo_request_id}: {str(e)}"
-            )
             return False
     
     def _process_single_status_update(
@@ -409,14 +396,12 @@ class SyncNewTimeOffRequestsUseCase:
             humand_request: Solicitud desde Humand con estado potencialmente actualizado
             result: Objeto para acumular resultados
         """
+        mapping = None  # Inicializar para evitar "possibly unbound"
         try:
             # 1. Buscar el mapping en la tabla de sincronización
             mapping = self.mapping_repository.get_by_humand_id(humand_request.id)
             
             if not mapping:
-                logger.debug(
-                    f"Solicitud Humand ID {humand_request.id} no tiene mapping, saltando..."
-                )
                 result.add_skipped()
                 return
             
@@ -426,8 +411,32 @@ class SyncNewTimeOffRequestsUseCase:
                     mapping.odoo_request_id
                 )
             except Exception as e:
-                error_msg = f"Error al obtener estado desde Odoo: {str(e)}"
-                logger.warning(error_msg)
+                import traceback
+                from xmlrpc.client import Fault
+                
+                error_type = type(e).__name__
+                
+                # Si es un Fault de Odoo, extraer información específica
+                if isinstance(e, Fault):
+                    fault_code = e.faultCode
+                    fault_string = e.faultString
+                    error_msg = (
+                        f"Error de Odoo al obtener estado (Código {fault_code}) | "
+                        f"Mensaje: {fault_string} | "
+                        f"Odoo ID: {mapping.odoo_request_id} | "
+                        f"Humand ID: {humand_request.id} | "
+                        f"Usuario: {humand_request.user_name} ({humand_request.user_email})"
+                    )
+                else:
+                    error_msg = (
+                        f"Error al obtener estado desde Odoo | "
+                        f"Tipo: {error_type} | "
+                        f"Detalle: {str(e)} | "
+                        f"Odoo ID: {mapping.odoo_request_id} | "
+                        f"Humand ID: {humand_request.id} | "
+                        f"Usuario: {humand_request.user_name} ({humand_request.user_email})"
+                    )
+                
                 result.add_error(humand_request.id, error_msg)
                 return
             
@@ -436,39 +445,59 @@ class SyncNewTimeOffRequestsUseCase:
             
             # 4. Comparar estados
             if current_odoo_state == desired_odoo_state:
-                logger.debug(
-                    f"Estado ya sincronizado para Humand ID {humand_request.id}: "
-                    f"Odoo '{current_odoo_state}' == Humand '{humand_request.status}' → '{desired_odoo_state}'"
-                )
                 result.add_skipped()
                 return
             
             # 5. Actualizar el estado en Odoo
-            logger.info(
-                f"Actualizando estado: Humand ID {humand_request.id} → "
-                f"Odoo ID {mapping.odoo_request_id} de '{current_odoo_state}' a '{desired_odoo_state}'"
-            )
-            
             success = self._update_odoo_request_state(
                 mapping.odoo_request_id, desired_odoo_state
             )
             
             if success:
-                logger.info(
-                    f"Estado actualizado exitosamente: Humand ID {humand_request.id} → "
-                    f"Odoo ID {mapping.odoo_request_id} → '{desired_odoo_state}'"
-                )
                 result.add_status_update()
             else:
-                error_msg = "Error al actualizar estado en Odoo"
-                logger.warning(error_msg)
+                error_msg = (
+                    f"Error al actualizar estado en Odoo | "
+                    f"Estado actual: '{current_odoo_state}' | "
+                    f"Estado deseado: '{desired_odoo_state}' | "
+                    f"Odoo ID: {mapping.odoo_request_id} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id})"
+                )
                 result.add_error(humand_request.id, error_msg)
             
         except Exception as e:
-            error_msg = f"Error inesperado al procesar actualización de estado: {str(e)}"
-            logger.error(
-                f"Error procesando actualización para Humand ID {humand_request.id}: {error_msg}"
-            )
+            import traceback
+            from xmlrpc.client import Fault
+            
+            error_type = type(e).__name__
+            error_detail = str(e)
+            error_traceback = traceback.format_exc()
+            
+            # Si es un Fault de Odoo, extraer información específica
+            if isinstance(e, Fault):
+                fault_code = e.faultCode
+                fault_string = e.faultString
+                error_msg = (
+                    f"Error de Odoo al actualizar estado (Código {fault_code}) | "
+                    f"Mensaje: {fault_string} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Estado Humand: {humand_request.status} | "
+                    f"Odoo ID: {mapping.odoo_request_id if mapping else 'N/A'}"
+                )
+            else:
+                error_msg = (
+                    f"Error al actualizar estado | "
+                    f"Tipo: {error_type} | "
+                    f"Detalle: {error_detail} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Estado Humand: {humand_request.status} | "
+                    f"Odoo ID: {mapping.odoo_request_id if mapping else 'N/A'}"
+                )
+            
             result.add_error(humand_request.id, error_msg)
 
 

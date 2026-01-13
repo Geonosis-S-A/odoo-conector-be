@@ -4,7 +4,7 @@ Modelos de base de datos para sincronización de tiempo personal entre Humand y 
 from datetime import datetime, UTC
 from typing import Optional
 from sqlmodel import SQLModel, Field, Column
-from sqlalchemy import String, event, UniqueConstraint, Index
+from sqlalchemy import String, event, UniqueConstraint, Index, JSON as JSONType
 
 
 class TimeOffSyncMappingModel(SQLModel, table=True):
@@ -95,6 +95,12 @@ class TimeOffSyncLogModel(SQLModel, table=True):
     
     # Metadata adicional
     execution_time_seconds: Optional[float] = Field(default=None)
+    
+    # Detalles completos de la ejecución en formato JSON
+    run_details: Optional[dict] = Field(
+        default=None,
+        sa_column=Column(JSONType, nullable=True)
+    )
 
 
 # Event listeners para actualizar automáticamente el campo updated_at
