@@ -48,8 +48,6 @@ from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 
 import logging
 
-logger = logging.getLogger(__name__)
-
 
 router = APIRouter(prefix="/timeoff", tags=["timeoff"])
 
@@ -357,33 +355,21 @@ async def sync_timeoff_requests(
         status_updates_result = None
         
         try:
-            logger.info(f"[Run {sync_log.id}] Iniciando sincronización de nuevas solicitudes")
             new_requests_result = use_case.execute(created_at_since=last_successful_run)
             sync_log.new_requests_synced = new_requests_result.successfully_synced
-            logger.info(
-                f"[Run {sync_log.id}] Nuevas solicitudes sincronizadas: "
-                f"{new_requests_result.successfully_synced}"
-            )
         except Exception as e:
             error_msg = f"Error en sincronización de nuevas solicitudes: {str(e)}"
-            logger.error(f"[Run {sync_log.id}] {error_msg}")
             sync_log.errors_count += 1
             sync_log.error_message = error_msg
         
         # 2. Sincronizar actualizaciones de estado (desde la última ejecución exitosa)
         try:
-            logger.info(f"[Run {sync_log.id}] Iniciando sincronización de estados")
             status_updates_result = use_case.execute_status_sync(
                 resolution_from_date=last_successful_run
             )
             sync_log.status_updates_synced = status_updates_result.status_updates_count
-            logger.info(
-                f"[Run {sync_log.id}] Estados actualizados: "
-                f"{status_updates_result.status_updates_count}"
-            )
         except Exception as e:
             error_msg = f"Error en sincronización de estados: {str(e)}"
-            logger.error(f"[Run {sync_log.id}] {error_msg}")
             sync_log.errors_count += 1
             if sync_log.error_message:
                 sync_log.error_message += f" | {error_msg}"
@@ -477,7 +463,6 @@ async def sync_timeoff_requests(
     except Exception as e:
         # Error crítico - marcar como error
         error_msg = f"Error crítico en sincronización: {str(e)}"
-        logger.error(f"[Run {sync_log.id}] {error_msg}")
         sync_log.mark_as_error(error_msg)
         sync_log.run_details = {
             "critical_error": str(e),

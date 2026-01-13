@@ -59,7 +59,6 @@ app = FastAPI(
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Error inesperado: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": "Ocurrió un error inesperado. Intenta más tarde."},
