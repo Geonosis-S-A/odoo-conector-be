@@ -13,6 +13,7 @@ from app.task.api.routers import router as task_router
 from app.auth.api.routes import router as auth_router
 from app.email.api.routes import router as email_router
 from app.dashboard.api.routers import router as dashboard_router
+from app.personal_time.api.routers import router as personal_time_router
 from app.employee_price.api.routers import router as employee_price_router
 from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
@@ -63,7 +64,6 @@ app = FastAPI(
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Error inesperado: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": "Ocurrió un error inesperado. Intenta más tarde."},
@@ -123,6 +123,7 @@ app.include_router(task_router, prefix=API_PREFIX + "/tasks")
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(email_router, prefix=API_PREFIX)
 app.include_router(dashboard_router, prefix=API_PREFIX)
+app.include_router(personal_time_router, prefix=API_PREFIX)
 app.include_router(employee_price_router, prefix=API_PREFIX)
 app.include_router(accounting_router, prefix=API_PREFIX)
 app.include_router(agent_router, prefix=API_PREFIX)

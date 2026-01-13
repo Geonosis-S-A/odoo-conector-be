@@ -11,6 +11,10 @@ from app.auth.infra.db.models import (
     RefreshTokenModel,
     OTPModel,
 )  # Hay que importar los modelos que se van a usar para que los detecte, en env.py
+from app.personal_time.infra.db.models import (
+    TimeOffSyncMappingModel,
+    TimeOffSyncLogModel,
+)
 from app.employee_price.infra.db.models import EmployeePriceModel
 from app.saved_prompts.infra.db.models import SavedPromptModel
 from app.shared.infra.db.config import settings
