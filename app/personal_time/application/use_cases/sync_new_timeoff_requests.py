@@ -10,7 +10,7 @@ from datetime import datetime
 import logging
 
 from app.personal_time.domain.humand_gateway import HumandGateway
-from app.personal_time.domain.gateway import TimeOffGateway
+from app.personal_time.domain.odoo_timeoff_gateway import OdooTimeOffGateway
 from app.personal_time.domain.repositories import TimeOffSyncMappingRepository
 from app.personal_time.domain.models import (
     HumandTimeOffRequest,
@@ -78,7 +78,7 @@ class SyncNewTimeOffRequestsUseCase:
     def __init__(
         self,
         humand_gateway: HumandGateway,
-        odoo_gateway: TimeOffGateway,
+        odoo_gateway: OdooTimeOffGateway,
         employee_gateway: EmployeeGateway,
         mapping_repository: TimeOffSyncMappingRepository,
     ):
