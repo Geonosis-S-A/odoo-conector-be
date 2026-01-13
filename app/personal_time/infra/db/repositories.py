@@ -54,8 +54,8 @@ class SQLModelTimeOffSyncMappingRepository(TimeOffSyncMappingRepository):
             humand_user_email=domain.humand_user_email,
             odoo_employee_id=domain.odoo_employee_id,
             sync_status=domain.sync_status,
-            created_at=domain.created_at,
-            updated_at=domain.updated_at,
+            created_at=domain.created_at or datetime.now(),
+            updated_at=domain.updated_at or datetime.now(),
             last_sync_error=domain.last_sync_error,
         )
 
@@ -159,6 +159,7 @@ class SQLModelTimeOffSyncLogRepository(TimeOffSyncLogRepository):
             errors_count=model.errors_count,
             error_message=model.error_message,
             execution_time_seconds=model.execution_time_seconds,
+            run_details=model.run_details,
         )
 
     def _domain_to_model(self, domain: TimeOffSyncLog) -> TimeOffSyncLogModel:
@@ -174,6 +175,7 @@ class SQLModelTimeOffSyncLogRepository(TimeOffSyncLogRepository):
             errors_count=domain.errors_count,
             error_message=domain.error_message,
             execution_time_seconds=domain.execution_time_seconds,
+            run_details=domain.run_details,
         )
 
     def save(self, log: TimeOffSyncLog) -> TimeOffSyncLog:
@@ -204,6 +206,7 @@ class SQLModelTimeOffSyncLogRepository(TimeOffSyncLogRepository):
         model.errors_count = log.errors_count
         model.error_message = log.error_message
         model.execution_time_seconds = log.execution_time_seconds
+        model.run_details = log.run_details
 
         self.db.commit()
         self.db.refresh(model)
@@ -217,7 +220,7 @@ class SQLModelTimeOffSyncLogRepository(TimeOffSyncLogRepository):
             .order_by(TimeOffSyncLogModel.started_at.desc())  # type: ignore
         )
         model = self.db.exec(statement).first()
-        return model.started_at if model else None
+        return model.started_at if model else datetime.now()
 
     def get_by_id(self, log_id: int) -> Optional[TimeOffSyncLog]:
         """Busca un log por su ID."""

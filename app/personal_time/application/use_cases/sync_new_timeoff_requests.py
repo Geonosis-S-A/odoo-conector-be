@@ -241,7 +241,12 @@ class SyncNewTimeOffRequestsUseCase:
             employee = self.employee_gateway.get_by_email(humand_request.user_email)
             
             if not employee:
-                error_msg = f"Empleado no encontrado en Odoo para email: {humand_request.user_email}"
+                error_msg = (
+                    f"Empleado no encontrado en Odoo | "
+                    f"Email: {humand_request.user_email} | "
+                    f"Nombre: {humand_request.user_name} | "
+                    f"Humand User ID: {humand_request.user_id}"
+                )
                 logger.warning(error_msg)
                 result.add_error(humand_request.id, error_msg)
                 return
@@ -252,7 +257,12 @@ class SyncNewTimeOffRequestsUseCase:
             )
             
             if not odoo_holiday_status_id:
-                error_msg = f"No se pudo mapear tipo de licencia: {humand_request.policy_type_name}"
+                error_msg = (
+                    f"No se pudo mapear tipo de licencia | "
+                    f"Tipo en Humand: '{humand_request.policy_type_name}' | "
+                    f"ID Humand: {humand_request.policy_type_id} | "
+                    f"Sugerencia: Verificar que el tipo de licencia existe en Odoo con ese nombre exacto"
+                )
                 logger.warning(error_msg)
                 result.add_error(humand_request.id, error_msg)
                 return
@@ -272,7 +282,13 @@ class SyncNewTimeOffRequestsUseCase:
             odoo_result = self.odoo_gateway.create_timeoff_request(odoo_request)
             
             if not odoo_result.success or not odoo_result.request_id:
-                error_msg = f"Error al crear en Odoo: {odoo_result.message}"
+                error_msg = (
+                    f"Error al crear en Odoo | "
+                    f"Mensaje: {odoo_result.message} | "
+                    f"Usuario: {humand_request.user_email} | "
+                    f"Fechas: {humand_request.from_date} a {humand_request.to_date} | "
+                    f"Tipo: {humand_request.policy_type_name}"
+                )
                 logger.warning(error_msg)
                 result.add_error(humand_request.id, error_msg)
                 return
@@ -292,9 +308,45 @@ class SyncNewTimeOffRequestsUseCase:
             result.add_success()
             
         except Exception as e:
-            error_msg = f"Error inesperado: {str(e)}"
+            # Capturar información detallada del error
+            import traceback
+            from xmlrpc.client import Fault
+            
+            error_type = type(e).__name__
+            error_detail = str(e)
+            error_traceback = traceback.format_exc()
+            
+            # Si es un Fault de Odoo, extraer información específica
+            if isinstance(e, Fault):
+                fault_code = e.faultCode
+                fault_string = e.faultString
+                error_msg = (
+                    f"Error de Odoo (Código {fault_code}) | "
+                    f"Mensaje: {fault_string} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Fechas: {humand_request.from_date} a {humand_request.to_date} | "
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id}) | "
+                    f"Estado Humand: {humand_request.status}"
+                )
+            else:
+                error_msg = (
+                    f"Error {error_type}: {error_detail} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Fechas: {humand_request.from_date} a {humand_request.to_date} | "
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id}) | "
+                    f"Estado Humand: {humand_request.status}"
+                )
+            
             logger.error(
-                f"Error procesando solicitud {humand_request.id}: {error_msg}"
+                f"Error procesando solicitud {humand_request.id}:\n"
+                f"  Tipo: {error_type}\n"
+                f"  Detalle: {error_detail}\n"
+                f"  Usuario: {humand_request.user_email}\n"
+                f"  Fechas: {humand_request.from_date} - {humand_request.to_date}\n"
+                f"  Tipo licencia: {humand_request.policy_type_name}\n"
+                f"  Traceback:\n{error_traceback}"
             )
             result.add_error(humand_request.id, error_msg)
     
@@ -409,6 +461,7 @@ class SyncNewTimeOffRequestsUseCase:
             humand_request: Solicitud desde Humand con estado potencialmente actualizado
             result: Objeto para acumular resultados
         """
+        mapping = None  # Inicializar para evitar "possibly unbound"
         try:
             # 1. Buscar el mapping en la tabla de sincronización
             mapping = self.mapping_repository.get_by_humand_id(humand_request.id)
@@ -426,8 +479,33 @@ class SyncNewTimeOffRequestsUseCase:
                     mapping.odoo_request_id
                 )
             except Exception as e:
-                error_msg = f"Error al obtener estado desde Odoo: {str(e)}"
-                logger.warning(error_msg)
+                import traceback
+                from xmlrpc.client import Fault
+                
+                error_type = type(e).__name__
+                
+                # Si es un Fault de Odoo, extraer información específica
+                if isinstance(e, Fault):
+                    fault_code = e.faultCode
+                    fault_string = e.faultString
+                    error_msg = (
+                        f"Error de Odoo al obtener estado (Código {fault_code}) | "
+                        f"Mensaje: {fault_string} | "
+                        f"Odoo ID: {mapping.odoo_request_id} | "
+                        f"Humand ID: {humand_request.id} | "
+                        f"Usuario: {humand_request.user_name} ({humand_request.user_email})"
+                    )
+                else:
+                    error_msg = (
+                        f"Error al obtener estado desde Odoo | "
+                        f"Tipo: {error_type} | "
+                        f"Detalle: {str(e)} | "
+                        f"Odoo ID: {mapping.odoo_request_id} | "
+                        f"Humand ID: {humand_request.id} | "
+                        f"Usuario: {humand_request.user_name} ({humand_request.user_email})"
+                    )
+                
+                logger.warning(f"{error_msg}\nTraceback: {traceback.format_exc()}")
                 result.add_error(humand_request.id, error_msg)
                 return
             
@@ -460,14 +538,56 @@ class SyncNewTimeOffRequestsUseCase:
                 )
                 result.add_status_update()
             else:
-                error_msg = "Error al actualizar estado en Odoo"
+                error_msg = (
+                    f"Error al actualizar estado en Odoo | "
+                    f"Estado actual: '{current_odoo_state}' | "
+                    f"Estado deseado: '{desired_odoo_state}' | "
+                    f"Odoo ID: {mapping.odoo_request_id} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id})"
+                )
                 logger.warning(error_msg)
                 result.add_error(humand_request.id, error_msg)
             
         except Exception as e:
-            error_msg = f"Error inesperado al procesar actualización de estado: {str(e)}"
+            import traceback
+            from xmlrpc.client import Fault
+            
+            error_type = type(e).__name__
+            error_detail = str(e)
+            error_traceback = traceback.format_exc()
+            
+            # Si es un Fault de Odoo, extraer información específica
+            if isinstance(e, Fault):
+                fault_code = e.faultCode
+                fault_string = e.faultString
+                error_msg = (
+                    f"Error de Odoo al actualizar estado (Código {fault_code}) | "
+                    f"Mensaje: {fault_string} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Estado Humand: {humand_request.status} | "
+                    f"Odoo ID: {mapping.odoo_request_id if mapping else 'N/A'}"
+                )
+            else:
+                error_msg = (
+                    f"Error al actualizar estado | "
+                    f"Tipo: {error_type} | "
+                    f"Detalle: {error_detail} | "
+                    f"Humand ID: {humand_request.id} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Estado Humand: {humand_request.status} | "
+                    f"Odoo ID: {mapping.odoo_request_id if mapping else 'N/A'}"
+                )
+            
             logger.error(
-                f"Error procesando actualización para Humand ID {humand_request.id}: {error_msg}"
+                f"Error procesando actualización para Humand ID {humand_request.id}:\n"
+                f"  Tipo: {error_type}\n"
+                f"  Detalle: {error_detail}\n"
+                f"  Usuario: {humand_request.user_email}\n"
+                f"  Estado Humand: {humand_request.status}\n"
+                f"  Traceback:\n{error_traceback}"
             )
             result.add_error(humand_request.id, error_msg)
 
