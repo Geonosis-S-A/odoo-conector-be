@@ -86,6 +86,19 @@ class TimeOffGateway(ABC):
         pass
 
     @abstractmethod
+    def set_timeoff_request_state(self, request_id: int, state: str) -> None:
+        """Cambia el estado de una solicitud de licencia.
+        
+        Args:
+            request_id: ID de la solicitud en Odoo
+            state: Estado deseado (draft, confirm, validate, refuse, cancel)
+            
+        Raises:
+            Exception: Si hay un error al cambiar el estado
+        """
+        pass
+
+    @abstractmethod
     def get_timeoff_type_by_name(self, name: str) -> Optional[TimeOffType]:
         """Busca un tipo de licencia por su nombre exacto.
         
