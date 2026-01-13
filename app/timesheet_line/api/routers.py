@@ -6,8 +6,9 @@ import xmlrpc.client
 from sqlmodel import Session
 
 from app.email.api.dependencies import get_common_email_service
-from app.email.api.schemas import ReviewMailRequest
+from app.email.api.schemas import ApprovedMailRequest, ReviewMailRequest
 from app.email.infra.email_service import CommonResendEmailService
+from app.email.domain.email_types import TimesheetEmailType
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import Roles, user_has_role
@@ -28,6 +29,9 @@ from app.timesheet_line.application.use_cases.obtener_horas import (
 )
 from app.timesheet_line.application.use_cases.validar_timesheet import (
     ValidateTimesheetUseCase,
+)
+from app.timesheet_line.application.use_cases.review_timesheets import (
+    ReviewTimesheetsUseCase,
 )
 from app.timesheet_line.domain.models import CreateTimesheetLineNotification
 from app.timesheet_line.domain.repositories import (
@@ -61,6 +65,8 @@ from app.timesheet_line.application.excepctions.exceptions import (
     OdooValidationError,
     OdooConnectionError,
     TimesheetValidateError,
+    ApproverNotFoundError,
+    TimesheetReviewError,
 )
 
 
@@ -142,11 +148,6 @@ async def create_timesheet_line(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al crear la línea de timesheet",
-        )
 
 
 @router.get("/", response_model=List[DetailedTimesheetLineResponse])
@@ -250,11 +251,6 @@ async def delete_timesheet_line(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al eliminar las líneas de timesheet",
-        )
 
 
 @router.put("/{timesheet_id}")
@@ -305,17 +301,16 @@ def edit_timesheet(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al editar la línea de timesheet",
-        )
-
 
 @router.post("/validate", response_model=Dict[str, bool])
 async def validate_timesheet_lines(
-    request: ValidateTimesheetRequest,
+    request: ApprovedMailRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    email_service: CommonResendEmailService = Depends(get_common_email_service),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    notification_repository: TimesheetLineNotificationRepository = Depends(
+        get_notification_repository
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -328,7 +323,6 @@ async def validate_timesheet_lines(
     Returns:
         Dict[str, bool]: Resultado de la validación
     """
-
     roles: list[int] = current_user["roles"]
     is_admin = user_has_role(roles, Roles.approver)
     if not is_admin:
@@ -338,8 +332,8 @@ async def validate_timesheet_lines(
         )
 
     try:
-        use_case = ValidateTimesheetUseCase(gateway)
-        success = use_case.execute(request.timesheetline_ids)
+        use_case = ValidateTimesheetUseCase(gateway, email_service, employee_gateway, notification_repository)
+        success = await use_case.execute(request.timesheetline_ids, request.approver_mail)
         return {"success": success}
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -348,14 +342,9 @@ async def validate_timesheet_lines(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail="Error interno del servidor al validar las líneas de timesheet",
-        )
 
 
-@router.post("/review")
+@router.post("/review", response_model=Dict[str, bool])
 async def review_mail(
     request: ReviewMailRequest,
     email_service: CommonResendEmailService = Depends(get_common_email_service),
@@ -366,8 +355,20 @@ async def review_mail(
         get_notification_repository
     ),
 ):
+    """
+    Envía correos de revisión o eliminación a los empleados sobre sus timesheets.
+
+    Args:
+        request: Objeto con lista de IDs de timesheets, email del aprobador, mensaje opcional y tipo de email
+        email_service: Servicio de email (inyectado)
+        employee_gateway: Gateway de empleados (inyectado)
+        timesheet_gateway: Gateway de timesheet (inyectado)
+        notification_repository: Repositorio de notificaciones (inyectado)
+
+    Returns:
+        Dict[str, bool]: Resultado del envío
+    """
     roles: list[int] = current_user["roles"]
-    # permiso para enviar correo de revisión
     is_admin = user_has_role(roles, Roles.approver)
     if not is_admin:
         raise HTTPException(
@@ -375,47 +376,25 @@ async def review_mail(
             detail="No tienes permisos para enviar correos de revisión",
         )
 
-    approver = employee_gateway.get_by_email(request.approver_mail)
-    if approver is None:
-        raise HTTPException(
-            status_code=404,
-            detail="El empleado que intenta enviar el correo de revisión no existe",
-        )
-    approver_id = approver.id
-
-    timesheet_lines = timesheet_gateway.get_by_ids(request.timesheetline_ids)
-
-    employees_bucket = {}
-    for timesheet_line in timesheet_lines:
-        employee = employee_gateway.get_by_id(timesheet_line.employee_id)
-        if employee is None:
-            continue
-        if employee.email not in employees_bucket:
-            employees_bucket[employee.email] = {
-                "timesheets": [],
-                "employee_id": None,
-            }
-        employees_bucket[employee.email]["timesheets"].append(timesheet_line)
-        employees_bucket[employee.email]["employee_id"] = employee.id
-
-    # El receiver es la key y los timesheet_lines son los valores.
     try:
-        for receiver_mail, employee_data in employees_bucket.items():
-            await email_service.send_review_mail(
-                receiver_mail,
-                request.approver_mail,
-                employee_data["timesheets"],
-                request.body,
-            )
-            for timesheet_line in employee_data["timesheets"]:
-                notification_repository.create(
-                    CreateTimesheetLineNotification(
-                        timesheet_line_id=timesheet_line.id,
-                        approver_id=approver_id,
-                        receiver_id=employee_data["employee_id"],
-                    )
-                )
-
-        return {"message": "Emails enviados correctamente!"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        use_case = ReviewTimesheetsUseCase(
+            employee_gateway, timesheet_gateway, email_service, notification_repository
+        )
+        # Obtener el tipo de email del request (por defecto REVIEW)
+        email_type = request.email_type or TimesheetEmailType.REVIEW
+        success = await use_case.execute(
+            request.timesheetline_ids, 
+            request.approver_mail, 
+            request.body,
+            email_type
+        )
+        return {"success": success}
+    except ApproverNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetReviewError as e:
+        raise HTTPException(status_code=500, detail=e.message)
+    except TimesheetDomainError as e:
+        # Captura cualquier otra excepción del dominio
+        raise HTTPException(status_code=400, detail=e.message)

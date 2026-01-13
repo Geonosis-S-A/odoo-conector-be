@@ -1,7 +1,10 @@
 from datetime import date
+import io
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi.responses import StreamingResponse
 
+from app.auth.infra.auth_service import JWTPayload
 from app.dashboard.api.schemas import (
     DashboardSummaryResponse,
     DashboardSummaryMetaResponse,
@@ -17,6 +20,9 @@ from app.dashboard.api.schemas import (
     HierarchicalItemResponse,
     TaskDetailResponse,
     SimpleTimesheetLineResponse,
+)
+from app.dashboard.application.use_cases.export_timesheets import (
+    ExportTimesheetsByTeamUseCase,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -47,7 +53,10 @@ from app.timesheet_line.infra.db.repositories import (
     SQLModelTimesheetLineNotificationRepository,
 )
 from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
+from app.employee_price.domain.repositories import EmployeePriceRepository
+from app.employee_price.infra.db.repositories import SQLModelEmployeePriceRepository
 from app.shared.infra.db.session import get_db, Session
+import pandas as pd
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -62,7 +71,6 @@ def get_employee_gateway(
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de empleados"
         )
-
 
 def get_timesheet_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
@@ -108,6 +116,13 @@ def get_notification_repository(
     return SQLModelTimesheetLineNotificationRepository(db)
 
 
+def get_employee_price_repository(
+    db: Session = Depends(get_db),
+) -> EmployeePriceRepository:
+    """Dependencia para obtener el repositorio de precios de empleados."""
+    return SQLModelEmployeePriceRepository(db)
+
+
 @router.get("/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
@@ -116,6 +131,9 @@ async def get_dashboard_summary(
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     task_gateway: TaskGateway = Depends(get_task_gateway),
     timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_price_repository: EmployeePriceRepository = Depends(
+        get_employee_price_repository
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -153,7 +171,11 @@ async def get_dashboard_summary(
 
         # Crear y ejecutar caso de uso
         use_case = GetDashboardSummaryUseCase(
-            dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
+            dashboard_gateway,
+            employee_gateway,
+            task_gateway,
+            timesheet_line_gateway,
+            employee_price_repository,
         )
         dashboard_summary = use_case.execute(
             user_id, requester_employee_id, date_from, date_to
@@ -204,9 +226,9 @@ async def get_task_detail(
     # Validar permisos
     roles: list[int] = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
-    
+
     # Si no es approver, solo puede ver información general o su propia información
-    
+
     if employee_id:
         if (
             (employee_id is not None and current_user["user_id"] != employee_id)
@@ -215,7 +237,7 @@ async def get_task_detail(
             raise HTTPException(
                 status_code=403, detail="No tienes permisos para ver esta información"
             )
-    else: 
+    else:
         if not is_approver:
             raise HTTPException(
                 status_code=403, detail="No tienes permisos para ver esta información"
@@ -241,7 +263,9 @@ async def get_task_detail(
             employee_gateway,
             notification_repository,
         )
-        task_detail = use_case.execute(task_id, project_id, date_from, date_to, employee_id)
+        task_detail = use_case.execute(
+            task_id, project_id, date_from, date_to, employee_id
+        )
 
         # Transformar líneas de timesheet al schema correcto
         timesheet_lines = [
@@ -320,10 +344,63 @@ async def get_dashboard_summary_by_employee(
         raise
 
 
+@router.get("/export-timesheets")
+async def export_timesheets(
+    date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
+    date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    dolar_value: float = Query(0, description="Valor del dólar"),
+    timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: JWTPayload = Depends(get_current_user),
+    task_gateway: TaskGateway = Depends(get_task_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    employee_price_repository: EmployeePriceRepository = Depends(
+        get_employee_price_repository
+    ),
+):
+    roles = current_user["roles"]
+    is_approver = user_has_role(roles, Roles.approver)
+    if not is_approver:
+        raise HTTPException(
+            status_code=403, detail="No tienes permisos para exportar timesheets"
+        )
+
+    use_case = ExportTimesheetsByTeamUseCase(
+        timesheet_line_gateway,
+        employee_gateway,
+        task_gateway,
+        current_user["user_id"],
+        employee_price_repository,
+        dolar_value=dolar_value,
+    )
+    timesheet_lines_df = use_case.execute(date_from, date_to)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        timesheet_lines_df.to_excel(writer, index=False, sheet_name="Horas")
+
+    output.seek(0)
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=horas.xlsx"},
+    )
+
+
 def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:
     """Transforma el modelo de dominio al esquema de respuesta de la API."""
 
     # Transformar KPIs
+    total_cost_response = None
+    if (
+        "total_cost" in dashboard_summary.summary
+        and dashboard_summary.summary["total_cost"]
+    ):
+        total_cost_response = KPIResponse(
+            total=dashboard_summary.summary["total_cost"].total,
+            average_per_user=dashboard_summary.summary["total_cost"].average_per_user,
+            unit=dashboard_summary.summary["total_cost"].unit,
+        )
+
     summary_response = DashboardSummaryKPIsResponse(
         hours_selected_period=KPIResponse(
             total=dashboard_summary.summary["hours_selected_period"].total,
@@ -346,6 +423,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
             ].average_per_user,
             unit=dashboard_summary.summary["daily_average_hours"].unit,
         ),
+        total_cost=total_cost_response,
     )
 
     # Transformar totales
@@ -372,6 +450,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
                 user_id=employee.user_id,
                 employee_name=employee.employee_name,
                 hours=employee.hours,
+                total_cost=employee.total_cost,
             )
             for employee in dashboard_summary.totals["by_employee"]
         ],
@@ -384,6 +463,19 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
             dashboard_summary.hierarchical_summary
         )
 
+    # Transformar employees_without_price si existe
+    employees_without_price_response = None
+    if dashboard_summary.employees_without_price:
+        from app.dashboard.api.schemas import EmployeeWithoutPriceResponse
+
+        employees_without_price_response = [
+            EmployeeWithoutPriceResponse(
+                user_id=emp.user_id,
+                employee_name=emp.employee_name,
+            )
+            for emp in dashboard_summary.employees_without_price
+        ]
+
     # Crear respuesta completa
     return DashboardSummaryResponse(
         meta=DashboardSummaryMetaResponse(
@@ -392,6 +484,7 @@ def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse
         summary=summary_response,
         totals=totals_response,
         hierarchical_summary=hierarchical_summary_response,
+        employees_without_price=employees_without_price_response,
     )
 
 
@@ -401,6 +494,7 @@ def _transform_hierarchical_summary(
     """Transforma la estructura jerárquica del dominio al schema de respuesta."""
     return HierarchicalSummaryResponse(
         total_hours=hierarchical_summary.total_hours,
+        total_cost=hierarchical_summary.total_cost,
         data=[_transform_hierarchical_item(item) for item in hierarchical_summary.data],
     )
 
@@ -418,6 +512,7 @@ def _transform_hierarchical_item(item) -> HierarchicalItemResponse:
         id=item.id,
         name=item.name,
         total_hours=item.total_hours,
+        total_cost=item.total_cost,
         data=data_field,
         is_artificial=item.is_artificial,
     )
@@ -477,6 +572,7 @@ def _transform_to_response_schema_by_employee(
                 user_id=employee.user_id,
                 employee_name=employee.employee_name,
                 hours=employee.hours,
+                total_cost=employee.total_cost,
             )
             for employee in dashboard_summary.totals["by_employee"]
         ],

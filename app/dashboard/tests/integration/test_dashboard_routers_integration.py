@@ -529,10 +529,19 @@ def test_dashboard_endpoints_response_format(client_admin):
     data_general = response_general.json()
     data_employee = response_employee.json()
 
-    # Ambos deben tener las mismas secciones principales
-    expected_sections = {"meta", "summary", "totals", "hierarchical_summary"}
-    assert set(data_general.keys()) == expected_sections
-    assert set(data_employee.keys()) == expected_sections
+    # Ambos deben tener las secciones principales necesarias
+    # El endpoint general tiene employees_without_price, el de empleado tiene worked_days
+    assert "meta" in data_general
+    assert "summary" in data_general
+    assert "totals" in data_general
+    assert "hierarchical_summary" in data_general
+    assert "employees_without_price" in data_general
+
+    assert "meta" in data_employee
+    assert "summary" in data_employee
+    assert "totals" in data_employee
+    assert "hierarchical_summary" in data_employee
+    assert "worked_days" in data_employee["meta"]
 
     # La diferencia principal está en meta (users_count y worked_days)
     assert "users_count" in data_general["meta"]

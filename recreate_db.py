@@ -10,6 +10,7 @@ from app.personal_time.infra.db.models import (
     TimeOffSyncMappingModel,
     TimeOffSyncLogModel,
 )
+from app.employee_price.infra.db.models import EmployeePriceModel
 
 # Importar SQLModel y engine
 from sqlmodel import SQLModel

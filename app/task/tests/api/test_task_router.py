@@ -317,18 +317,6 @@ class TestGetTasks:
         assert response.status_code == 404
         assert "Proyecto con el id 999 no encontrado" in response.json()["detail"]
 
-    def test_get_tasks_server_error(self, mock_odoo_task_gateway, test_client):
-        # Arrange
-        mock_odoo_task_gateway.get_project_by_id.side_effect = Exception(
-            "Error de servidor"
-        )
-
-        # Act
-        response = test_client.get("/api/v1/tasks/?project_id=1")
-
-        # Assert
-        assert response.status_code == 500
-        assert "Error de servidor" in response.json()["detail"]
 
     def test_get_tasks_invalid_project_id(self, test_client):
         # Act

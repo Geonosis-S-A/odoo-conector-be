@@ -38,12 +38,18 @@ class TestGetDashboardSummaryUseCase:
         return Mock()
 
     @pytest.fixture
+    def mock_employee_price_repository(self):
+        """Mock del repositorio de precios de empleados."""
+        return Mock()
+
+    @pytest.fixture
     def use_case(
         self,
         mock_dashboard_gateway,
         mock_employee_gateway,
         mock_task_gateway,
         mock_timesheet_gateway,
+        mock_employee_price_repository,
     ):
         """Instancia del caso de uso con mocks."""
         return GetDashboardSummaryUseCase(
@@ -51,6 +57,7 @@ class TestGetDashboardSummaryUseCase:
             mock_employee_gateway,
             mock_task_gateway,
             mock_timesheet_gateway,
+            mock_employee_price_repository,
         )
 
     @pytest.fixture
@@ -103,6 +110,7 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway,
         mock_timesheet_gateway,
         mock_task_gateway,
+        mock_employee_price_repository,
         mock_timesheet_data,
         mock_team_users,
     ):
@@ -116,6 +124,9 @@ class TestGetDashboardSummaryUseCase:
         # Configurar mocks
         mock_timesheet_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
+
+        # Mock de precios de empleados (vacío para este test)
+        mock_employee_price_repository.get_by_user_ids.return_value = []
 
         # Mock de KPIs
         hours_kpi = KPI(total=200.0, average_per_user=100.0, unit="hours")
@@ -198,12 +209,24 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway.calculate_task_totals.assert_called_once_with(
             mock_timesheet_data
         )
-        mock_dashboard_gateway.calculate_employee_totals.assert_called_once_with(
-            mock_timesheet_data, mock_team_users
-        )
+        mock_dashboard_gateway.calculate_employee_totals.assert_called_once()
+        call_args = mock_dashboard_gateway.calculate_employee_totals.call_args
+        assert call_args[0][0] == mock_timesheet_data
+        assert call_args[0][1] == mock_team_users
+        # Verificar que el tercer parámetro (timesheet_cost_map) es un dict
+        assert isinstance(call_args[0][2], dict)
+
         mock_dashboard_gateway.calculate_project_without_task_totals.assert_called_once_with(
             project_totals, task_totals
         )
+        mock_dashboard_gateway.calculate_hierarchical_summary.assert_called_once()
+        call_args_hierarchical = (
+            mock_dashboard_gateway.calculate_hierarchical_summary.call_args
+        )
+        assert call_args_hierarchical[0][0] == mock_timesheet_data
+        assert call_args_hierarchical[0][1] == use_case.task_gateway
+        # Verificar que el tercer parámetro (timesheet_cost_map) es un dict
+        assert isinstance(call_args_hierarchical[0][2], dict)
 
     def test_execute_with_empty_team_users(
         self,
@@ -211,6 +234,7 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway,
         mock_timesheet_gateway,
         mock_task_gateway,
+        mock_employee_price_repository,
     ):
         """Test con equipo vacío."""
         # Arrange
@@ -221,6 +245,9 @@ class TestGetDashboardSummaryUseCase:
 
         mock_timesheet_gateway.get_team_users.return_value = []
         mock_dashboard_gateway.get_timesheet_summary.return_value = []
+
+        # Mock de precios de empleados (vacío)
+        mock_employee_price_repository.get_by_user_ids.return_value = []
 
         # Mock de KPIs vacíos
         empty_hours_kpi = KPI(total=0.0, average_per_user=0.0, unit="hours")
@@ -270,7 +297,7 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway,
         mock_timesheet_gateway,
         mock_task_gateway,
-        mock_timesheet_data,
+        mock_employee_price_repository,
     ):
         """Test con equipo de un solo usuario."""
         # Arrange
@@ -281,7 +308,46 @@ class TestGetDashboardSummaryUseCase:
 
         single_user_team = [{"id": 1, "name": "Employee 1"}]
         mock_timesheet_gateway.get_team_users.return_value = single_user_team
-        mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
+
+        # Mock de datos de timesheet para un solo empleado
+        single_user_timesheet_data = [
+            DetailedTimesheetLine(
+                id=1,
+                name="Task 1",
+                employee_id=1,
+                project=Mock(id=1, name="Project A"),
+                task=Mock(id=1, name="Task 1"),
+                hours=8.0,
+                date=date(2024, 1, 1),
+                validated=False,
+            ),
+            DetailedTimesheetLine(
+                id=2,
+                name="Task 2",
+                employee_id=1,
+                project=Mock(id=1, name="Project A"),
+                task=Mock(id=2, name="Task 2"),
+                hours=6.0,
+                date=date(2024, 1, 2),
+                validated=False,
+            ),
+            DetailedTimesheetLine(
+                id=3,
+                name="Task 3",
+                employee_id=1,
+                project=Mock(id=2, name="Project B"),
+                task=None,  # Sin tarea específica
+                hours=4.0,
+                date=date(2024, 1, 3),
+                validated=True,
+            ),
+        ]
+        mock_dashboard_gateway.get_timesheet_summary.return_value = (
+            single_user_timesheet_data
+        )
+
+        # Mock de precios de empleados (vacío)
+        mock_employee_price_repository.get_by_user_ids.return_value = []
 
         # Mock de KPIs para un usuario
         hours_kpi = KPI(total=120.0, average_per_user=120.0, unit="hours")
@@ -311,13 +377,13 @@ class TestGetDashboardSummaryUseCase:
 
         # Verificar que se calculó para 1 usuario
         mock_dashboard_gateway.calculate_hours_kpi.assert_called_once_with(
-            mock_timesheet_data, 1
+            single_user_timesheet_data, 1
         )
         mock_dashboard_gateway.calculate_entries_kpi.assert_called_once_with(
-            mock_timesheet_data, 1
+            single_user_timesheet_data, 1
         )
         mock_dashboard_gateway.calculate_daily_average_kpi.assert_called_once_with(
-            mock_timesheet_data, 1, date_from, date_to
+            single_user_timesheet_data, 1, date_from, date_to
         )
 
     def test_execute_project_without_task_integration(
@@ -326,6 +392,7 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway,
         mock_timesheet_gateway,
         mock_task_gateway,
+        mock_employee_price_repository,
         mock_timesheet_data,
         mock_team_users,
     ):
@@ -338,6 +405,9 @@ class TestGetDashboardSummaryUseCase:
 
         mock_timesheet_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
+
+        # Mock de precios de empleados (vacío)
+        mock_employee_price_repository.get_by_user_ids.return_value = []
 
         # Mock básico de KPIs
         mock_dashboard_gateway.calculate_hours_kpi.return_value = KPI(
@@ -389,6 +459,7 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway,
         mock_timesheet_gateway,
         mock_task_gateway,
+        mock_employee_price_repository,
         mock_timesheet_data,
         mock_team_users,
     ):
@@ -416,6 +487,10 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway.calculate_task_totals.return_value = []
         mock_dashboard_gateway.calculate_employee_totals.return_value = []
         mock_dashboard_gateway.calculate_project_without_task_totals.return_value = []
+        mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
+
+        # Mock de precios de empleados (vacío)
+        mock_employee_price_repository.get_by_user_ids.return_value = []
 
         # Mock del hierarchical summary - solo verificar que se llama
         mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
@@ -426,9 +501,12 @@ class TestGetDashboardSummaryUseCase:
         # Assert
         # Solo verificar que se llamó, no el contenido (como pediste)
         # Verificar que se llama al cálculo de estructura jerárquica
-        mock_dashboard_gateway.calculate_hierarchical_summary.assert_called_once_with(
-            mock_timesheet_data, use_case.task_gateway
-        )
+        mock_dashboard_gateway.calculate_hierarchical_summary.assert_called_once()
+        call_args = mock_dashboard_gateway.calculate_hierarchical_summary.call_args
+        assert call_args[0][0] == mock_timesheet_data
+        assert call_args[0][1] == use_case.task_gateway
+        # Verificar que se pase un dict como tercer parámetro
+        assert isinstance(call_args[0][2], dict)
         # Verificar que hierarchical_summary se asignó (puede ser None del mock)
         assert hasattr(result, "hierarchical_summary")
 
@@ -438,6 +516,7 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway,
         mock_timesheet_gateway,
         mock_task_gateway,
+        mock_employee_price_repository,
         mock_timesheet_data,
         mock_team_users,
     ):
@@ -465,11 +544,13 @@ class TestGetDashboardSummaryUseCase:
         mock_dashboard_gateway.calculate_task_totals.return_value = []
         mock_dashboard_gateway.calculate_employee_totals.return_value = []
         mock_dashboard_gateway.calculate_project_without_task_totals.return_value = []
-        # Mock task gateway para hierarchical summary
-        mock_task_gateway.get_tasks_info_with_parents.return_value = {}  # Sin tareas
+        mock_dashboard_gateway.calculate_hierarchical_summary.return_value = None
+
+        # Mock de precios de empleados (vacío)
+        mock_employee_price_repository.get_by_user_ids.return_value = []
 
         # Act
-        result = use_case.execute(user_id, employee_id, date_from, date_to)
+        use_case.execute(user_id, employee_id, date_from, date_to)
 
         # Assert - Verificar orden de llamadas críticas
         assert mock_timesheet_gateway.get_team_users.called

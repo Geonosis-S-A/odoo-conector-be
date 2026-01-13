@@ -42,7 +42,7 @@ class EmailTemplateService:
             print(f"Error cargando imagen {image_name}: {e}")
             return ""
 
-    def _handle_timesheet_records(self, template_content: str, context: Dict[str, Any]) -> str:
+    def _handle_timesheet_records(self, template_content: str, template_name: str, context: Dict[str, Any]) -> str:
         """Maneja el renderizado de los registros de timesheet"""
         if "TIMESHEET_DATA" in context:
             timesheet_data = context.get("TIMESHEET_DATA", [])
@@ -71,12 +71,22 @@ class EmailTemplateService:
                 """
             
             template_content = template_content.replace("{{TIMESHEET_RECORDS}}", timesheet_html)
-
+            
+            # Determinar el mensaje según el tipo de template
             count = len(timesheet_data)
-            if count == 1:
-                context["TIMESHEET_MESSAGE"] = "uno de tus registros de horas ha sido marcado"
-            else:
-                context["TIMESHEET_MESSAGE"] = f"{count} de tus registros de horas han sido marcados"
+            if "review_mail" == template_name:
+                if count == 1:
+                    context["TIMESHEET_MESSAGE"] = "uno de tus registros de horas ha sido marcado"
+                else:
+                    context["TIMESHEET_MESSAGE"] = f"{count} de tus registros de horas han sido marcados"
+            elif "approved_mail" == template_name:
+                if count == 1:
+                    context["TIMESHEET_MESSAGE"] = "uno de tus registros de horas ha sido aprobado"
+                else:
+                    context["TIMESHEET_MESSAGE"] = f"{count} de tus registros de horas han sido aprobados"
+            elif "eliminated_mail" == template_name:
+                # No necesita TIMESHEET_MESSAGE ya que el template tiene un mensaje fijo
+                pass
         
         return template_content
 
@@ -113,7 +123,7 @@ class EmailTemplateService:
                 "ISOLOGOTIPO_NEGRO-AZUL.png"
             )
 
-        template_content = self._handle_timesheet_records(template_content, context)
+        template_content = self._handle_timesheet_records(template_content, template_name, context)
         template_content = self._handle_conditional_sections(template_content, context)
 
         # Reemplazar todas las variables del contexto (excepto TIMESHEET_DATA que ya procesamos)

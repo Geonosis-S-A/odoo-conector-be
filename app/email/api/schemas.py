@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+from app.email.domain.email_types import TimesheetEmailType
 
 
 class SupportMailRequest(BaseModel):
@@ -9,8 +10,10 @@ class SupportMailRequest(BaseModel):
     body: str
     date: datetime
 
-
-class ReviewMailRequest(BaseModel):
+class ApprovedMailRequest(BaseModel):
     approver_mail: str
-    body: Optional[str] = None
     timesheetline_ids: list[int]
+
+class ReviewMailRequest(ApprovedMailRequest):
+    body: Optional[str] = None
+    email_type: Optional[TimesheetEmailType]
