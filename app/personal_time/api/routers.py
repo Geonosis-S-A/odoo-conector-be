@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 from app.shared.infra.db.session import get_db
+import logging
 
 from app.personal_time.api.schemas import SyncRunResponse
+
+logger = logging.getLogger(__name__)
 
 
 from app.personal_time.infra.external.odoo_timeoff_type_gateway import (
@@ -91,8 +94,8 @@ async def sync_timeoff_requests(
             new_requests_result = use_case.execute(created_at_since=last_successful_run)
             sync_log.new_requests_synced = new_requests_result.successfully_synced
         except Exception as e:
+            logger.error(f"Error crítico en sincronización de nuevas solicitudes: {str(e)}", exc_info=True)
             error_msg = f"Error en sincronización de nuevas solicitudes: {str(e)}"
-            sync_log.errors_count += 1
             sync_log.error_message = error_msg
         
         # 2. Sincronizar actualizaciones de estado (desde la última ejecución exitosa)
@@ -102,8 +105,8 @@ async def sync_timeoff_requests(
             )
             sync_log.status_updates_synced = status_updates_result.status_updates_count
         except Exception as e:
+            logger.error(f"Error crítico en sincronización de estados: {str(e)}", exc_info=True)
             error_msg = f"Error en sincronización de estados: {str(e)}"
-            sync_log.errors_count += 1
             if sync_log.error_message:
                 sync_log.error_message += f" | {error_msg}"
             else:
@@ -158,23 +161,25 @@ async def sync_timeoff_requests(
         sync_log.run_details = run_details
         
         # Determinar estado final
-        if total_errors == 0 and (
-            (new_requests_result and new_requests_result.successfully_synced > 0) or
-            (status_updates_result and status_updates_result.status_updates_count > 0)
-        ):
+        # Si hay un error_message establecido (por excepción en los try/except), es un error crítico
+        if sync_log.error_message:
+            sync_log.mark_as_error(sync_log.error_message)
+            message = sync_log.error_message
+        # Si no hay errores de procesamiento individual
+        elif total_errors == 0:
             sync_log.mark_as_success()
-            message = "Sincronización completada exitosamente"
-        elif total_errors > 0 and (
-            (new_requests_result and new_requests_result.successfully_synced > 0) or
-            (status_updates_result and status_updates_result.status_updates_count > 0)
-        ):
+            total_synced = (
+                (new_requests_result.successfully_synced if new_requests_result else 0) +
+                (status_updates_result.status_updates_count if status_updates_result else 0)
+            )
+            if total_synced > 0:
+                message = f"Sincronización completada exitosamente: {total_synced} registro(s) procesado(s)"
+            else:
+                message = "Sincronización completada exitosamente: sin registros nuevos para procesar"
+        # Si hay errores pero también se procesaron algunos registros exitosamente
+        else:
             sync_log.mark_as_partial_success()
             message = f"Sincronización completada con {total_errors} error(es)"
-        else:
-            sync_log.mark_as_error(
-                sync_log.error_message or "Sincronización falló sin procesar solicitudes"
-            )
-            message = sync_log.error_message or "Error en la sincronización"
         
         # Actualizar log en BD
         log_repo.update(sync_log)
