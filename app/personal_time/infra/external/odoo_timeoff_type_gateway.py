@@ -90,11 +90,14 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
             timeoff_request: Solicitud de licencia a crear
 
         Returns:
-            TimeOffRequestResult: Resultado de la operación con ID si es exitosa
+            TimeOffRequestResult: Resultado de la operación con ID si es exitosa.
+            Si la creación fue exitosa pero el cambio de estado falló, retorna éxito
+            con un mensaje de advertencia.
 
         Raises:
-            Exception: Si hay errores de comunicación con Odoo o errores del sistema
+            Exception: Si hay errores de comunicación con Odoo o errores del sistema durante la creación
         """
+        request_id = None
         try:
             # Convertir la solicitud al formato esperado por Odoo
             # NO incluir el estado en el create - se aplicará después
@@ -120,12 +123,30 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
 
             # Aplicar el estado deseado si se especificó y no es draft (que ya lo está)
             if desired_state and desired_state != "draft":
-                self.set_timeoff_request_state(request_id, desired_state)
+                try:
+                    self.set_timeoff_request_state(request_id, desired_state)
+                    return TimeOffRequestResult.success_result(request_id)
+                except Exception as state_error:
+                    # Si falla el cambio de estado, retornar éxito con advertencia
+                    # La solicitud fue creada exitosamente pero quedó en estado draft
+                    warning_msg = (
+                        f"Creada en estado 'draft' - No se pudo cambiar a '{desired_state}': {str(state_error)}"
+                    )
+                    return TimeOffRequestResult(
+                        success=True,
+                        request_id=request_id,
+                        message=warning_msg,
+                        actual_state="draft",
+                        desired_state=desired_state
+                    )
 
             return TimeOffRequestResult.success_result(request_id)
 
         except Exception as e:
-            # Propagar directamente el error original
+            # Si falla la creación (no el cambio de estado), propagar el error
+            if request_id is None:
+                raise
+            # Si llegamos aquí, es un error después de crear pero antes del cambio de estado
             raise
     
     def set_timeoff_request_state(self, request_id: int, state: str):

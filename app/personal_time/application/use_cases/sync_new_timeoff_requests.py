@@ -8,9 +8,8 @@ creándolas en Odoo mientras mantiene el mapeo de IDs.
 from typing import List, Optional, Tuple
 from datetime import datetime
 import logging
-
 from app.personal_time.domain.humand_gateway import HumandGateway
-from app.personal_time.domain.gateway import TimeOffGateway
+from app.personal_time.domain.odoo_timeoff_gateway import OdooTimeOffGateway
 from app.personal_time.domain.repositories import TimeOffSyncMappingRepository
 from app.personal_time.domain.models import (
     HumandTimeOffRequest,
@@ -78,7 +77,7 @@ class SyncNewTimeOffRequestsUseCase:
     def __init__(
         self,
         humand_gateway: HumandGateway,
-        odoo_gateway: TimeOffGateway,
+        odoo_gateway: OdooTimeOffGateway,
         employee_gateway: EmployeeGateway,
         mapping_repository: TimeOffSyncMappingRepository,
     ):
@@ -118,6 +117,7 @@ class SyncNewTimeOffRequestsUseCase:
             humand_requests = self._fetch_new_requests_from_humand(
                 created_at_since
             )
+
             
             
             # 2. Procesar cada solicitud
@@ -185,6 +185,8 @@ class SyncNewTimeOffRequestsUseCase:
             
 
             created_date = created_at_since.date() if created_at_since else None
+
+   
             
             requests = self.humand_gateway.get_all_timeoff_requests( 
                 created_at_since=created_date,
@@ -264,6 +266,7 @@ class SyncNewTimeOffRequestsUseCase:
                 result.add_error(humand_request.id, error_msg)
                 return
             
+            # Siempre guardar el mapeo si se creó en Odoo
             mapping = TimeOffSyncMapping.from_humand_and_odoo(
                 humand_request=humand_request,
                 odoo_request_id=odoo_result.request_id,
@@ -272,7 +275,23 @@ class SyncNewTimeOffRequestsUseCase:
             
             self.mapping_repository.save(mapping)
             
-            result.add_success()
+            # Verificar si hubo problemas con el cambio de estado
+            if odoo_result.actual_state and odoo_result.desired_state and odoo_result.actual_state != odoo_result.desired_state:
+                # Se creó pero no se pudo cambiar al estado deseado
+                error_msg = (
+                    f"Creada en Odoo (ID: {odoo_result.request_id}) pero con estado incorrecto | "
+                    f"Estado deseado: '{odoo_result.desired_state}' | "
+                    f"Estado actual: '{odoo_result.actual_state}' | "
+                    f"Motivo: {odoo_result.message} | "
+                    f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
+                    f"Fechas: {humand_request.from_date} a {humand_request.to_date} | "
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id}) | "
+                    f"Estado Humand: {humand_request.status}"
+                )
+                result.add_error(humand_request.id, error_msg)
+            else:
+                # Todo OK
+                result.add_success()
             
         except Exception as e:
             # Capturar información detallada del error
