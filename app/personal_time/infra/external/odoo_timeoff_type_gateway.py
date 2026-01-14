@@ -102,7 +102,7 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
             # Convertir la solicitud al formato esperado por Odoo
             # NO incluir el estado en el create - se aplicará después
             odoo_data = timeoff_request.to_odoo_data(include_state=False)
-            
+
             # Guardar el estado deseado del objeto
             desired_state = timeoff_request.state
 
@@ -129,15 +129,13 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
                 except Exception as state_error:
                     # Si falla el cambio de estado, retornar éxito con advertencia
                     # La solicitud fue creada exitosamente pero quedó en estado draft
-                    warning_msg = (
-                        f"Creada en estado 'draft' - No se pudo cambiar a '{desired_state}': {str(state_error)}"
-                    )
+                    warning_msg = f"Creada en estado 'draft' - No se pudo cambiar a '{desired_state}': {str(state_error)}"
                     return TimeOffRequestResult(
                         success=True,
                         request_id=request_id,
                         message=warning_msg,
                         actual_state="draft",
-                        desired_state=desired_state
+                        desired_state=desired_state,
                     )
 
             return TimeOffRequestResult.success_result(request_id)
@@ -148,19 +146,18 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
                 raise
             # Si llegamos aquí, es un error después de crear pero antes del cambio de estado
             raise
-    
+
     def set_timeoff_request_state(self, request_id: int, state: str):
         """Cambia el estado de una solicitud de licencia en Odoo.
-        
+
         Args:
             request_id: ID de la solicitud en Odoo
             state: Estado deseado (draft, confirm, validate, refuse, cancel)
-            
+
         Raises:
             Exception: Si hay un error al cambiar el estado
         """
         try:
-            
             if state == "validate":
                 self.odoo_connection["models"].execute_kw(
                     self.odoo_connection["ODOO_DB"],
@@ -183,12 +180,14 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
             elif state == "draft":
                 # Ya se crea en draft por defecto, no hacer nada
                 pass
-            
+
             else:
                 raise ValueError(f"Estado no soportado: {state}")
-                
+
         except Exception as e:
-            raise Exception(f"Error al cambiar estado de solicitud a '{state}': {str(e)}")
+            raise Exception(
+                f"Error al cambiar estado de solicitud a '{state}': {str(e)}"
+            )
 
     def update_timeoff_request(
         self, request_id: int, timeoff_request: TimeOffRequest
@@ -354,20 +353,20 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
 
     def get_timeoff_type_by_name(self, name: str) -> Optional[TimeOffType]:
         """Busca un tipo de licencia por su nombre exacto en Odoo.
-        
+
         Args:
             name: Nombre del tipo de licencia a buscar
-            
+
         Returns:
             Optional[TimeOffType]: Tipo de licencia encontrado o None
-            
+
         Raises:
             Exception: Si hay un error al consultar Odoo
         """
         try:
             # Buscar el tipo de licencia por nombre exacto
             domain = [["name", "=", name]]
-            
+
             result = self.odoo_connection["models"].execute_kw(
                 self.odoo_connection["ODOO_DB"],
                 self.odoo_connection["uid"],
@@ -386,17 +385,19 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
                     ],
                 },
             )
-            
+
             # Validar que el resultado sea una lista
             if not isinstance(result, list):
                 raise Exception("Respuesta inesperada de Odoo: se esperaba una lista")
-            
+
             # Si no se encontró, retornar None
             if not result:
                 return None
-            
+
             # Convertir el primer resultado a modelo de dominio
             return TimeOffType.from_odoo_data(result[0])
-            
+
         except Exception as e:
-            raise Exception(f"Error al buscar tipo de licencia por nombre en Odoo: {str(e)}")
+            raise Exception(
+                f"Error al buscar tipo de licencia por nombre en Odoo: {str(e)}"
+            )
