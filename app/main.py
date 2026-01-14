@@ -18,6 +18,7 @@ from app.employee_price.api.routers import router as employee_price_router
 from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
 from app.saved_prompts.api.routers import router as saved_prompts_router
+from app.personal_time.jobs.sync_scheduler import start_scheduler, stop_scheduler
 import logging
 
 
@@ -45,7 +46,14 @@ async def lifespan(app):
         from app.shared.infra.db.session import engine
 
         SQLModel.metadata.create_all(bind=engine)
+    
+    # Iniciar el scheduler de jobs programados
+    start_scheduler()
+    
     yield  # acá arranca la app
+    
+    # Detener el scheduler al cerrar la aplicación
+    stop_scheduler()
 
 
 app = FastAPI(

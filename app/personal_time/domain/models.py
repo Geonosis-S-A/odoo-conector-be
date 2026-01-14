@@ -77,6 +77,8 @@ class TimeOffRequestResult:
     request_id: Optional[int]
     success: bool
     message: str
+    actual_state: Optional[str] = None
+    desired_state: Optional[str] = None
 
     @classmethod
     def success_result(cls, request_id: int) -> "TimeOffRequestResult":
