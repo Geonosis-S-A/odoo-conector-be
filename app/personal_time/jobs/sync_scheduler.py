@@ -186,7 +186,7 @@ def start_scheduler():
     """
     scheduler.add_job(
         func=execute_timeoff_sync_job,
-        trigger=CronTrigger(hour=16, minute=43, timezone=ARGENTINA_TZ),
+        trigger=CronTrigger(hour=19, minute=00, timezone=ARGENTINA_TZ),
         id="timeoff_sync_daily",
         name="Sincronización diaria de licencias Humand → Odoo",
         replace_existing=True,
