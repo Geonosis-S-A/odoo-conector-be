@@ -31,13 +31,16 @@ class SyncResult:
         self.successfully_synced = 0
         self.errors_count = 0
         self.errors: List[Tuple[str, str]] = []  # (humand_request_id, error_message)
+        self.successes: List[Tuple[str, dict]] = []  # (humand_request_id, details)
         self.skipped_count = 0  # Ya existían en la BD
         self.status_updates_count = 0  # Estados actualizados
+        self.status_updates: List[Tuple[str, dict]] = []  # (humand_request_id, details)
 
-    def add_success(self):
+    def add_success(self, humand_request_id: str, details: dict):
         """Registra una sincronización exitosa."""
         self.total_processed += 1
         self.successfully_synced += 1
+        self.successes.append((humand_request_id, details))
 
     def add_error(self, humand_request_id: str, error_message: str):
         """Registra un error."""
@@ -50,10 +53,11 @@ class SyncResult:
         self.total_processed += 1
         self.skipped_count += 1
 
-    def add_status_update(self):
+    def add_status_update(self, humand_request_id: str, details: dict):
         """Registra una actualización de estado exitosa."""
         self.total_processed += 1
         self.status_updates_count += 1
+        self.status_updates.append((humand_request_id, details))
 
     def get_summary(self) -> str:
         """Retorna un resumen de la sincronización."""
@@ -65,8 +69,24 @@ class SyncResult:
             f"Errores: {self.errors_count}"
         )
 
+    def to_dict(self) -> dict:
+        """Convierte el resultado a un diccionario para serialización."""
+        return {
+            "total_processed": self.total_processed,
+            "successfully_synced": self.successfully_synced,
+            "status_updates_count": self.status_updates_count,
+            "skipped": self.skipped_count,
+            "errors_count": self.errors_count,
+            "errors": [{"humand_id": err[0], "error": err[1]} for err in self.errors],
+            "successes": [
+                {"humand_id": success[0], **success[1]} for success in self.successes
+            ],
+            "status_updates": [
+                {"humand_id": update[0], **update[1]} for update in self.status_updates
+            ],
+        }
 
-# TODO: ALMACENAR CADA RUN DEL JOB EN LA TABLA DE LOG DE SINCRONIZACIONES
+
 class SyncNewTimeOffRequestsUseCase:
     """
     Caso de uso para sincronizar nuevas solicitudes de licencias desde Humand a Odoo.
@@ -95,6 +115,67 @@ class SyncNewTimeOffRequestsUseCase:
         self.odoo_gateway = odoo_gateway
         self.employee_gateway = employee_gateway
         self.mapping_repository = mapping_repository
+
+    @staticmethod
+    def build_run_details(
+        new_requests_result: Optional["SyncResult"] = None,
+        status_updates_result: Optional["SyncResult"] = None,
+    ) -> dict:
+        """
+        Construye el JSON de detalles de una ejecución de sincronización.
+
+        Args:
+            new_requests_result: Resultado de la sincronización de nuevas solicitudes
+            status_updates_result: Resultado de la sincronización de estados
+
+        Returns:
+            dict: Diccionario con los detalles completos de la ejecución
+        """
+        new_dict = (
+            new_requests_result.to_dict()
+            if new_requests_result
+            else {
+                "total_processed": 0,
+                "successfully_synced": 0,
+                "status_updates_count": 0,
+                "skipped": 0,
+                "errors_count": 0,
+                "errors": [],
+                "successes": [],
+                "status_updates": [],
+            }
+        )
+
+        status_dict = (
+            status_updates_result.to_dict()
+            if status_updates_result
+            else {
+                "total_processed": 0,
+                "successfully_synced": 0,
+                "status_updates_count": 0,
+                "skipped": 0,
+                "errors_count": 0,
+                "errors": [],
+                "successes": [],
+                "status_updates": [],
+            }
+        )
+
+        total_processed = new_dict["total_processed"] + status_dict["total_processed"]
+        total_synced = (
+            new_dict["successfully_synced"] + status_dict["status_updates_count"]
+        )
+        total_errors = new_dict["errors_count"] + status_dict["errors_count"]
+
+        return {
+            "new_requests": new_dict,
+            "status_updates": status_dict,
+            "summary": {
+                "total_processed": total_processed,
+                "total_synced": total_synced,
+                "total_errors": total_errors,
+            },
+        }
 
     def execute(self, created_at_since: Optional[datetime] = None) -> SyncResult:
         """
@@ -281,8 +362,18 @@ class SyncNewTimeOffRequestsUseCase:
                 )
                 result.add_error(humand_request.id, error_msg)
             else:
-                # Todo OK
-                result.add_success()
+                # Sincronización exitosa - registrar detalles
+                success_details = {
+                    "odoo_request_id": odoo_result.request_id,
+                    "user_email": humand_request.user_email,
+                    "user_name": humand_request.user_name,
+                    "from_date": humand_request.from_date.isoformat(),
+                    "to_date": humand_request.to_date.isoformat(),
+                    "policy_type": humand_request.policy_type_name,
+                    "status": humand_request.status,
+                    "odoo_state": odoo_state,
+                }
+                result.add_success(humand_request.id, success_details)
 
         except Exception as e:
             # Capturar información detallada del error
@@ -320,9 +411,7 @@ class SyncNewTimeOffRequestsUseCase:
 
     def _map_policy_type_to_odoo(
         self, policy_type_id: str, policy_type_name: str
-    ) -> Optional[
-        int
-    ]:  # TODO: revisar mapeo por nombres de policy(funciona pero hay nombres que no coinciden).
+    ) -> Optional[int]:
         """
         Mapea un tipo de política de Humand a un tipo de licencia en Odoo.
 
@@ -468,7 +557,17 @@ class SyncNewTimeOffRequestsUseCase:
             )
 
             if success:
-                result.add_status_update()
+                # Actualización de estado exitosa - registrar detalles
+                update_details = {
+                    "odoo_request_id": mapping.odoo_request_id,
+                    "user_email": humand_request.user_email,
+                    "user_name": humand_request.user_name,
+                    "policy_type": humand_request.policy_type_name,
+                    "previous_state": current_odoo_state,
+                    "new_state": desired_odoo_state,
+                    "humand_status": humand_request.status,
+                }
+                result.add_status_update(humand_request.id, update_details)
             else:
                 error_msg = (
                     f"Error al actualizar estado en Odoo | "
