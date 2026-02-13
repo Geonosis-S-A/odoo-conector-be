@@ -183,6 +183,14 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
             # Modo "messages": tokens del LLM
             if mode == "messages":
                 token, metadata = chunk
+                
+                # Filtrar mensajes de herramientas (ToolMessage)
+                # Solo queremos enviar el texto que el modelo escribe al usuario
+                message_type = type(token).__name__
+                if message_type == "ToolMessage":
+                    # No enviar respuestas de herramientas al frontend
+                    continue
+                
                 content_blocks = getattr(token, "content_blocks", [])
 
                 for block in content_blocks:
@@ -190,6 +198,15 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                     if isinstance(block, dict) and block.get("type") == "text":
                         text_chunk = block.get("text", "")
                         if text_chunk:
+                            # Filtro adicional: no enviar si parece ser JSON de herramienta
+                            if text_chunk.strip().startswith("{") and (
+                                "search_term" in text_chunk or 
+                                "project_id" in text_chunk or
+                                "found" in text_chunk or
+                                "tasks" in text_chunk
+                            ):
+                                continue
+                            
                             yield {"type": "text", "content": text_chunk}
 
             # Modo "updates": actualizaciones del grafo (incluye interrupciones)
@@ -279,6 +296,13 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
             # Modo "messages": tokens del LLM
             if mode == "messages":
                 token, metadata = chunk
+                
+                # Filtrar mensajes de herramientas (ToolMessage)
+                message_type = type(token).__name__
+                if message_type == "ToolMessage":
+                    # No enviar respuestas de herramientas al frontend
+                    continue
+                
                 content_blocks = getattr(token, "content_blocks", [])
 
                 for block in content_blocks:
@@ -286,6 +310,15 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
                     if isinstance(block, dict) and block.get("type") == "text":
                         text_chunk = block.get("text", "")
                         if text_chunk:
+                            # Filtro adicional: no enviar si parece ser JSON de herramienta
+                            if text_chunk.strip().startswith("{") and (
+                                "search_term" in text_chunk or 
+                                "project_id" in text_chunk or
+                                "found" in text_chunk or
+                                "tasks" in text_chunk
+                            ):
+                                continue
+                            
                             yield {"type": "text", "content": text_chunk}
 
             # Modo "updates": actualizaciones del grafo (incluye interrupciones)
