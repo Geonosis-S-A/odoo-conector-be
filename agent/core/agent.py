@@ -7,8 +7,7 @@ from agent.tools.project_tools import (
     get_all_projects,
     search_task_in_project,
     get_all_tasks_in_project,
-    create_timesheet_entry,
-    create_multiple_timesheet_entries,
+    create_timesheet_entries,
     get_timesheet_entries_by_date_range,
     Context,
 )
@@ -70,8 +69,7 @@ def create_timesheet_agent():
             get_all_projects,
             search_task_in_project,
             get_all_tasks_in_project,
-            create_timesheet_entry,
-            create_multiple_timesheet_entries,
+            create_timesheet_entries,
             get_timesheet_entries_by_date_range,
         ],
         context_schema=Context,
@@ -81,7 +79,7 @@ def create_timesheet_agent():
             [
                 HumanInTheLoopMiddleware(
                     interrupt_on={
-                        "create_timesheet_entry": True,  # Interrumpir y permitir approve/reject
+                        "create_timesheet_entries": True,  # Interrumpir y permitir approve/reject
                     },
                 ),
             ],
