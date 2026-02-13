@@ -81,11 +81,8 @@ def create_timesheet_agent():
             [
                 HumanInTheLoopMiddleware(
                     interrupt_on={
-                        "create_timesheet_entry": {
-                            "allowed_decisions": ["approve", "reject"]
-                        },
+                        "create_timesheet_entry": True,  # Interrumpir y permitir approve/reject
                     },
-                    description_prefix="Ejecución de herramienta pendiente de aprobación",
                 ),
             ],
         ),
@@ -216,6 +213,9 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                             "type": "interrupt",
                             "content": interrupt_data
                         }
+                        # IMPORTANTE: Detener el streaming aquí porque la ejecución está pausada
+                        # El usuario debe responder con approve/reject para reanudar
+                        return
                 
                 # También detectar cuando se ejecutan herramientas exitosamente
                 # para enviar notificaciones al frontend
@@ -245,7 +245,6 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                                     pass
 
     except Exception as e:
-        # Log error but don't print stack trace in production
         print(f"Error in agent stream: {e}")
         raise
 
@@ -308,6 +307,8 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
                             "type": "interrupt",
                             "content": interrupt_data
                         }
+                        # IMPORTANTE: Detener el streaming aquí porque la ejecución está pausada
+                        return
                 
                 # Detectar cuando se ejecutan herramientas exitosamente
                 for node_name, node_update in chunk.items():
@@ -335,6 +336,5 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
                                     pass
 
     except Exception as e:
-        # Log error but don't print stack trace in production
         print(f"Error in agent resume stream: {e}")
         raise
