@@ -1,4 +1,4 @@
-from agent.core.agent import create_timesheet_agent, run_agent_stream
+from agent.core.agent import create_timesheet_agent, run_agent_stream, resume_agent_stream
 
 # Crear una instancia global del agente (se reutiliza entre llamadas)
 _agent = None
@@ -71,4 +71,24 @@ def run_agent_service(prompt: str, conversation_id: str, employee_id: int):
     
     # Ejecutar el agente con streaming
     for chunk in run_agent_stream(agent, prompt, conversation_id, employee_id):
+        yield chunk
+
+
+def resume_agent_service(conversation_id: str, employee_id: int, decisions: list):
+    """
+    Reanuda el agente después de una interrupción con las decisiones del usuario.
+    
+    Args:
+        conversation_id: ID único de la conversación para mantener contexto
+        employee_id: ID del empleado que hace la consulta
+        decisions: Lista de decisiones del usuario
+    
+    Yields:
+        dict: Diccionario con 'type' ('text', 'event', 'interrupt') y 'content'
+    """
+    # Obtener el agente (se crea solo la primera vez)
+    agent = get_agent()
+    
+    # Reanudar el agente con las decisiones
+    for chunk in resume_agent_stream(agent, conversation_id, employee_id, decisions):
         yield chunk

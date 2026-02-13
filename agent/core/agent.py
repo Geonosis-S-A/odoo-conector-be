@@ -19,7 +19,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from datetime import date, datetime
 import locale
-
+from typing import Any, cast
+from langchain.agents.middleware import AgentMiddleware, HumanInTheLoopMiddleware
 
 load_dotenv()
 
@@ -75,6 +76,19 @@ def create_timesheet_agent():
         ],
         context_schema=Context,
         checkpointer=checkpointer,
+        middleware=cast(
+            "list[AgentMiddleware[Any, Context]]",
+            [
+                HumanInTheLoopMiddleware(
+                    interrupt_on={
+                        "create_timesheet_entry": {
+                            "allowed_decisions": ["approve", "reject"]
+                        },
+                    },
+                    description_prefix="Ejecución de herramienta pendiente de aprobación",
+                ),
+            ],
+        ),
     )
 
     return agent, checkpointer
@@ -145,7 +159,7 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
         employee_id: ID del empleado que hace la consulta
 
     Yields:
-        dict: Diccionario con 'type' ('text' o 'event') y 'content'
+        dict: Diccionario con 'type' ('text', 'event', 'interrupt') y 'content'
     """
     import json
 
@@ -158,7 +172,7 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
 
     try:
         # Ejecutar el agente en modo streaming con la fecha actual inyectada
-        for token, metadata in agent.stream(
+        for mode, chunk in agent.stream(
             {
                 "messages": [
                     {"role": "system", "content": date_context},
@@ -167,16 +181,11 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
             },
             config=config,
             context=Context(employee_id=employee_id),
-            stream_mode="messages",
+            stream_mode=["updates", "messages"],
         ):
-            # Obtener el nombre del nodo actual
-            node = (
-                metadata.get("langgraph_node") if isinstance(metadata, dict) else None
-            )
-
-            # Procesar respuestas del modelo (texto)
-            if node == "model":
-                # Procesar los content_blocks (basado en el ejemplo del usuario)
+            # Modo "messages": tokens del LLM
+            if mode == "messages":
+                token, metadata = chunk
                 content_blocks = getattr(token, "content_blocks", [])
 
                 for block in content_blocks:
@@ -186,31 +195,146 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                         if text_chunk:
                             yield {"type": "text", "content": text_chunk}
 
-            # Detectar cuando se ejecutan herramientas y verificar si se creó un timesheet
-            elif node == "tools":
-                # El token contiene el resultado de la herramienta
-                content = getattr(token, "content", None)
+            # Modo "updates": actualizaciones del grafo (incluye interrupciones)
+            elif mode == "updates":
+                # Detectar interrupciones de Human-in-the-Loop
+                if isinstance(chunk, dict) and "__interrupt__" in chunk:
+                    # Extraer información de la interrupción
+                    interrupts = chunk["__interrupt__"]
+                    
+                    if interrupts:
+                        # Convertir el objeto Interrupt a dict serializable
+                        interrupt_data = []
+                        for interrupt in interrupts:
+                            if hasattr(interrupt, 'value'):
+                                interrupt_data.append(interrupt.value)
+                            elif isinstance(interrupt, dict):
+                                interrupt_data.append(interrupt)
+                        
+                        # Enviar interrupción al frontend para que el usuario decida
+                        yield {
+                            "type": "interrupt",
+                            "content": interrupt_data
+                        }
+                
+                # También detectar cuando se ejecutan herramientas exitosamente
+                # para enviar notificaciones al frontend
+                for node_name, node_update in chunk.items():
+                    if node_name == "tools" and isinstance(node_update, dict):
+                        # El node_update contiene información sobre la ejecución de herramientas
+                        messages = node_update.get("messages", [])
+                        for msg in messages:
+                            content = getattr(msg, "content", None)
+                            if content:
+                                try:
+                                    # Intentar parsear el contenido como JSON
+                                    result = (
+                                        json.loads(content) if isinstance(content, str) else content
+                                    )
 
-                if content:
-                    try:
-                        # Intentar parsear el contenido como JSON
-                        result = (
-                            json.loads(content) if isinstance(content, str) else content
-                        )
-
-                        # Verificar si es una respuesta exitosa de creación de timesheet
-                        if isinstance(result, dict) and result.get("success") is True:
-                            # Enviar evento especial al frontend
-                            yield {
-                                "type": "event",
-                                "event": "timesheet_created",
-                                "content": {"success": True},
-                            }
-                    except (json.JSONDecodeError, AttributeError):
-                        # Si no se puede parsear, ignorar
-                        pass
+                                    # Verificar si es una respuesta exitosa de creación de timesheet
+                                    if isinstance(result, dict) and result.get("success") is True:
+                                        # Enviar evento especial al frontend
+                                        yield {
+                                            "type": "event",
+                                            "event": "timesheet_created",
+                                            "content": {"success": True},
+                                        }
+                                except (json.JSONDecodeError, AttributeError):
+                                    # Si no se puede parsear, ignorar
+                                    pass
 
     except Exception as e:
         # Log error but don't print stack trace in production
         print(f"Error in agent stream: {e}")
+        raise
+
+
+def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions: list):
+    """
+    Reanuda el agente después de una interrupción con las decisiones del usuario.
+
+    Args:
+        agent: El agente configurado a ejecutar
+        conversation_id: ID único de la conversación para mantener contexto
+        employee_id: ID del empleado que hace la consulta
+        decisions: Lista de decisiones del usuario [{"type": "approve"}, {"type": "reject", "message": "..."}]
+
+    Yields:
+        dict: Diccionario con 'type' ('text', 'event', 'interrupt') y 'content'
+    """
+    import json
+    from langgraph.types import Command
+
+    # Configurar el contexto de la conversación (mismo thread_id para reanudar)
+    config: RunnableConfig = {"configurable": {"thread_id": conversation_id}}
+
+    try:
+        # Reanudar el agente con las decisiones del usuario
+        for mode, chunk in agent.stream(
+            Command(resume={"decisions": decisions}),
+            config=config,
+            context=Context(employee_id=employee_id),
+            stream_mode=["updates", "messages"],
+        ):
+            # Modo "messages": tokens del LLM
+            if mode == "messages":
+                token, metadata = chunk
+                content_blocks = getattr(token, "content_blocks", [])
+
+                for block in content_blocks:
+                    # Solo emitir chunks de texto (ignorar tool_calls)
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        text_chunk = block.get("text", "")
+                        if text_chunk:
+                            yield {"type": "text", "content": text_chunk}
+
+            # Modo "updates": actualizaciones del grafo (incluye interrupciones)
+            elif mode == "updates":
+                # Detectar interrupciones adicionales (en caso de múltiples herramientas)
+                if isinstance(chunk, dict) and "__interrupt__" in chunk:
+                    interrupts = chunk["__interrupt__"]
+                    
+                    if interrupts:
+                        # Convertir el objeto Interrupt a dict serializable
+                        interrupt_data = []
+                        for interrupt in interrupts:
+                            if hasattr(interrupt, 'value'):
+                                interrupt_data.append(interrupt.value)
+                            elif isinstance(interrupt, dict):
+                                interrupt_data.append(interrupt)
+                        
+                        yield {
+                            "type": "interrupt",
+                            "content": interrupt_data
+                        }
+                
+                # Detectar cuando se ejecutan herramientas exitosamente
+                for node_name, node_update in chunk.items():
+                    if node_name == "tools" and isinstance(node_update, dict):
+                        messages = node_update.get("messages", [])
+                        for msg in messages:
+                            content = getattr(msg, "content", None)
+                            if content:
+                                try:
+                                    # Intentar parsear el contenido como JSON
+                                    result = (
+                                        json.loads(content) if isinstance(content, str) else content
+                                    )
+
+                                    # Verificar si es una respuesta exitosa de creación de timesheet
+                                    if isinstance(result, dict) and result.get("success") is True:
+                                        # Enviar evento especial al frontend
+                                        yield {
+                                            "type": "event",
+                                            "event": "timesheet_created",
+                                            "content": {"success": True},
+                                        }
+                                except (json.JSONDecodeError, AttributeError):
+                                    # Si no se puede parsear, ignorar
+                                    pass
+
+    except Exception as e:
+        # Log error but don't print stack trace in production
+        print(f"Error in agent resume stream: {e}")
         raise
