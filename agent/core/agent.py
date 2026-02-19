@@ -165,6 +165,9 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
     current_date = get_current_date_formatted()
     date_context = f"[Fecha actual del sistema: {current_date}]"
 
+    # Bandera para rastrear si se ha enviado texto antes del interrupt
+    has_sent_text = False
+
     try:
         # Ejecutar el agente en modo streaming con la fecha actual inyectada
         for mode, chunk in agent.stream(
@@ -206,6 +209,7 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                                 continue
                             
                             yield {"type": "text", "content": text_chunk}
+                            has_sent_text = True  # Marcar que se envió texto
 
             # Modo "updates": actualizaciones del grafo (incluye interrupciones)
             elif mode == "updates":
@@ -215,6 +219,13 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                     interrupts = chunk["__interrupt__"]
                     
                     if interrupts:
+                        # Si no se ha enviado texto, generar uno automático como fallback
+                        if not has_sent_text:
+                            yield {
+                                "type": "text", 
+                                "content": "Voy a proceder con la siguiente acción:\n\n"
+                            }
+                        
                         # Convertir el objeto Interrupt a dict serializable
                         interrupt_data = []
                         for interrupt in interrupts:
@@ -228,9 +239,8 @@ def run_agent_stream(agent, message: str, conversation_id: str, employee_id: int
                             "type": "interrupt",
                             "content": interrupt_data
                         }
-                        # IMPORTANTE: Detener el streaming aquí porque la ejecución está pausada
-                        # El usuario debe responder con approve/reject para reanudar
-                        return
+                        # No hacer return - dejar que el stream termine naturalmente
+                        # El agente está pausado y no generará más chunks hasta que se reanude
                 
                 # También detectar cuando se ejecutan herramientas exitosamente
                 # para enviar notificaciones al frontend
@@ -283,6 +293,9 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
     # Configurar el contexto de la conversación (mismo thread_id para reanudar)
     config: RunnableConfig = {"configurable": {"thread_id": conversation_id}}
 
+    # Bandera para rastrear si se ha enviado texto antes de un posible interrupt adicional
+    has_sent_text = False
+
     try:
         # Reanudar el agente con las decisiones del usuario
         for mode, chunk in agent.stream(
@@ -318,6 +331,7 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
                                 continue
                             
                             yield {"type": "text", "content": text_chunk}
+                            has_sent_text = True  # Marcar que se envió texto
 
             # Modo "updates": actualizaciones del grafo (incluye interrupciones)
             elif mode == "updates":
@@ -326,6 +340,13 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
                     interrupts = chunk["__interrupt__"]
                     
                     if interrupts:
+                        # Si no se ha enviado texto, generar uno automático como fallback
+                        if not has_sent_text:
+                            yield {
+                                "type": "text", 
+                                "content": "Voy a proceder con la siguiente acción:\n\n"
+                            }
+                        
                         # Convertir el objeto Interrupt a dict serializable
                         interrupt_data = []
                         for interrupt in interrupts:
@@ -338,8 +359,8 @@ def resume_agent_stream(agent, conversation_id: str, employee_id: int, decisions
                             "type": "interrupt",
                             "content": interrupt_data
                         }
-                        # IMPORTANTE: Detener el streaming aquí porque la ejecución está pausada
-                        return
+                        # No hacer return - dejar que el stream termine naturalmente
+
                 
                 # Detectar cuando se ejecutan herramientas exitosamente
                 for node_name, node_update in chunk.items():
