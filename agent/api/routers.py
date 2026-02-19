@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from agent.services.cargar_horas import run_agent_service, delete_conversation
+from agent.services.cargar_horas import run_agent_service, delete_conversation, resume_agent_service
 from app.shared.security.dependencies import get_current_user
 from app.auth.infra.auth_service import JWTPayload
 from pydantic import BaseModel
@@ -11,10 +11,17 @@ router = APIRouter(prefix="/agent", tags=["agent"])
 
 
 class CargarHorasAgentRequest(BaseModel):
-    """Schema para la petición de carga de horas del agente."""
+    """
+    Schema para la petición de carga de horas del agente.
+    
+    Soporta dos modos:
+    1. Inicio/continuación normal: enviar 'prompt' con el mensaje del usuario
+    2. Reanudar tras interrupción (HITL): enviar 'decisions' con la respuesta del usuario
+    """
 
-    prompt: str
     conversation_id: str
+    prompt: str | None = None  # Mensaje del usuario (para inicio/continuación)
+    decisions: list | None = None  # Decisiones HITL (para reanudar tras interrupción)
 
 
 @router.post("/cargar-horas-agent")
@@ -24,14 +31,37 @@ async def cargar_horas_agent(
 ):
     """
     Endpoint para interactuar con el agente de carga de horas con streaming SSE.
+    
+    Soporta dos modos de operación:
+    1. **Iniciar/Continuar conversación**: Enviar 'prompt' con el mensaje del usuario
+    2. **Reanudar tras Human-in-the-Loop**: Enviar 'decisions' para aprobar/rechazar acciones
+    
+    Ambos modos usan el mismo 'conversation_id' para mantener el contexto.
 
     Args:
-        request: Petición con el prompt y conversation_id
+        request: Petición con conversation_id y (prompt O decisions)
         current_user: Usuario autenticado (inyectado automáticamente)
 
     Returns:
         StreamingResponse: Respuesta en streaming SSE (Server-Sent Events)
+        
+    Ejemplo de uso:
+        - Inicio: {"conversation_id": "abc123", "prompt": "Carga 8 horas al proyecto X"}
+        - HITL Resume: {"conversation_id": "abc123", "decisions": [{"type": "approve"}]}
     """
+    # Validar que venga prompt O decisions, pero no ambos ni ninguno
+    if request.prompt and request.decisions:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes enviar 'prompt' O 'decisions', no ambos"
+        )
+    
+    if not request.prompt and not request.decisions:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes enviar 'prompt' (para iniciar) o 'decisions' (para reanudar)"
+        )
+    
     # Obtener employee_id del usuario autenticado
     employee_id = current_user["user_id"]
 
@@ -54,9 +84,23 @@ async def cargar_horas_agent(
                 """Produce chunks desde el generador síncrono en un thread separado."""
 
                 def iterate():
-                    for chunk in run_agent_service(
-                        request.prompt, request.conversation_id, employee_id
-                    ):
+                    # Determinar si es inicio/continuación o reanudación
+                    if request.prompt:
+                        # Modo normal: nuevo mensaje del usuario
+                        generator = run_agent_service(
+                            request.prompt, request.conversation_id, employee_id
+                        )
+                    elif request.decisions is not None:
+                        # Modo HITL: reanudar con decisiones
+                        generator = resume_agent_service(
+                            request.conversation_id, employee_id, request.decisions
+                        )
+                    else:
+                        # Esto no debería ocurrir por la validación anterior
+                        raise ValueError("No se proporcionó prompt ni decisions")
+                    
+                    # Iterar sobre el generador correspondiente
+                    for chunk in generator:
                         # Usar call_soon_threadsafe para enviar desde otro thread
                         loop.call_soon_threadsafe(queue.put_nowait, chunk)
                     loop.call_soon_threadsafe(queue.put_nowait, None)  # Señal de fin

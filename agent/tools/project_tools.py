@@ -346,132 +346,30 @@ def _timesheet_line_to_dict(line) -> dict:
 
 
 @tool
-def create_timesheet_entry(
-    runtime: ToolRuntime[Context],
-    project_id: int,
-    task_id: int,
-    hours: float,
-    date_str: str,
-    description: str = "",
-) -> str:
-    """Create a single timesheet entry for the current employee.
-
-    Args:
-        runtime: Runtime context containing employee_id
-        project_id: ID of the project
-        task_id: ID of the task
-        hours: Number of hours to register
-        date_str: Date in format YYYY-MM-DD (e.g., "2024-11-14") or "hoy"/"today"
-        description: Optional description for the timesheet entry
-
-    Returns:
-        JSON string with the created timesheet entry details
-    """
-    try:
-        # Obtener employee_id del contexto
-        employee_id = runtime.context.employee_id
-
-        # Parsear la fecha
-        try:
-            entry_date = _parse_date(date_str)
-        except ValueError as e:
-            return json.dumps(
-                {"success": False, "error": "Fecha inválida", "message": str(e)},
-                ensure_ascii=False,
-            )
-
-        # Obtener la conexión a Odoo
-        odoo_connection = get_odoo_connection()
-
-        # Crear el gateway de timesheet
-        timesheet_gateway = OdooTimesheetLineGateway(odoo_connection)
-
-        # Crear el request
-        request = CargarHorasRequest(
-            name=description if description else None,
-            employee_id=employee_id,
-            project_id=project_id,
-            hours=hours,
-            date=entry_date,
-            task_id=task_id,
-        )
-
-        # Ejecutar el use case con un solo elemento
-        use_case = CargarHorasUseCase(timesheet_gateway)
-        created_lines = use_case.execute([request])
-
-        if not created_lines:
-            return json.dumps(
-                {
-                    "success": False,
-                    "error": "Error al crear",
-                    "message": "No se pudo crear la entrada de timesheet",
-                },
-                ensure_ascii=False,
-            )
-
-        # Retornar información de éxito
-        return json.dumps(
-            {
-                "success": True,
-                "message": "Entrada de timesheet creada exitosamente",
-                "timesheet": _timesheet_line_to_dict(created_lines[0]),
-            },
-            ensure_ascii=False,
-        )
-
-    except InvalidHoursError as e:
-        return json.dumps(
-            {
-                "success": False,
-                "error": "Horas inválidas",
-                "message": f"Las horas deben ser un número positivo. Recibido: {hours}",
-            },
-            ensure_ascii=False,
-        )
-
-    except TimesheetCreationError as e:
-        return json.dumps(
-            {"success": False, "error": "Error al crear timesheet", "message": str(e)},
-            ensure_ascii=False,
-        )
-
-    except TimesheetNotFoundError as e:
-        return json.dumps(
-            {"success": False, "error": "Timesheet no encontrado", "message": str(e)},
-            ensure_ascii=False,
-        )
-
-    except Exception as e:
-        return json.dumps(
-            {
-                "success": False,
-                "error": "Error inesperado",
-                "message": f"Ocurrió un error al crear la entrada de timesheet: {str(e)}",
-            },
-            ensure_ascii=False,
-        )
-
-
-@tool
-def create_multiple_timesheet_entries(
+def create_timesheet_entries(
     runtime: ToolRuntime[Context], entries_json: str
 ) -> str:
-    """Create multiple timesheet entries at once for the current employee (batch operation).
+    """Create one or multiple timesheet entries for the current employee.
+    
+    This is a unified tool that handles both single and batch timesheet creation.
+    You can create from 1 to N entries in a single call.
 
     Args:
         runtime: Runtime context containing employee_id
-        entries_json: JSON string with array of entries. Each entry should have:
+        entries_json: JSON string with array of entries (minimum 1). Each entry should have:
                      - project_id (int): ID of the project
-                     - task_id (int): ID of the task
+                     - task_id (int | null): ID of the task (optional, use null if no task)
                      - hours (float): Number of hours
-                     - date_str (str): Date in YYYY-MM-DD or "hoy"
-                     - description (str, optional): Description
+                     - date_str (str): Date in YYYY-MM-DD or "hoy"/"today"
+                     - description (str, optional): Description (defaults to empty string)
 
-    Example entries_json:
+    Example entries_json for single entry:
+        '[{"project_id": 101, "task_id": 523, "hours": 8.0, "date_str": "2024-11-14", "description": "Desarrollo"}]'
+    
+    Example entries_json for multiple entries:
         '[
             {"project_id": 101, "task_id": 523, "hours": 5.0, "date_str": "2024-11-14", "description": "Desarrollo"},
-            {"project_id": 102, "task_id": 524, "hours": 3.0, "date_str": "hoy", "description": "Testing"}
+            {"project_id": 102, "task_id": null, "hours": 3.0, "date_str": "2024-11-15", "description": "Testing"}
         ]'
 
     Returns:
@@ -508,19 +406,30 @@ def create_multiple_timesheet_entries(
         odoo_connection = get_odoo_connection()
         timesheet_gateway = OdooTimesheetLineGateway(odoo_connection)
 
+        # Validar que hay al menos 1 entrada
+        if len(entries_data) == 0:
+            return json.dumps(
+                {
+                    "success": False,
+                    "error": "Sin entradas",
+                    "message": "Debes proporcionar al menos una entrada de timesheet",
+                },
+                ensure_ascii=False,
+            )
+
         # Crear todas las requests
         requests = []
         for idx, entry in enumerate(entries_data):
             try:
-                # Validar campos requeridos
+                # Validar campos requeridos (task_id es opcional, puede ser null)
                 if not all(
-                    k in entry for k in ["project_id", "task_id", "hours", "date_str"]
+                    k in entry for k in ["project_id", "hours", "date_str"]
                 ):
                     return json.dumps(
                         {
                             "success": False,
                             "error": "Campos faltantes",
-                            "message": f"Entrada {idx + 1}: Faltan campos requeridos (project_id, task_id, hours, date_str)",
+                            "message": f"Entrada {idx + 1}: Faltan campos requeridos (project_id, hours, date_str)",
                         },
                         ensure_ascii=False,
                     )
@@ -528,14 +437,19 @@ def create_multiple_timesheet_entries(
                 # Parsear fecha
                 entry_date = _parse_date(entry["date_str"])
 
+                # task_id puede ser null/None (opcional)
+                task_id = entry.get("task_id")
+                if task_id == "null" or task_id == "None":
+                    task_id = None
+
                 # Crear request
                 request = CargarHorasRequest(
-                    name=entry.get("description", None),
+                    name=entry.get("description") if entry.get("description") else None,
                     employee_id=employee_id,
                     project_id=entry["project_id"],
                     hours=entry["hours"],
                     date=entry_date,
-                    task_id=entry["task_id"],
+                    task_id=task_id,
                 )
                 requests.append(request)
 
