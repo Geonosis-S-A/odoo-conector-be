@@ -361,16 +361,13 @@ def create_timesheet_entries(
                      - task_id (int | null): ID of the task (optional, use null if no task)
                      - hours (float): Number of hours
                      - date_str (str): Date in YYYY-MM-DD or "hoy"/"today"
-                     - description (str, optional): Description (defaults to empty string)
+                     - description (str, optional): Leave empty unless user explicitly requests one. Default: empty.
 
-    Example entries_json for single entry:
-        '[{"project_id": 101, "task_id": 523, "hours": 8.0, "date_str": "2024-11-14", "description": "Desarrollo"}]'
+    Example entries_json for single entry (no description):
+        '[{"project_id": 101, "task_id": 523, "hours": 8.0, "date_str": "2024-11-14"}]'
     
-    Example entries_json for multiple entries:
-        '[
-            {"project_id": 101, "task_id": 523, "hours": 5.0, "date_str": "2024-11-14", "description": "Desarrollo"},
-            {"project_id": 102, "task_id": null, "hours": 3.0, "date_str": "2024-11-15", "description": "Testing"}
-        ]'
+    Example entries_json with user-requested description:
+        '[{"project_id": 101, "task_id": 523, "hours": 8.0, "date_str": "2024-11-14", "description": "Revisión de código"}]'
 
     Returns:
         JSON string with the created timesheet entries details
