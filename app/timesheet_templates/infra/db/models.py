@@ -6,6 +6,8 @@ from sqlmodel import Field, SQLModel
 class TimesheetTemplateModel(SQLModel, table=True):
     """Modelo de base de datos para templates de carga de timesheets."""
 
+    __tablename__ = "timesheettemplate"
+
     id: Optional[int] = Field(default=None, primary_key=True)
     user_id: int = Field(
         index=True, description="ID del usuario que creó el template"
