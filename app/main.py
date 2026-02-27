@@ -18,7 +18,6 @@ from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
 from app.saved_prompts.api.routers import router as saved_prompts_router
 from app.timesheet_templates.api.routers import router as timesheet_templates_router
-from app.personal_time.jobs.sync_scheduler import start_scheduler, stop_scheduler
 import logging
 
 
