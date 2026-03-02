@@ -73,12 +73,15 @@ class ListTimesheetLinesUseCase:
 
         employees = self.employee_gateway.all()
         employees_dict = {employee.id: employee for employee in employees}
-        # Devolver la lista de timesheets (puede estar vacía, y eso está bien)
+
+        # Una sola query batch para todas las notificaciones (reemplaza el loop N+1)
+        notifications = self.notification_repository.get_by_timesheet_ids(
+            [t.id for t in timesheets]
+        )
+        notifications_map = {n.timesheet_line_id: n for n in notifications}
+
         for timesheet in timesheets:
-            # es ineficiente, pero van a ser pocos. Todo: mejorar
-            notification = self.notification_repository.get_by_timesheet_id(
-                timesheet.id
-            )
+            notification = notifications_map.get(timesheet.id)
             if notification is not None:
                 timesheet.notification = TimesheetLineNotificationResponse(
                     id=notification.id,
