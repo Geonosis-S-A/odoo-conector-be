@@ -1,8 +1,10 @@
 from datetime import date
-from typing import List
+from typing import List, Optional
 
 from app.dashboard.domain.models import (
     DashboardSummaryByEmployee,
+    PreviousPeriodData,
+    ValidationStats,
     KPI,
     ProjectTotal,
     TaskTotal,
@@ -31,7 +33,12 @@ class GetDashboardSummaryByEmployeeUseCase:
         self.timesheet_line_gateway = timesheet_line_gateway
 
     def execute(
-        self, employee_id: int, date_from: date, date_to: date
+        self,
+        employee_id: int,
+        date_from: date,
+        date_to: date,
+        prev_date_from: Optional[date] = None,
+        prev_date_to: Optional[date] = None,
     ) -> DashboardSummaryByEmployee:
         """
         Ejecuta el caso de uso para obtener el resumen del dashboard.
@@ -93,7 +100,15 @@ class GetDashboardSummaryByEmployeeUseCase:
             timesheet_data, self.task_gateway
         )
 
-        # 7. Crear y retornar el resumen del dashboard
+        # 7. Calcular estadísticas de validación
+        approved_hours = sum(line.hours for line in timesheet_data if line.validated)
+        pending_hours = sum(line.hours for line in timesheet_data if not line.validated)
+        validation_stats = ValidationStats(
+            approved_hours=approved_hours,
+            pending_hours=pending_hours,
+        )
+
+        # 8. Crear el resumen del dashboard
         dashboard_summary = DashboardSummaryByEmployee.create(
             users_count=1,
             worked_days=dias_trabajados_count,
@@ -105,5 +120,38 @@ class GetDashboardSummaryByEmployeeUseCase:
             by_employee=by_employee,
             hierarchical_summary=hierarchical_summary,
         )
+        dashboard_summary.validation_stats = validation_stats
+
+        # 9. Computar período anterior si se solicitó (solo KPIs, sin jerarquía)
+        if prev_date_from and prev_date_to:
+            dashboard_summary.previous_period = self._compute_previous_period(
+                employee_id, prev_date_from, prev_date_to
+            )
 
         return dashboard_summary
+
+    def _compute_previous_period(
+        self, employee_id: int, date_from: date, date_to: date
+    ) -> PreviousPeriodData:
+        """Computa los KPIs mínimos del período anterior (sin jerarquía ni totales)."""
+        INTERNAL_PROJECT_NAME = "Interno"
+
+        all_data = self.dashboard_service.get_timesheet_summary(
+            [employee_id], date_from, date_to,
+            self.task_gateway, self.timesheet_line_gateway, None,
+        )
+        data = [line for line in all_data if line.project.name != INTERNAL_PROJECT_NAME]
+
+        worked_days = len({line.date for line in data if line.hours > 0})
+        hours_kpi = self.dashboard_service.calculate_hours_kpi(data, 1)
+        entries_kpi = self.dashboard_service.calculate_entries_kpi(data, 1)
+        daily_avg_kpi = self.dashboard_service.calculate_daily_average_kpi(
+            data, 1, date_from, date_to
+        )
+
+        return PreviousPeriodData(
+            worked_days=worked_days,
+            hours_total=hours_kpi.total,
+            entries_total=entries_kpi.total,
+            daily_average=daily_avg_kpi.total,
+        )

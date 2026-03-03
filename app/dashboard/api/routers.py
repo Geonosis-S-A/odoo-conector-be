@@ -16,6 +16,8 @@ from app.dashboard.api.schemas import (
     EmployeeTotalResponse,
     DashboardSummaryResponseByEmployee,
     DashboardSummaryMetaResponseByEmployee,
+    PreviousPeriodSummaryResponse,
+    ValidationStatsResponse,
     HierarchicalSummaryResponse,
     HierarchicalItemResponse,
     TaskDetailResponse,
@@ -292,6 +294,8 @@ async def get_dashboard_summary_by_employee(
     employee_id: int = Path(..., description="ID del empleado para filtrar"),
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    prev_date_from: Optional[date] = Query(None, description="Inicio del período anterior para comparación"),
+    prev_date_to: Optional[date] = Query(None, description="Fin del período anterior para comparación"),
     dashboard_gateway: DashboardDataService = Depends(get_dashboard_data_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     task_gateway: TaskGateway = Depends(get_task_gateway),
@@ -332,7 +336,9 @@ async def get_dashboard_summary_by_employee(
         use_case = GetDashboardSummaryByEmployeeUseCase(
             dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
         )
-        dashboard_summary = use_case.execute(employee_id, date_from, date_to)
+        dashboard_summary = use_case.execute(
+            employee_id, date_from, date_to, prev_date_from, prev_date_to
+        )
 
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema_by_employee(dashboard_summary)
@@ -585,6 +591,26 @@ def _transform_to_response_schema_by_employee(
             dashboard_summary.hierarchical_summary
         )
 
+    # Transformar período anterior si existe
+    previous_period_response = None
+    if dashboard_summary.previous_period:
+        pp = dashboard_summary.previous_period
+        previous_period_response = PreviousPeriodSummaryResponse(
+            worked_days=pp.worked_days,
+            hours_total=pp.hours_total,
+            entries_total=pp.entries_total,
+            daily_average=pp.daily_average,
+        )
+
+    # Transformar estadísticas de validación si existen
+    validation_stats_response = None
+    if dashboard_summary.validation_stats:
+        vs = dashboard_summary.validation_stats
+        validation_stats_response = ValidationStatsResponse(
+            approved_hours=vs.approved_hours,
+            pending_hours=vs.pending_hours,
+        )
+
     # Crear respuesta completa
     return DashboardSummaryResponseByEmployee(
         meta=DashboardSummaryMetaResponseByEmployee(
@@ -594,4 +620,6 @@ def _transform_to_response_schema_by_employee(
         summary=summary_response,
         totals=totals_response,
         hierarchical_summary=hierarchical_summary_response,
+        previous_period=previous_period_response,
+        validation_stats=validation_stats_response,
     )
