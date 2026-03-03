@@ -73,16 +73,21 @@ class GetTaskDetailUseCase:
         # Obtener IDs únicos de empleados para buscar nombres
         unique_employee_ids = list(set(line.employee_id for line in timesheet_lines))
 
-        # Obtener nombres de empleados
+        # Obtener nombres de empleados en una sola llamada batch
         employee_names = self._get_employee_names(unique_employee_ids)
 
-        # Obtener todos los empleados para el diccionario de notificaciones
-        employees = self.employee_gateway.all()
+        # Construir employees_dict solo con los empleados relevantes (batch)
+        employees = self.employee_gateway.get_by_ids(unique_employee_ids)
         employees_dict = {employee.id: employee for employee in employees}
+
+        # Obtener todas las notificaciones en una sola query batch
+        timesheet_ids = [line.id for line in timesheet_lines]
+        notifications_list = self.notification_repository.get_by_timesheet_ids(timesheet_ids)
+        notifications_map = {n.timesheet_line_id: n for n in notifications_list}
 
         # Transformar a formato simplificado con información del empleado
         timesheet_lines_data = [
-            self._transform_to_simple_format(line, employee_names, employees_dict)
+            self._transform_to_simple_format(line, employee_names, employees_dict, notifications_map)
             for line in timesheet_lines
         ]
 
@@ -93,31 +98,24 @@ class GetTaskDetailUseCase:
         }
 
     def _get_employee_names(self, employee_ids: List[int]) -> dict:
-        """
-        Obtiene los nombres de los empleados desde el EmployeeGateway.
-
-        Args:
-            employee_ids: Lista de IDs de empleados
-
-        Returns:
-            dict con mapping employee_id -> employee_name
-        """
-        employee_names = {}
-
-        for employee_id in employee_ids:
-            try:
-                employee = self.employee_gateway.get_by_id(employee_id)
-                if employee:
-                    employee_names[employee_id] = employee.full_name
-                else:
-                    employee_names[employee_id] = f"Empleado {employee_id}"
-            except Exception:
-                employee_names[employee_id] = f"Empleado {employee_id}"
-
-        return employee_names
+        """Obtiene los nombres de los empleados en una sola llamada batch."""
+        if not employee_ids:
+            return {}
+        try:
+            employees = self.employee_gateway.get_by_ids(employee_ids)
+            employee_names = {emp.id: emp.full_name for emp in employees}
+            for emp_id in employee_ids:
+                employee_names.setdefault(emp_id, f"Empleado {emp_id}")
+            return employee_names
+        except Exception:
+            return {emp_id: f"Empleado {emp_id}" for emp_id in employee_ids}
 
     def _transform_to_simple_format(
-        self, line: DetailedTimesheetLine, employee_names: dict, employees_dict: dict
+        self,
+        line: DetailedTimesheetLine,
+        employee_names: dict,
+        employees_dict: dict,
+        notifications_map: dict,
     ) -> dict:
         """
         Transforma un DetailedTimesheetLine al formato simplificado solicitado.
@@ -126,22 +124,19 @@ class GetTaskDetailUseCase:
             line: Línea de timesheet del modelo de dominio
             employee_names: Mapping de employee_id -> employee_name
             employees_dict: Mapping de employee_id -> employee object para notificaciones
-
-        Returns:
-            dict compatible con SimpleTimesheetLineResponse
+            notifications_map: Mapping de timesheet_line_id -> TimesheetLineNotification
         """
-        # Buscar notificación para esta línea de timesheet
         notification_data = None
         try:
-            notification = self.notification_repository.get_by_timesheet_id(line.id)
+            notification = notifications_map.get(line.id)
             if notification is not None:
+                approver = employees_dict.get(notification.approver_id)
                 notification_data = {
                     "id": notification.id,
-                    "sender_name": employees_dict[notification.approver_id].full_name,
+                    "sender_name": approver.full_name if approver else f"Empleado {notification.approver_id}",
                     "sended_at": notification.created_at,
                 }
         except Exception:
-            # Si hay algún error obteniendo la notificación, continúa sin ella
             pass
 
         return {
