@@ -45,7 +45,7 @@ class GetDashboardSummaryByEmployeeUseCase:
             DashboardSummary con todos los KPIs y totales calculados
         """
 
-        timesheet_data = self.dashboard_service.get_timesheet_summary(
+        all_timesheet_data = self.dashboard_service.get_timesheet_summary(
             [employee_id],
             date_from,
             date_to,
@@ -53,6 +53,14 @@ class GetDashboardSummaryByEmployeeUseCase:
             self.timesheet_line_gateway,
             None,
         )
+
+        # Excluir registros del proyecto interno (licencias, vacaciones, ausencias)
+        # para que no distorsionen ninguna métrica del dashboard.
+        INTERNAL_PROJECT_NAME = "Interno"
+        timesheet_data = [
+            line for line in all_timesheet_data
+            if line.project.name != INTERNAL_PROJECT_NAME
+        ]
 
         dias_trabajados = {line.date for line in timesheet_data if line.hours > 0}
         dias_trabajados_count = len(dias_trabajados)
