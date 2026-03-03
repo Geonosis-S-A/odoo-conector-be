@@ -55,6 +55,14 @@ class GetDashboardSummaryUseCase:
             user_id,
         )
 
+        # Excluir registros del proyecto interno (licencias, vacaciones, ausencias)
+        # para que no distorsionen ninguna métrica del dashboard.
+        INTERNAL_PROJECT_NAME = "Interno"
+        timesheet_data = [
+            line for line in timesheet_data
+            if line.project.name != INTERNAL_PROJECT_NAME
+        ]
+
         # Calcular empleados únicos que realmente cargaron horas
         # Esto incluye empleados del equipo + empleados externos que trabajaron en proyectos gestionados
         unique_employee_ids = set(record.employee_id for record in timesheet_data)

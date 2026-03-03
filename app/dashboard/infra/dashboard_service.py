@@ -236,27 +236,17 @@ class OdooDashboardDataService(DashboardDataService):
         return employee_list
 
     def get_employee_names(self, employee_ids: List[int]) -> dict:
-        """Obtiene los nombres de los empleados desde Odoo usando el EmployeeGateway."""
+        """Obtiene los nombres de los empleados desde Odoo en una sola llamada batch."""
+        if not employee_ids:
+            return {}
         try:
-            employee_names = {}
-
-            # Si no hay empleados, retornar diccionario vacío
-            if not employee_ids:
-                return employee_names
-
-            # Obtener información de cada empleado usando el gateway
-            for employee_id in employee_ids:
-                employee = self.employee_gateway.get_by_id(employee_id)
-                if employee:
-                    employee_names[employee_id] = employee.full_name
-                else:
-                    # Si no se encuentra el empleado, usar nombre genérico
-                    employee_names[employee_id] = f"Empleado {employee_id}"
-
+            employees = self.employee_gateway.get_by_ids(employee_ids)
+            employee_names = {emp.id: emp.full_name for emp in employees}
+            # Rellenar con nombre genérico para IDs que Odoo no devolvió
+            for emp_id in employee_ids:
+                employee_names.setdefault(emp_id, f"Empleado {emp_id}")
             return employee_names
-
         except Exception:
-            # En caso de error, retornar nombres genéricos
             return {emp_id: f"Empleado {emp_id}" for emp_id in employee_ids}
 
     def calculate_project_without_task_totals(

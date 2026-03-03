@@ -123,6 +123,24 @@ class DashboardSummary:
 
 
 @dataclass
+class ValidationStats:
+    """Horas aprobadas y pendientes de validación del período."""
+
+    approved_hours: float
+    pending_hours: float
+
+
+@dataclass
+class PreviousPeriodData:
+    """KPIs mínimos del período anterior para comparación de tendencias."""
+
+    worked_days: int
+    hours_total: float
+    entries_total: float
+    daily_average: float
+
+
+@dataclass
 class DashboardSummaryByEmployee:
     """Modelo principal que contiene toda la información del dashboard."""
 
@@ -130,9 +148,9 @@ class DashboardSummaryByEmployee:
     worked_days: int
     summary: Dict[str, KPI]  # KPIs principales
     totals: Dict[str, List[Any]]  # Totales desagregados
-    hierarchical_summary: Optional[HierarchicalSummary] = (
-        None  # Nueva estructura jerárquica
-    )
+    hierarchical_summary: Optional[HierarchicalSummary] = None
+    previous_period: Optional[PreviousPeriodData] = None
+    validation_stats: Optional[ValidationStats] = None
 
     @classmethod
     def create(
