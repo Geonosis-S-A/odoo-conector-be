@@ -146,6 +146,14 @@ class DashboardSummaryResponseByEmployee(BaseModel):
         json_encoders = {float: lambda v: round(v, 2) if v is not None else None}
 
 
+class ExcelDataResponse(BaseModel):
+    """Schema de respuesta con datos de las hojas del Excel de SharePoint."""
+
+    proyectos: List[dict]
+    horas: List[dict]
+    headcount: List[dict]
+
+
 class TaskDetailRequest(BaseModel):
     """Schema de request para obtener detalle de empleados por tarea."""
 
