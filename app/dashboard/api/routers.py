@@ -1,5 +1,6 @@
 from datetime import date
 import io
+import os
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from fastapi.responses import StreamingResponse
@@ -398,7 +399,7 @@ async def export_timesheets(
     )
 
 
-ALLOWED_KPI_EMAILS = ["ivan.tomaselli@geonosis.com.ar"]
+ALLOWED_KPI_EMAILS = os.getenv("ALLOWED_KPI_EMAILS", "")
 
 
 @router.get("/excel-data", response_model=ExcelDataResponse)
