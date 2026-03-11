@@ -1,5 +1,6 @@
 from datetime import date
 import io
+import os
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from fastapi.responses import StreamingResponse
@@ -22,9 +23,15 @@ from app.dashboard.api.schemas import (
     HierarchicalItemResponse,
     TaskDetailResponse,
     SimpleTimesheetLineResponse,
+    ExcelDataResponse,
 )
 from app.dashboard.application.use_cases.export_timesheets import (
     ExportTimesheetsByTeamUseCase,
+)
+from app.dashboard.application.use_cases.get_excel_data import GetExcelDataUseCase
+from app.shared.infra.external.microsoft.graph_client import (
+    GraphExcelClient,
+    get_graph_excel_client,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -390,6 +397,27 @@ async def export_timesheets(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=horas.xlsx"},
     )
+
+
+ALLOWED_KPI_EMAILS = os.getenv("ALLOWED_KPI_EMAILS", "")
+
+
+@router.get("/excel-data", response_model=ExcelDataResponse)
+async def get_excel_data(
+    client: GraphExcelClient = Depends(get_graph_excel_client),
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    """Obtiene datos de las hojas Proyectos, Horas y Headcount del Excel en SharePoint."""
+    if current_user["user_email"] not in ALLOWED_KPI_EMAILS:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    try:
+        use_case = GetExcelDataUseCase(client)
+        return await use_case.execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al obtener datos de Microsoft Graph: {str(e)}",
+        )
 
 
 def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:
