@@ -228,7 +228,7 @@ class SyncNewTimeOffRequestsUseCase:
                 return
 
             # Mapear el estado de Humand a Odoo
-            odoo_state = self._map_humand_state_to_odoo(humand_request.status)
+            odoo_state = self._map_humand_state_to_odoo(humand_request)
 
             odoo_request = TimeOffRequest(
                 holiday_status_id=odoo_holiday_status_id,
@@ -337,9 +337,10 @@ class SyncNewTimeOffRequestsUseCase:
             Optional[int]: ID del tipo de licencia en Odoo, o None si no se encuentra
         """
         try:
+            print(f"policy_type_name (HUMAND): {policy_type_name}")
             # Buscar el tipo de licencia en Odoo por nombre exacto
             timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(policy_type_name)
-
+            print(f"timeoff_type (Odoo): {timeoff_type}")
             if timeoff_type:
                 return timeoff_type.id
 
@@ -348,33 +349,39 @@ class SyncNewTimeOffRequestsUseCase:
         except Exception as e:
             return None
 
-    def _map_humand_state_to_odoo(self, humand_state: str) -> str:
+    def _map_humand_state_to_odoo(self, humand_request: HumandTimeOffRequest) -> str:
         """
         Mapea un estado de solicitud de Humand a un estado de Odoo.
 
         Humand States → Odoo States:
-        - IN_PROGRESS → draft (esperando aprobación)
-        - PENDING → draft (pendiente de aprobación)
+        - PENDING → draft (todavía no enviada a aprobación)
+        - IN_PROGRESS + firstApprovalDate null → confirm (pendiente de primera aprobación)
+        - IN_PROGRESS + firstApprovalDate informado → validate1 (pendiente de segunda aprobación)
         - APPROVED → validate (aprobado)
         - REJECTED → refuse (rechazado)
         - CANCELLED → refuse (rechazado)
 
         Args:
-            humand_state: Estado de la solicitud en Humand
+            humand_request: Solicitud de Humand con su estado y metadata de aprobación
 
         Returns:
             str: Estado correspondiente en Odoo
         """
         state_mapping = {
-            "IN_PROGRESS": "draft",  # En progreso → Esperando aprobación
-            "PENDING": "draft",  # Pendiente → Esperando aprobación
+            "PENDING": "draft",  # Pendiente de envío/confirmación
             "APPROVED": "validate",  # Aprobado → Validado/Aprobado
             "REJECTED": "refuse",  # Rechazado → Rechazado
             "CANCELLED": "refuse",  # Cancelado → Rechazado
         }
 
         # Normalizar el estado (mayúsculas, sin espacios)
-        normalized_state = humand_state.upper().strip()
+        normalized_state = humand_request.status.upper().strip()
+
+        if normalized_state == "IN_PROGRESS":
+            if humand_request.first_approval_date:
+                return "validate1"
+            else:
+                return "draft"
 
         odoo_state = state_mapping.get(normalized_state, "draft")
 
@@ -386,7 +393,7 @@ class SyncNewTimeOffRequestsUseCase:
 
         Args:
             odoo_request_id: ID de la solicitud en Odoo
-            new_state: Nuevo estado a aplicar (confirm, validate, refuse)
+            new_state: Nuevo estado a aplicar (draft, confirm, validate1, validate, refuse)
 
         Returns:
             bool: True si la actualización fue exitosa, False en caso contrario
@@ -455,7 +462,7 @@ class SyncNewTimeOffRequestsUseCase:
                 return
 
             # 3. Mapear el estado de Humand a Odoo
-            desired_odoo_state = self._map_humand_state_to_odoo(humand_request.status)
+            desired_odoo_state = self._map_humand_state_to_odoo(humand_request)
 
             # 4. Comparar estados
             if current_odoo_state == desired_odoo_state:

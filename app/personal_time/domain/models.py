@@ -45,7 +45,7 @@ class TimeOffRequest:
     request_date_from: date  # Fecha de inicio
     request_date_to: date  # Fecha de fin
     employee_id: int  # ID del empleado
-    state: Optional[str] = None  # Estado deseado en Odoo (draft, confirm, validate, refuse, cancel)
+    state: Optional[str] = None  # Estado deseado en Odoo (draft, confirm, validate1, validate, refuse)
 
     def to_odoo_data(self, include_state: bool = False) -> dict:
         """Convierte la solicitud a formato de Odoo.
@@ -115,6 +115,7 @@ class HumandTimeOffRequest:
     days: float
     reason: Optional[str]
     created_at: date
+    first_approval_date: Optional[date]
     resolution_date: Optional[date]
 
     @classmethod
@@ -139,6 +140,7 @@ class HumandTimeOffRequest:
         
         # Fechas de sistema
         created_at_str = humand_data.get("createdAt")
+        first_approval_date_str = humand_data.get("firstApprovalDate")
         resolution_date_str = humand_data.get("resolutionDate")
         
         # Construir nombre completo del usuario
@@ -159,6 +161,11 @@ class HumandTimeOffRequest:
             days=float(humand_data.get("amountInTime", 0)),
             reason=humand_data.get("description"),
             created_at=date.fromisoformat(created_at_str.split("T")[0]) if created_at_str else date.today(),
+            first_approval_date=(
+                date.fromisoformat(first_approval_date_str.split("T")[0])
+                if first_approval_date_str
+                else None
+            ),
             resolution_date=date.fromisoformat(resolution_date_str.split("T")[0]) if resolution_date_str else None,
         )
 
@@ -175,7 +182,7 @@ class TimeOffRequestInfo:
     request_date_to: date
     employee_id: int
     employee_name: str
-    state: str  # Estado de la solicitud (draft, confirm, validate, refuse, cancel)
+    state: str  # Estado de la solicitud (draft, confirm, validate1, validate, refuse)
     number_of_days: float
 
     @classmethod

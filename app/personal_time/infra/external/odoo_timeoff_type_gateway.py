@@ -128,13 +128,22 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
                     return TimeOffRequestResult.success_result(request_id)
                 except Exception as state_error:
                     # Si falla el cambio de estado, retornar éxito con advertencia
-                    # La solicitud fue creada exitosamente pero quedó en estado draft
-                    warning_msg = f"Creada en estado 'draft' - No se pudo cambiar a '{desired_state}': {str(state_error)}"
+                    # La solicitud fue creada exitosamente, pero no se pudo alcanzar el estado final esperado
+                    actual_state = "unknown"
+                    try:
+                        actual_state = self.get_timeoff_request_state(request_id)
+                    except Exception:
+                        actual_state = "unknown"
+
+                    warning_msg = (
+                        f"Creada en estado '{actual_state}' - "
+                        f"No se pudo cambiar a '{desired_state}': {str(state_error)}"
+                    )
                     return TimeOffRequestResult(
                         success=True,
                         request_id=request_id,
                         message=warning_msg,
-                        actual_state="draft",
+                        actual_state=actual_state,
                         desired_state=desired_state,
                     )
 
@@ -152,42 +161,86 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
 
         Args:
             request_id: ID de la solicitud en Odoo
-            state: Estado deseado (draft, confirm, validate, refuse, cancel)
+            state: Estado deseado (draft, confirm, validate1, validate, refuse)
 
         Raises:
             Exception: Si hay un error al cambiar el estado
         """
         try:
-            if state == "validate":
-                self.odoo_connection["models"].execute_kw(
-                    self.odoo_connection["ODOO_DB"],
-                    self.odoo_connection["uid"],
-                    self.odoo_connection["ODOO_PASSWORD"],
-                    "hr.leave",
-                    "action_approve",
-                    [[request_id]],
-                )
-            elif state == "refuse":
-                # Rechazar la solicitud
-                self.odoo_connection["models"].execute_kw(
-                    self.odoo_connection["ODOO_DB"],
-                    self.odoo_connection["uid"],
-                    self.odoo_connection["ODOO_PASSWORD"],
-                    "hr.leave",
-                    "action_refuse",
-                    [[request_id]],
-                )
-            elif state == "draft":
-                # Ya se crea en draft por defecto, no hacer nada
-                pass
+            current_state = self.get_timeoff_request_state(request_id)
 
+            if current_state == state:
+                return
+
+            if state == "draft":
+                if current_state in {"confirm", "refuse"}:
+                    self._execute_leave_action("action_draft", request_id)
+                else:
+                    raise ValueError(
+                        f"No se puede llevar una solicitud desde '{current_state}' a 'draft'"
+                    )
+            elif state == "confirm":
+                if current_state != "draft":
+                    raise ValueError(
+                        f"No se puede llevar una solicitud desde '{current_state}' a 'confirm'"
+                    )
+                self._execute_leave_action("action_confirm", request_id)
+            elif state == "validate1":
+                if current_state == "draft":
+                    self._execute_leave_action("action_confirm", request_id)
+                    current_state = self.get_timeoff_request_state(request_id)
+
+                if current_state != "confirm":
+                    raise ValueError(
+                        f"No se puede llevar una solicitud desde '{current_state}' a 'validate1'"
+                    )
+
+                self._execute_leave_action("action_approve", request_id)
+            elif state == "validate":
+                if current_state == "draft":
+                    self._execute_leave_action("action_confirm", request_id)
+                    current_state = self.get_timeoff_request_state(request_id)
+
+                if current_state == "confirm":
+                    self._execute_leave_action("action_approve", request_id)
+                    current_state = self.get_timeoff_request_state(request_id)
+
+                if current_state == "validate1":
+                    self._execute_leave_action("action_validate", request_id)
+                elif current_state != "validate":
+                    raise ValueError(
+                        f"No se puede llevar una solicitud desde '{current_state}' a 'validate'"
+                    )
+            elif state == "refuse":
+                if current_state not in {"draft", "confirm", "validate1", "validate"}:
+                    raise ValueError(
+                        f"No se puede llevar una solicitud desde '{current_state}' a 'refuse'"
+                    )
+                self._execute_leave_action("action_refuse", request_id)
             else:
                 raise ValueError(f"Estado no soportado: {state}")
+
+            final_state = self.get_timeoff_request_state(request_id)
+            if final_state != state:
+                raise Exception(
+                    f"Transición incompleta: estado final '{final_state}', esperado '{state}'"
+                )
 
         except Exception as e:
             raise Exception(
                 f"Error al cambiar estado de solicitud a '{state}': {str(e)}"
             )
+
+    def _execute_leave_action(self, action_name: str, request_id: int) -> None:
+        """Ejecuta una acción de workflow sobre una licencia en Odoo."""
+        self.odoo_connection["models"].execute_kw(
+            self.odoo_connection["ODOO_DB"],
+            self.odoo_connection["uid"],
+            self.odoo_connection["ODOO_PASSWORD"],
+            "hr.leave",
+            action_name,
+            [[request_id]],
+        )
 
     def update_timeoff_request(
         self, request_id: int, timeoff_request: TimeOffRequest
