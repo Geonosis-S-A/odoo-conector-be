@@ -142,14 +142,11 @@ class SyncNewTimeOffRequestsUseCase:
         result = SyncResult()
 
         try:
-            # 1. Obtener solicitudes modificadas desde Humand
-            resolution_date = (
-                resolution_from_date.date() if resolution_from_date else None
-            )
-
-            humand_requests = self.humand_gateway.get_all_timeoff_requests(
-                resolution_from_date=resolution_date
-            )
+            # 1. Obtener solicitudes candidatas a cambio de estado desde Humand.
+            # resolutionFromDate cubre cambios terminales (approved/rejected/cancelled),
+            # pero no siempre detecta la primera aprobacion que mantiene la solicitud
+            # en IN_PROGRESS y solo completa firstApprovalDate.
+            humand_requests = self._fetch_status_sync_candidates(resolution_from_date)
 
             # 2. Procesar cada solicitud para actualizar su estado
             for humand_request in humand_requests:
@@ -159,6 +156,39 @@ class SyncNewTimeOffRequestsUseCase:
             raise
 
         return result
+
+    def _fetch_status_sync_candidates(
+        self, resolution_from_date: Optional[datetime]
+    ) -> List[HumandTimeOffRequest]:
+        """Obtiene las solicitudes de Humand que pueden haber cambiado de estado."""
+        resolution_date = resolution_from_date.date() if resolution_from_date else None
+
+        # 1. Cambios terminales detectables por resolutionFromDate.
+        resolved_requests = self.humand_gateway.get_all_timeoff_requests(
+            resolution_from_date=resolution_date
+        )
+
+        # 2. Cambios intermedios hacia validate1. Humand mantiene estas licencias en
+        # IN_PROGRESS y solo informa firstApprovalDate, por lo que no entran por
+        # resolutionFromDate. Se reconsulta el universo de solicitudes en progreso
+        # y luego se filtra a las que ya existen en el mapeo local.
+        mapped_humand_ids = {
+            mapping.humand_request_id
+            for mapping in self.mapping_repository.get_all_synced()
+        }
+        in_progress_requests = [
+            request
+            for request in self.humand_gateway.get_all_timeoff_requests(
+                states=["IN_PROGRESS"]
+            )
+            if request.id in mapped_humand_ids
+        ]
+
+        requests_by_id = {request.id: request for request in resolved_requests}
+        for request in in_progress_requests:
+            requests_by_id[request.id] = request
+
+        return list(requests_by_id.values())
 
     def _fetch_new_requests_from_humand(
         self, created_at_since: Optional[datetime]
@@ -337,10 +367,8 @@ class SyncNewTimeOffRequestsUseCase:
             Optional[int]: ID del tipo de licencia en Odoo, o None si no se encuentra
         """
         try:
-            print(f"policy_type_name (HUMAND): {policy_type_name}")
             # Buscar el tipo de licencia en Odoo por nombre exacto
             timeoff_type = self.odoo_gateway.get_timeoff_type_by_name(policy_type_name)
-            print(f"timeoff_type (Odoo): {timeoff_type}")
             if timeoff_type:
                 return timeoff_type.id
 
@@ -381,13 +409,15 @@ class SyncNewTimeOffRequestsUseCase:
             if humand_request.first_approval_date:
                 return "validate1"
             else:
-                return "draft"
+                return "confirm"
 
         odoo_state = state_mapping.get(normalized_state, "draft")
 
         return odoo_state
 
-    def _update_odoo_request_state(self, odoo_request_id: int, new_state: str) -> bool:
+    def _update_odoo_request_state(
+        self, odoo_request_id: int, new_state: str
+    ) -> Tuple[bool, Optional[str]]:
         """
         Actualiza solo el estado de una solicitud en Odoo.
 
@@ -396,16 +426,16 @@ class SyncNewTimeOffRequestsUseCase:
             new_state: Nuevo estado a aplicar (draft, confirm, validate1, validate, refuse)
 
         Returns:
-            bool: True si la actualización fue exitosa, False en caso contrario
+            Tuple[bool, Optional[str]]: resultado y detalle de error si falla
         """
         try:
             # Llamar al método del gateway que cambia el estado
             self.odoo_gateway.set_timeoff_request_state(odoo_request_id, new_state)
 
-            return True
+            return True, None
 
         except Exception as e:
-            return False
+            return False, str(e)
 
     def _process_single_status_update(
         self, humand_request: HumandTimeOffRequest, result: SyncResult
@@ -470,7 +500,7 @@ class SyncNewTimeOffRequestsUseCase:
                 return
 
             # 5. Actualizar el estado en Odoo
-            success = self._update_odoo_request_state(
+            success, update_error = self._update_odoo_request_state(
                 mapping.odoo_request_id, desired_odoo_state
             )
 
@@ -484,7 +514,8 @@ class SyncNewTimeOffRequestsUseCase:
                     f"Odoo ID: {mapping.odoo_request_id} | "
                     f"Humand ID: {humand_request.id} | "
                     f"Usuario: {humand_request.user_name} ({humand_request.user_email}) | "
-                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id})"
+                    f"Tipo licencia: '{humand_request.policy_type_name}' (ID: {humand_request.policy_type_id}) | "
+                    f"Detalle: {update_error or 'Sin detalle adicional'}"
                 )
                 result.add_error(humand_request.id, error_msg)
 

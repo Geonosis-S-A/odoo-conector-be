@@ -68,7 +68,7 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
                     "context": context,
                 },
             )
-            print(result)
+
             # Validar que el resultado sea una lista
             if not isinstance(result, list):
                 raise Exception("Respuesta inesperada de Odoo: se esperaba una lista")
@@ -197,6 +197,15 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
 
                 self._execute_leave_action("action_approve", request_id)
             elif state == "validate":
+                request_data = self._get_timeoff_request_data(request_id)
+                if float(request_data.get("number_of_days", 0) or 0) <= 0:
+                    raise ValueError(
+                        "Odoo no puede aprobar la licencia porque tiene "
+                        f"number_of_days={request_data.get('number_of_days', 0)}. "
+                        "Normalmente esto indica que las fechas caen fuera del calendario laboral "
+                        "del empleado o que la solicitud fue creada con una duracion no laborable."
+                    )
+
                 if current_state == "draft":
                     self._execute_leave_action("action_confirm", request_id)
                     current_state = self.get_timeoff_request_state(request_id)
@@ -241,6 +250,35 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
             action_name,
             [[request_id]],
         )
+
+    def _get_timeoff_request_data(self, request_id: int) -> dict:
+        """Obtiene campos auxiliares de una solicitud para validar transiciones."""
+        result = self.odoo_connection["models"].execute_kw(
+            self.odoo_connection["ODOO_DB"],
+            self.odoo_connection["uid"],
+            self.odoo_connection["ODOO_PASSWORD"],
+            "hr.leave",
+            "search_read",
+            [[["id", "=", request_id]]],
+            {
+                "fields": [
+                    "id",
+                    "state",
+                    "number_of_days",
+                    "request_date_from",
+                    "request_date_to",
+                    "employee_id",
+                    "holiday_status_id",
+                    "validation_type",
+                ],
+                "limit": 1,
+            },
+        )
+
+        if not isinstance(result, list) or not result:
+            raise ValueError(f"No se encontró la solicitud con ID {request_id}")
+
+        return result[0]
 
     def update_timeoff_request(
         self, request_id: int, timeoff_request: TimeOffRequest
