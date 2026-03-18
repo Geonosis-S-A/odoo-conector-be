@@ -20,6 +20,16 @@ from app.personal_time.infra.db.repositories import (
 from app.personal_time.infra.external.humand_gateway import HumandAPIGateway
 from app.personal_time.infra.external.odoo_timeoff_type_gateway import OdooTimeOffeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
+from app.personal_time.api.schemas import (
+    RunDetails,
+    NewRequestsPhaseDetail,
+    StatusUpdatesPhaseDetail,
+    SyncSummary,
+    SyncedRecordDetail,
+    StatusUpdateRecordDetail,
+    SkippedRecordDetail,
+    ErrorRecordDetail,
+)
 
 
 # Zona horaria de Buenos Aires, Argentina
@@ -97,43 +107,51 @@ def execute_timeoff_sync_job():
         
         sync_log.errors_count = total_errors
         
-        # Construir detalles
-        run_details = {
-            "new_requests": {
-                "total_processed": new_requests_result.total_processed if new_requests_result else 0,
-                "successfully_synced": new_requests_result.successfully_synced if new_requests_result else 0,
-                "skipped": new_requests_result.skipped_count if new_requests_result else 0,
-                "errors_count": new_requests_result.errors_count if new_requests_result else 0,
-                "errors": [
-                    {"humand_id": err[0], "error": err[1]}
-                    for err in (new_requests_result.errors if new_requests_result else [])
+        run_details = RunDetails(
+            new_requests=NewRequestsPhaseDetail(
+                total_processed=new_requests_result.total_processed if new_requests_result else 0,
+                successfully_synced=new_requests_result.successfully_synced if new_requests_result else 0,
+                skipped=new_requests_result.skipped_count if new_requests_result else 0,
+                errors_count=new_requests_result.errors_count if new_requests_result else 0,
+                synced_records=[
+                    SyncedRecordDetail(**d) for d in (new_requests_result.synced_details if new_requests_result else [])
                 ],
-            },
-            "status_updates": {
-                "total_processed": status_updates_result.total_processed if status_updates_result else 0,
-                "status_updates_count": status_updates_result.status_updates_count if status_updates_result else 0,
-                "skipped": status_updates_result.skipped_count if status_updates_result else 0,
-                "errors_count": status_updates_result.errors_count if status_updates_result else 0,
-                "errors": [
-                    {"humand_id": err[0], "error": err[1]}
-                    for err in (status_updates_result.errors if status_updates_result else [])
+                skipped_records=[
+                    SkippedRecordDetail(**d) for d in (new_requests_result.skipped_details if new_requests_result else [])
                 ],
-            },
-            "summary": {
-                "total_processed": (
+                errors=[
+                    ErrorRecordDetail(**d) for d in (new_requests_result.error_details if new_requests_result else [])
+                ],
+            ),
+            status_updates=StatusUpdatesPhaseDetail(
+                total_processed=status_updates_result.total_processed if status_updates_result else 0,
+                status_updates_count=status_updates_result.status_updates_count if status_updates_result else 0,
+                skipped=status_updates_result.skipped_count if status_updates_result else 0,
+                errors_count=status_updates_result.errors_count if status_updates_result else 0,
+                updated_records=[
+                    StatusUpdateRecordDetail(**d) for d in (status_updates_result.status_update_details if status_updates_result else [])
+                ],
+                skipped_records=[
+                    SkippedRecordDetail(**d) for d in (status_updates_result.skipped_details if status_updates_result else [])
+                ],
+                errors=[
+                    ErrorRecordDetail(**d) for d in (status_updates_result.error_details if status_updates_result else [])
+                ],
+            ),
+            summary=SyncSummary(
+                total_processed=(
                     (new_requests_result.total_processed if new_requests_result else 0) +
                     (status_updates_result.total_processed if status_updates_result else 0)
                 ),
-                "total_synced": (
+                total_synced=(
                     (new_requests_result.successfully_synced if new_requests_result else 0) +
                     (status_updates_result.status_updates_count if status_updates_result else 0)
                 ),
-                "total_errors": total_errors,
-            },
-            "execution_type": "scheduled_job",
-        }
+                total_errors=total_errors,
+            ),
+        )
         
-        sync_log.run_details = run_details
+        sync_log.run_details = run_details.model_dump(mode="json")
         
         # Determinar estado final
         if total_errors == 0 and (

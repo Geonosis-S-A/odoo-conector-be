@@ -3,7 +3,17 @@ from sqlmodel import Session
 from app.shared.infra.db.session import get_db
 import logging
 
-from app.personal_time.api.schemas import SyncRunResponse
+from app.personal_time.api.schemas import (
+    SyncRunResponse,
+    RunDetails,
+    NewRequestsPhaseDetail,
+    StatusUpdatesPhaseDetail,
+    SyncSummary,
+    SyncedRecordDetail,
+    StatusUpdateRecordDetail,
+    SkippedRecordDetail,
+    ErrorRecordDetail,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,42 +133,52 @@ async def sync_timeoff_requests(
         
         sync_log.errors_count = total_errors
         
-        # Construir detalles completos en JSON
-        run_details = {
-            "new_requests": {
-                "total_processed": new_requests_result.total_processed if new_requests_result else 0,
-                "successfully_synced": new_requests_result.successfully_synced if new_requests_result else 0,
-                "skipped": new_requests_result.skipped_count if new_requests_result else 0,
-                "errors_count": new_requests_result.errors_count if new_requests_result else 0,
-                "errors": [
-                    {"humand_id": err[0], "error": err[1]}
-                    for err in (new_requests_result.errors if new_requests_result else [])
+        # Construir detalles completos estructurados
+        run_details = RunDetails(
+            new_requests=NewRequestsPhaseDetail(
+                total_processed=new_requests_result.total_processed if new_requests_result else 0,
+                successfully_synced=new_requests_result.successfully_synced if new_requests_result else 0,
+                skipped=new_requests_result.skipped_count if new_requests_result else 0,
+                errors_count=new_requests_result.errors_count if new_requests_result else 0,
+                synced_records=[
+                    SyncedRecordDetail(**d) for d in (new_requests_result.synced_details if new_requests_result else [])
                 ],
-            },
-            "status_updates": {
-                "total_processed": status_updates_result.total_processed if status_updates_result else 0,
-                "status_updates_count": status_updates_result.status_updates_count if status_updates_result else 0,
-                "skipped": status_updates_result.skipped_count if status_updates_result else 0,
-                "errors_count": status_updates_result.errors_count if status_updates_result else 0,
-                "errors": [
-                    {"humand_id": err[0], "error": err[1]}
-                    for err in (status_updates_result.errors if status_updates_result else [])
+                skipped_records=[
+                    SkippedRecordDetail(**d) for d in (new_requests_result.skipped_details if new_requests_result else [])
                 ],
-            },
-            "summary": {
-                "total_processed": (
+                errors=[
+                    ErrorRecordDetail(**d) for d in (new_requests_result.error_details if new_requests_result else [])
+                ],
+            ),
+            status_updates=StatusUpdatesPhaseDetail(
+                total_processed=status_updates_result.total_processed if status_updates_result else 0,
+                status_updates_count=status_updates_result.status_updates_count if status_updates_result else 0,
+                skipped=status_updates_result.skipped_count if status_updates_result else 0,
+                errors_count=status_updates_result.errors_count if status_updates_result else 0,
+                updated_records=[
+                    StatusUpdateRecordDetail(**d) for d in (status_updates_result.status_update_details if status_updates_result else [])
+                ],
+                skipped_records=[
+                    SkippedRecordDetail(**d) for d in (status_updates_result.skipped_details if status_updates_result else [])
+                ],
+                errors=[
+                    ErrorRecordDetail(**d) for d in (status_updates_result.error_details if status_updates_result else [])
+                ],
+            ),
+            summary=SyncSummary(
+                total_processed=(
                     (new_requests_result.total_processed if new_requests_result else 0) +
                     (status_updates_result.total_processed if status_updates_result else 0)
                 ),
-                "total_synced": (
+                total_synced=(
                     (new_requests_result.successfully_synced if new_requests_result else 0) +
                     (status_updates_result.status_updates_count if status_updates_result else 0)
                 ),
-                "total_errors": total_errors,
-            },
-        }
+                total_errors=total_errors,
+            ),
+        )
         
-        sync_log.run_details = run_details
+        sync_log.run_details = run_details.model_dump(mode="json")
         
         # Determinar estado final
         # Si hay un error_message establecido (por excepción en los try/except), es un error crítico
@@ -184,7 +204,6 @@ async def sync_timeoff_requests(
         # Actualizar log en BD
         log_repo.update(sync_log)
         
-        # Retornar respuesta
         return SyncRunResponse(
             run_id=sync_log.id or 0,
             status=sync_log.status,
@@ -195,7 +214,7 @@ async def sync_timeoff_requests(
             new_requests_synced=sync_log.new_requests_synced,
             status_updates_synced=sync_log.status_updates_synced,
             errors_count=sync_log.errors_count,
-            run_details=sync_log.run_details,
+            run_details=run_details,
         )
         
     except Exception as e:
