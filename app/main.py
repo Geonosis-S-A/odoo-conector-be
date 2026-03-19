@@ -38,6 +38,12 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Silence noisy third-party loggers
+logging.getLogger("azure.identity").setLevel(logging.WARNING)
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 
 @asynccontextmanager
 async def lifespan(app):

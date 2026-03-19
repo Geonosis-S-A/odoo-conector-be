@@ -26,7 +26,33 @@ class SQLModelTimesheetLineNotificationRepository(TimesheetLineNotificationRepos
     def get_by_timesheet_ids(
         self, timesheet_line_ids: list[int]
     ) -> list[TimesheetLineNotification]:
-        raise NotImplementedError("Not implemented")
+        if not timesheet_line_ids:
+            return []
+
+        # Trae todas las notificaciones para los IDs dados, de más reciente a más antigua.
+        # El use case conserva solo la primera por timesheet_line_id (la más reciente).
+        rows = self.db.exec(
+            select(TimesheetLineNotificationModel)
+            .where(TimesheetLineNotificationModel.timesheet_line_id.in_(timesheet_line_ids))
+            .order_by(desc(TimesheetLineNotificationModel.created_at))
+        ).all()
+
+        seen: set[int] = set()
+        result: list[TimesheetLineNotification] = []
+        for row in rows:
+            if row.timesheet_line_id in seen:
+                continue
+            seen.add(row.timesheet_line_id)
+            result.append(
+                TimesheetLineNotification(
+                    id=row.id,
+                    timesheet_line_id=row.timesheet_line_id,
+                    approver_id=row.approver_id,
+                    receiver_id=row.receiver_id,
+                    created_at=row.created_at,
+                )
+            )
+        return result
 
     def get_by_timesheet_id(
         self, timesheet_line_id: int

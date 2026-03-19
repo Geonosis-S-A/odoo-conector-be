@@ -1,5 +1,6 @@
 from datetime import date
 import io
+import os
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from fastapi.responses import StreamingResponse
@@ -16,13 +17,21 @@ from app.dashboard.api.schemas import (
     EmployeeTotalResponse,
     DashboardSummaryResponseByEmployee,
     DashboardSummaryMetaResponseByEmployee,
+    PreviousPeriodSummaryResponse,
+    ValidationStatsResponse,
     HierarchicalSummaryResponse,
     HierarchicalItemResponse,
     TaskDetailResponse,
     SimpleTimesheetLineResponse,
+    ExcelDataResponse,
 )
 from app.dashboard.application.use_cases.export_timesheets import (
     ExportTimesheetsByTeamUseCase,
+)
+from app.dashboard.application.use_cases.get_excel_data import GetExcelDataUseCase
+from app.shared.infra.external.microsoft.graph_client import (
+    GraphExcelClient,
+    get_graph_excel_client,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -292,6 +301,8 @@ async def get_dashboard_summary_by_employee(
     employee_id: int = Path(..., description="ID del empleado para filtrar"),
     date_from: date = Query(..., description="Fecha de inicio del rango (YYYY-MM-DD)"),
     date_to: date = Query(..., description="Fecha de fin del rango (YYYY-MM-DD)"),
+    prev_date_from: Optional[date] = Query(None, description="Inicio del período anterior para comparación"),
+    prev_date_to: Optional[date] = Query(None, description="Fin del período anterior para comparación"),
     dashboard_gateway: DashboardDataService = Depends(get_dashboard_data_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     task_gateway: TaskGateway = Depends(get_task_gateway),
@@ -332,7 +343,9 @@ async def get_dashboard_summary_by_employee(
         use_case = GetDashboardSummaryByEmployeeUseCase(
             dashboard_gateway, employee_gateway, task_gateway, timesheet_line_gateway
         )
-        dashboard_summary = use_case.execute(employee_id, date_from, date_to)
+        dashboard_summary = use_case.execute(
+            employee_id, date_from, date_to, prev_date_from, prev_date_to
+        )
 
         # Transformar modelo de dominio a esquema de respuesta
         response = _transform_to_response_schema_by_employee(dashboard_summary)
@@ -384,6 +397,27 @@ async def export_timesheets(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=horas.xlsx"},
     )
+
+
+ALLOWED_KPI_EMAILS = os.getenv("ALLOWED_KPI_EMAILS", "")
+
+
+@router.get("/excel-data", response_model=ExcelDataResponse)
+async def get_excel_data(
+    client: GraphExcelClient = Depends(get_graph_excel_client),
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    """Obtiene datos de las hojas Proyectos, Horas y Headcount del Excel en SharePoint."""
+    if current_user["user_email"] not in ALLOWED_KPI_EMAILS:
+        raise HTTPException(status_code=403, detail="No autorizado")
+    try:
+        use_case = GetExcelDataUseCase(client)
+        return await use_case.execute()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al obtener datos de Microsoft Graph: {str(e)}",
+        )
 
 
 def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:
@@ -585,6 +619,26 @@ def _transform_to_response_schema_by_employee(
             dashboard_summary.hierarchical_summary
         )
 
+    # Transformar período anterior si existe
+    previous_period_response = None
+    if dashboard_summary.previous_period:
+        pp = dashboard_summary.previous_period
+        previous_period_response = PreviousPeriodSummaryResponse(
+            worked_days=pp.worked_days,
+            hours_total=pp.hours_total,
+            entries_total=pp.entries_total,
+            daily_average=pp.daily_average,
+        )
+
+    # Transformar estadísticas de validación si existen
+    validation_stats_response = None
+    if dashboard_summary.validation_stats:
+        vs = dashboard_summary.validation_stats
+        validation_stats_response = ValidationStatsResponse(
+            approved_hours=vs.approved_hours,
+            pending_hours=vs.pending_hours,
+        )
+
     # Crear respuesta completa
     return DashboardSummaryResponseByEmployee(
         meta=DashboardSummaryMetaResponseByEmployee(
@@ -594,4 +648,6 @@ def _transform_to_response_schema_by_employee(
         summary=summary_response,
         totals=totals_response,
         hierarchical_summary=hierarchical_summary_response,
+        previous_period=previous_period_response,
+        validation_stats=validation_stats_response,
     )

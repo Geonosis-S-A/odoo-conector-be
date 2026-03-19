@@ -21,6 +21,9 @@ class EmployeeGateway(ABC):
     def get_by_id(self, id: int) -> Employee | None: ...
 
     @abstractmethod
+    def get_by_ids(self, ids: list[int]) -> list[Employee]: ...
+
+    @abstractmethod
     def get_user_id_by_employee_id(self, employee_id: int) -> int | None: ...
 
     @abstractmethod

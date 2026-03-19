@@ -200,6 +200,24 @@ class OdooEmployeeGateway(EmployeeGateway):
             return None
         return self._transform_odoo_to_domain(employee_data[0])
 
+    def get_by_ids(self, ids: list[int]) -> list[Employee]:
+        """Obtiene múltiples empleados en una sola llamada RPC a Odoo."""
+        if not ids:
+            return []
+        employees_data = cast(
+            List[Dict[str, Any]],
+            self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",
+                "read",
+                [ids],
+                {"fields": ["id", "name", "work_email"]},
+            ),
+        )
+        return [self._transform_odoo_to_domain(emp) for emp in employees_data]
+
     def exists_by_id(self, id: int) -> bool:
         """Verifica si un empleado existe en Odoo por su ID."""
         try:

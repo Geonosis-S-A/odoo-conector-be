@@ -113,6 +113,22 @@ class DashboardSummaryResponse(BaseModel):
         json_encoders = {float: lambda v: round(v, 2) if v is not None else None}
 
 
+class ValidationStatsResponse(BaseModel):
+    """Horas aprobadas y pendientes del período."""
+
+    approved_hours: float
+    pending_hours: float
+
+
+class PreviousPeriodSummaryResponse(BaseModel):
+    """KPIs mínimos del período anterior para comparación de tendencias."""
+
+    worked_days: int
+    hours_total: float
+    entries_total: float
+    daily_average: float
+
+
 class DashboardSummaryResponseByEmployee(BaseModel):
     """Schema de respuesta completo para el resumen del dashboard."""
 
@@ -120,12 +136,22 @@ class DashboardSummaryResponseByEmployee(BaseModel):
     summary: DashboardSummaryKPIsResponse
     totals: DashboardSummaryTotalsResponse
     hierarchical_summary: Optional[HierarchicalSummaryResponse] = None
+    previous_period: Optional[PreviousPeriodSummaryResponse] = None
+    validation_stats: Optional[ValidationStatsResponse] = None
 
     class Config:
         """Configuración del modelo Pydantic."""
 
         from_attributes = True
         json_encoders = {float: lambda v: round(v, 2) if v is not None else None}
+
+
+class ExcelDataResponse(BaseModel):
+    """Schema de respuesta con datos de las hojas del Excel de SharePoint."""
+
+    proyectos: List[dict]
+    horas: List[dict]
+    headcount: List[dict]
 
 
 class TaskDetailRequest(BaseModel):
