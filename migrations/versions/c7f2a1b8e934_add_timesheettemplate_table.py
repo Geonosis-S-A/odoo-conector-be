@@ -1,7 +1,6 @@
 """add timesheettemplate table
 
 Revision ID: c7f2a1b8e934
-Revises: a43f954e2c06
 Revises: eb366ba8f21e
 Create Date: 2026-02-27 00:00:00.000000
 
@@ -15,7 +14,7 @@ import sqlmodel
 
 # revision identifiers, used by Alembic.
 revision: str = 'c7f2a1b8e934'
-down_revision: Union[str, None] = 'a43f954e2c06'
+down_revision: Union[str, None] = 'eb366ba8f21e'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
