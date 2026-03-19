@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     EMAIL_PASSWORD: str = os.getenv("EMAIL_PASSWORD", "")
     SECRET_KEY: str = os.getenv("SECRET_KEY", "")
     RESEND_APIKEY: str = os.getenv("RESEND_APIKEY", "")
+    HUMAND_API_URL: str = os.getenv("HUMAND_API_URL", "https://api-prod.humand.co/public/api/v1")
+    HUMAND_API_KEY: str = os.getenv("HUMAND_API_KEY", "")
 
     class Config:
         env_file = ".env"
