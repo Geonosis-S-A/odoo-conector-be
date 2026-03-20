@@ -1,7 +1,7 @@
 from datetime import date
 import io
 import os
-from typing import Optional
+from typing import Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from fastapi.responses import StreamingResponse
 
@@ -23,15 +23,19 @@ from app.dashboard.api.schemas import (
     HierarchicalItemResponse,
     TaskDetailResponse,
     SimpleTimesheetLineResponse,
-    ExcelDataResponse,
+    ExcelGanttDataResponse,
+    ExcelKpiDataResponse,
 )
 from app.dashboard.application.use_cases.export_timesheets import (
     ExportTimesheetsByTeamUseCase,
 )
-from app.dashboard.application.use_cases.get_excel_data import GetExcelDataUseCase
+from app.dashboard.application.use_cases.get_excel_data import (
+    GetExcelDataUseCase,
+    GetGanttExcelDataUseCase,
+)
 from app.shared.infra.external.microsoft.graph_client import (
-    GraphExcelClient,
     get_graph_excel_client,
+    get_graph_excel_gantt_client,
 )
 from app.dashboard.application.use_cases.get_dashboard_summary import (
     GetDashboardSummaryUseCase,
@@ -66,6 +70,16 @@ from app.employee_price.domain.repositories import EmployeePriceRepository
 from app.employee_price.infra.db.repositories import SQLModelEmployeePriceRepository
 from app.shared.infra.db.session import get_db, Session
 import pandas as pd
+
+
+def _email_set_from_env(raw: str) -> set[str]:
+    if not raw.strip():
+        return set()
+    return {e.strip().lower() for e in raw.split(",") if e.strip()}
+
+
+ALLOWED_KPI_EMAILS = _email_set_from_env(os.getenv("ALLOWED_KPI_EMAILS", ""))
+ALLOWED_GANTT_EMAILS = _email_set_from_env(os.getenv("ALLOWED_GANTT_EMAILS", ""))
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -399,25 +413,28 @@ async def export_timesheets(
     )
 
 
-ALLOWED_KPI_EMAILS = os.getenv("ALLOWED_KPI_EMAILS", "")
 
-
-@router.get("/excel-data", response_model=ExcelDataResponse)
+@router.get("/excel-data", response_model=Union[ExcelKpiDataResponse, ExcelGanttDataResponse])
 async def get_excel_data(
-    client: GraphExcelClient = Depends(get_graph_excel_client),
     current_user: JWTPayload = Depends(get_current_user),
 ):
-    """Obtiene datos de las hojas Proyectos, Horas y Headcount del Excel en SharePoint."""
-    if current_user["user_email"] not in ALLOWED_KPI_EMAILS:
-        raise HTTPException(status_code=403, detail="No autorizado")
+    """KPI: hojas Proyectos, Horas, Headcount. Gantt: hoja `base` (Base Gantt.xlsx)."""
+    email = (current_user.get("user_email") or "").strip().lower()
     try:
-        use_case = GetExcelDataUseCase(client)
-        return await use_case.execute()
+        if email in ALLOWED_GANTT_EMAILS:
+            client = get_graph_excel_gantt_client()
+            use_case = GetGanttExcelDataUseCase(client)
+            return await use_case.execute()
+        if email in ALLOWED_KPI_EMAILS:
+            client = get_graph_excel_client()
+            use_case = GetExcelDataUseCase(client)
+            return await use_case.execute()
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error al obtener datos de Microsoft Graph: {str(e)}",
         )
+    raise HTTPException(status_code=403, detail="No autorizado")
 
 
 def _transform_to_response_schema(dashboard_summary) -> DashboardSummaryResponse:

@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel
 from datetime import date
 
@@ -146,12 +146,21 @@ class DashboardSummaryResponseByEmployee(BaseModel):
         json_encoders = {float: lambda v: round(v, 2) if v is not None else None}
 
 
-class ExcelDataResponse(BaseModel):
-    """Schema de respuesta con datos de las hojas del Excel de SharePoint."""
+class ExcelKpiDataResponse(BaseModel):
+    """KPI: mismas claves que el endpoint histórico (Proyectos, Horas, Headcount)."""
 
     proyectos: List[dict]
     horas: List[dict]
     headcount: List[dict]
+
+
+class ExcelGanttDataResponse(BaseModel):
+    """Gantt: hoja Base Gantt (p. ej. pestaña 'base')."""
+
+    base: List[dict]
+
+
+ExcelDataResponse = Union[ExcelKpiDataResponse, ExcelGanttDataResponse]
 
 
 class TaskDetailRequest(BaseModel):

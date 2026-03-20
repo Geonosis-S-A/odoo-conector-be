@@ -14,6 +14,8 @@ CLIENT_ID = os.getenv("CLIENT_ID", "")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET", "")
 SITE_ID = os.getenv("SITE_ID", "")
 ITEM_ID = os.getenv("ITEM_ID", "")
+GANTT_SITE_ID = os.getenv("GANTT_SITE_ID", "")
+GANTT_ITEM_ID = os.getenv("GANTT_ITEM_ID", "")
 
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 CACHE_TTL_SECONDS = 300  # 5 minutos
@@ -43,15 +45,22 @@ def _rows_to_dicts(values: list[list]) -> list[dict]:
 
 
 class GraphExcelClient:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        site_id: str | None = None,
+        item_id: str | None = None,
+    ) -> None:
         self._credential = ClientSecretCredential(
             tenant_id=TENANT_ID,
             client_id=CLIENT_ID,
             client_secret=CLIENT_SECRET,
         )
-        self.site_id = SITE_ID
-        self.item_id = ITEM_ID
+        self.site_id = site_id if site_id is not None else SITE_ID
+        self.item_id = item_id if item_id is not None else ITEM_ID
         self._drive_id: str | None = None
+
+    def _cache_key(self, sheet_name: str) -> str:
+        return f"{self.site_id}:{self.item_id}:{sheet_name}"
 
     def _get_token(self) -> str:
         token = self._credential.get_token("https://graph.microsoft.com/.default")
@@ -87,7 +96,8 @@ class GraphExcelClient:
         return self._drive_id
 
     async def get_worksheet_data(self, sheet_name: str) -> list[dict]:
-        cached = _get_cached(sheet_name)
+        cache_key = self._cache_key(sheet_name)
+        cached = _get_cached(cache_key)
         if cached is not None:
             return cached
 
@@ -109,15 +119,31 @@ class GraphExcelClient:
         result = response.json()
         values = result.get("values", [])
         data = _rows_to_dicts(values)
-        _set_cached(sheet_name, data)
+        _set_cached(cache_key, data)
         return data
 
 
-_graph_client_instance: GraphExcelClient | None = None
+_kpi_graph_client: GraphExcelClient | None = None
+_gantt_graph_client: GraphExcelClient | None = None
 
 
 def get_graph_excel_client() -> GraphExcelClient:
-    global _graph_client_instance
-    if _graph_client_instance is None:
-        _graph_client_instance = GraphExcelClient()
-    return _graph_client_instance
+    global _kpi_graph_client
+    if _kpi_graph_client is None:
+        _kpi_graph_client = GraphExcelClient()
+    return _kpi_graph_client
+
+
+def get_graph_excel_gantt_client() -> GraphExcelClient:
+    global _gantt_graph_client
+    if _gantt_graph_client is None:
+        if not (GANTT_ITEM_ID or "").strip():
+            raise RuntimeError(
+                "GANTT_ITEM_ID debe estar definido en el entorno (id del archivo Base Gantt.xlsx en Graph)."
+            )
+        site = (GANTT_SITE_ID or "").strip() or SITE_ID
+        _gantt_graph_client = GraphExcelClient(
+            site_id=site,
+            item_id=GANTT_ITEM_ID.strip(),
+        )
+    return _gantt_graph_client
