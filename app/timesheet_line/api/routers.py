@@ -48,6 +48,8 @@ from app.timesheet_line.infra.db.repositories import (
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
+from app.task.domain.gateway import TaskGateway
+from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
 from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.timesheet_line.application.excepctions.exceptions import (
@@ -90,6 +92,17 @@ def get_employee_gateway(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de empleados"
+        )
+
+
+def get_task_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> TaskGateway:
+    try:
+        return OdooTaskGateway(odoo_connection)
+    except Exception:
+        raise HTTPException(
+            status_code=500, detail="Error al conectar con el gateway de tareas"
         )
 
 
@@ -169,6 +182,7 @@ async def list_timesheet_lines(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
+    task_gateway: TaskGateway = Depends(get_task_gateway),
     team: bool | None = Query(None, description="Filtrar por equipo"),
 ):
     """
@@ -199,7 +213,10 @@ async def list_timesheet_lines(
     try:
         id = current_user["user_id"]  # esto es el employee_id del f
         use_case = ListTimesheetLinesUseCase(
-            gateway, employee_gateway, notification_repository
+            gateway,
+            employee_gateway,
+            notification_repository,
+            task_gateway,
         )
         timesheets = use_case.execute(
             employee_id,

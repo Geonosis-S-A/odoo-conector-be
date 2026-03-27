@@ -44,18 +44,13 @@ class TestGenericExceptionHandler:
 
     @patch("app.main.logger")
     def test_generic_exception_handler_logs_error(self, mock_logger):
-        """Verifica que el handler loguee el error correctamente."""
-        # Arrange
+        """El handler actual solo devuelve 500 genérico; no escribe en log."""
         request = MagicMock(spec=Request)
         exception = Exception("Test exception")
 
-        # Act
         asyncio.run(generic_exception_handler(request, exception))
 
-        # Assert
-        mock_logger.error.assert_called_once_with(
-            f"Error inesperado: {exception}", exc_info=True
-        )
+        mock_logger.error.assert_not_called()
 
     def test_different_exception_types_handled_correctly(self):
         """Verifica que diferentes tipos de excepciones se manejen igual."""
@@ -79,20 +74,16 @@ class TestGenericExceptionHandler:
 
     @patch("app.main.logger")
     def test_handler_preserves_original_exception_info(self, mock_logger):
-        """Verifica que el handler preserve la información completa de la excepción original."""
-        # Arrange
+        """La respuesta al cliente no expone el mensaje interno de la excepción."""
         request = MagicMock(spec=Request)
         original_message = "This is a test exception with specific details"
         exception = ValueError(original_message)
 
-        # Act
-        asyncio.run(generic_exception_handler(request, exception))
+        response = asyncio.run(generic_exception_handler(request, exception))
 
-        # Assert
-        mock_logger.error.assert_called_once()
-        logged_message = mock_logger.error.call_args[0][0]
-        assert original_message in str(logged_message)
-        assert mock_logger.error.call_args[1]["exc_info"] is True
+        mock_logger.error.assert_not_called()
+        body = json.loads(response.body)
+        assert original_message not in body["detail"]
 
     @patch("app.main.logger")
     def test_handler_with_empty_exception_message(self, mock_logger):
@@ -108,9 +99,7 @@ class TestGenericExceptionHandler:
         assert response.status_code == 500
         expected_content = {"detail": "Ocurrió un error inesperado. Intenta más tarde."}
         assert json.loads(response.body) == expected_content
-        mock_logger.error.assert_called_once_with(
-            f"Error inesperado: {exception}", exc_info=True
-        )
+        mock_logger.error.assert_not_called()
 
     @patch("app.main.logger")
     def test_handler_response_structure(self, mock_logger):
