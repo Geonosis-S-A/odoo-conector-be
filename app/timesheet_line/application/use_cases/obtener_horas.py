@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import List
 from datetime import date
 
@@ -6,6 +7,11 @@ from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.timesheet_line.domain.repositories import (
     TimesheetLineGateway,
     TimesheetLineNotificationRepository,
+)
+from app.task.domain.gateway import TaskGateway
+from app.task.domain.task_hierarchy import (
+    collect_tasks_info_with_ancestors,
+    full_task_display_name,
 )
 from app.users.domain.repositories import EmployeeGateway
 from app.timesheet_line.application.excepctions.exceptions import (
@@ -23,12 +29,14 @@ class ListTimesheetLinesUseCase:
         timesheet_line_gateway: TimesheetLineGateway,
         employee_gateway: EmployeeGateway,
         notification_repository: TimesheetLineNotificationRepository,
+        task_gateway: TaskGateway | None = None,
     ) -> None:
         self.timesheet_line_gateway = timesheet_line_gateway
         self.employee_gateway = employee_gateway
         self.notification_repository: TimesheetLineNotificationRepository = (
             notification_repository
         )
+        self.task_gateway = task_gateway
 
     def execute(
         self,
@@ -70,6 +78,19 @@ class ListTimesheetLinesUseCase:
         timesheets = self.timesheet_line_gateway.all(
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
         )
+
+        if self.task_gateway and timesheets:
+            task_ids = [t.task.id for t in timesheets if t.task is not None]
+            if task_ids:
+                tasks_info = collect_tasks_info_with_ancestors(
+                    self.task_gateway, task_ids
+                )
+                for line in timesheets:
+                    if line.task is None:
+                        continue
+                    full_name = full_task_display_name(line.task.id, tasks_info)
+                    if full_name:
+                        line.task = replace(line.task, name=full_name)
 
         employees = self.employee_gateway.all()
         employees_dict = {employee.id: employee for employee in employees}

@@ -98,21 +98,21 @@ class TestGetTaskDetailUseCase:
             mock_timesheet_lines
         )
 
-        # Mock de empleados
+        # Mock de empleados (batch get_by_ids, usado dos veces en execute)
         mock_employee_1 = Mock()
         mock_employee_1.id = 1
         mock_employee_1.full_name = "Juan Pérez"
         mock_employee_2 = Mock()
         mock_employee_2.id = 2
         mock_employee_2.full_name = "Ana García"
+        by_id = {1: mock_employee_1, 2: mock_employee_2}
 
-        mock_employee_gateway.get_by_id.side_effect = lambda emp_id: (
-            mock_employee_1 if emp_id == 1 else mock_employee_2
-        )
-        mock_employee_gateway.all.return_value = [mock_employee_1, mock_employee_2]
+        def get_by_ids(ids):
+            return [by_id[i] for i in ids if i in by_id]
 
-        # Mock de notificaciones
-        mock_notification_repository.get_by_timesheet_id.return_value = None
+        mock_employee_gateway.get_by_ids.side_effect = get_by_ids
+
+        mock_notification_repository.get_by_timesheet_ids.return_value = []
 
         # Act
         result = use_case.execute(task_id, project_id, date_from, date_to)
@@ -140,7 +140,10 @@ class TestGetTaskDetailUseCase:
             date_from=date_from,
             date_to=date_to,
         )
-        assert mock_employee_gateway.get_by_id.call_count == 2
+        assert mock_employee_gateway.get_by_ids.call_count == 2
+        mock_notification_repository.get_by_timesheet_ids.assert_called_once_with(
+            [1, 2]
+        )
 
     def test_execute_success_with_project_id(
         self,
@@ -180,11 +183,11 @@ class TestGetTaskDetailUseCase:
         mock_employee_3.id = 3
         mock_employee_3.full_name = "Carlos López"
 
-        mock_employee_gateway.get_by_id.return_value = mock_employee_3
-        mock_employee_gateway.all.return_value = [mock_employee_3]
+        mock_employee_gateway.get_by_ids.side_effect = (
+            lambda ids: [mock_employee_3] if 3 in ids else []
+        )
 
-        # Mock de notificaciones
-        mock_notification_repository.get_by_timesheet_id.return_value = None
+        mock_notification_repository.get_by_timesheet_ids.return_value = []
 
         # Act
         result = use_case.execute(task_id, project_id, date_from, date_to)
@@ -209,6 +212,7 @@ class TestGetTaskDetailUseCase:
             date_from=date_from,
             date_to=date_to,
         )
+        mock_notification_repository.get_by_timesheet_ids.assert_called_once_with([3])
 
     def test_execute_with_notifications(
         self,
@@ -236,31 +240,24 @@ class TestGetTaskDetailUseCase:
         mock_employee_2 = Mock()
         mock_employee_2.id = 2
         mock_employee_2.full_name = "Ana García"
-        mock_manager = Mock()
-        mock_manager.id = 10
-        mock_manager.full_name = "Manager"
 
-        mock_employee_gateway.get_by_id.side_effect = lambda emp_id: (
-            mock_employee_1 if emp_id == 1 else mock_employee_2
-        )
-        mock_employee_gateway.all.return_value = [
-            mock_employee_1,
-            mock_employee_2,
-            mock_manager,
-        ]
+        by_id = {1: mock_employee_1, 2: mock_employee_2}
 
-        # Mock de notificación para la primera línea
+        def get_by_ids(ids):
+            return [by_id[i] for i in ids if i in by_id]
+
+        mock_employee_gateway.get_by_ids.side_effect = get_by_ids
+
         mock_notification = Mock()
         mock_notification.id = 1
-        mock_notification.approver_id = 10
+        mock_notification.timesheet_line_id = 1
+        # approver_id debe estar en employees_dict (solo empleados de las líneas)
+        mock_notification.approver_id = 1
         mock_notification.created_at = "2024-01-02T09:00:00Z"
 
-        def mock_get_notification(timesheet_id):
-            return mock_notification if timesheet_id == 1 else None
-
-        mock_notification_repository.get_by_timesheet_id.side_effect = (
-            mock_get_notification
-        )
+        mock_notification_repository.get_by_timesheet_ids.return_value = [
+            mock_notification
+        ]
 
         # Act
         result = use_case.execute(task_id, project_id, date_from, date_to)
@@ -272,15 +269,16 @@ class TestGetTaskDetailUseCase:
         first_line = timesheet_lines[0]
         assert first_line["notification"] is not None
         assert first_line["notification"]["id"] == 1
-        assert first_line["notification"]["sender_name"] == "Manager"
+        assert first_line["notification"]["sender_name"] == "Juan Pérez"
         assert first_line["notification"]["sended_at"] == "2024-01-02T09:00:00Z"
 
         # Segunda línea no debe tener notificación
         second_line = timesheet_lines[1]
         assert second_line["notification"] is None
 
-        # Verificar que se buscaron notificaciones para ambas líneas
-        assert mock_notification_repository.get_by_timesheet_id.call_count == 2
+        mock_notification_repository.get_by_timesheet_ids.assert_called_once_with(
+            [1, 2]
+        )
 
     def test_execute_error_no_task_id_nor_project_id(
         self,
@@ -345,7 +343,8 @@ class TestGetTaskDetailUseCase:
         date_to = date(2024, 1, 31)
 
         mock_timesheet_gateway.get_by_task_or_project.return_value = []
-        mock_employee_gateway.all.return_value = []  # Lista vacía de empleados
+        mock_employee_gateway.get_by_ids.return_value = []
+        mock_notification_repository.get_by_timesheet_ids.return_value = []
 
         # Act
         result = use_case.execute(task_id, project_id, date_from, date_to)
@@ -382,10 +381,8 @@ class TestGetTaskDetailUseCase:
             mock_timesheet_lines
         )
 
-        # Mock que simula empleado no encontrado
-        mock_employee_gateway.get_by_id.return_value = None
-        mock_employee_gateway.all.return_value = []
-        mock_notification_repository.get_by_timesheet_id.return_value = None
+        mock_employee_gateway.get_by_ids.return_value = []
+        mock_notification_repository.get_by_timesheet_ids.return_value = []
 
         # Act
         result = use_case.execute(task_id, project_id, date_from, date_to)
@@ -405,8 +402,7 @@ class TestGetTaskDetailUseCase:
         mock_notification_repository,
         mock_timesheet_lines,
     ):
-        """Test que verifica el manejo de errores al obtener notificaciones."""
-        # Arrange
+        """Si falla el batch de notificaciones, el caso de uso propaga la excepción."""
         task_id = 1
         project_id = None
         date_from = date(2024, 1, 1)
@@ -416,26 +412,24 @@ class TestGetTaskDetailUseCase:
             mock_timesheet_lines
         )
 
-        # Mock de empleados
-        mock_employee = Mock()
-        mock_employee.id = 1
-        mock_employee.full_name = "Juan Pérez"
-        mock_employee_gateway.get_by_id.return_value = mock_employee
-        mock_employee_gateway.all.return_value = [mock_employee]
+        mock_employee_1 = Mock()
+        mock_employee_1.id = 1
+        mock_employee_1.full_name = "Juan Pérez"
+        mock_employee_2 = Mock()
+        mock_employee_2.id = 2
+        mock_employee_2.full_name = "Ana García"
+        by_id = {1: mock_employee_1, 2: mock_employee_2}
 
-        # Mock que simula error al obtener notificación
-        mock_notification_repository.get_by_timesheet_id.side_effect = Exception(
+        mock_employee_gateway.get_by_ids.side_effect = lambda ids: [
+            by_id[i] for i in ids if i in by_id
+        ]
+
+        mock_notification_repository.get_by_timesheet_ids.side_effect = Exception(
             "Database error"
         )
 
-        # Act
-        result = use_case.execute(task_id, project_id, date_from, date_to)
-
-        # Assert
-        # Debe continuar sin notificaciones a pesar del error
-        timesheet_lines = result["timesheet_lines"]
-        assert timesheet_lines[0]["notification"] is None
-        assert timesheet_lines[1]["notification"] is None
+        with pytest.raises(Exception, match="Database error"):
+            use_case.execute(task_id, project_id, date_from, date_to)
 
     def test_get_employee_names_method(
         self,
@@ -443,26 +437,20 @@ class TestGetTaskDetailUseCase:
         mock_employee_gateway,
     ):
         """Test del método privado _get_employee_names."""
-        # Arrange
         employee_ids = [1, 2, 999]
 
-        # Mock de empleados - 999 no existe
         mock_employee_1 = Mock()
+        mock_employee_1.id = 1
         mock_employee_1.full_name = "Juan Pérez"
         mock_employee_2 = Mock()
+        mock_employee_2.id = 2
         mock_employee_2.full_name = "Ana García"
 
-        def mock_get_by_id(emp_id):
-            if emp_id == 1:
-                return mock_employee_1
-            elif emp_id == 2:
-                return mock_employee_2
-            else:
-                return None
+        mock_employee_gateway.get_by_ids.return_value = [
+            mock_employee_1,
+            mock_employee_2,
+        ]
 
-        mock_employee_gateway.get_by_id.side_effect = mock_get_by_id
-
-        # Act
         result = use_case._get_employee_names(employee_ids)
 
         # Assert
@@ -500,18 +488,14 @@ class TestGetTaskDetailUseCase:
         mock_employee.full_name = "Manager"
         employees_dict = {10: mock_employee}
 
-        # Mock de notificación
         mock_notification = Mock()
         mock_notification.id = 1
         mock_notification.approver_id = 10
         mock_notification.created_at = "2024-01-02T09:00:00Z"
-        mock_notification_repository.get_by_timesheet_id.return_value = (
-            mock_notification
-        )
+        notifications_map = {1: mock_notification}
 
-        # Act
         result = use_case._transform_to_simple_format(
-            timesheet_line, employee_names, employees_dict
+            timesheet_line, employee_names, employees_dict, notifications_map
         )
 
         # Assert
@@ -549,12 +533,8 @@ class TestGetTaskDetailUseCase:
         employee_names = {2: "Ana García"}
         employees_dict = {}
 
-        # Sin notificación
-        mock_notification_repository.get_by_timesheet_id.return_value = None
-
-        # Act
         result = use_case._transform_to_simple_format(
-            timesheet_line, employee_names, employees_dict
+            timesheet_line, employee_names, employees_dict, {}
         )
 
         # Assert
