@@ -376,7 +376,7 @@ class TestDashboardRouters:
 
             # Verificar que se llamó al use case con los parámetros correctos
             mock_use_case.execute.assert_called_once_with(
-                test_employee_id, test_date_from, test_date_to
+                test_employee_id, test_date_from, test_date_to, None, None
             )
 
     def test_get_dashboard_summary_by_employee_success_admin_different_user(
@@ -424,7 +424,7 @@ class TestDashboardRouters:
             # Assert
             assert response.status_code == 200
             mock_use_case.execute.assert_called_once_with(
-                test_employee_id, test_date_from, test_date_to
+                test_employee_id, test_date_from, test_date_to, None, None
             )
 
     def test_get_dashboard_summary_by_employee_forbidden_different_user(

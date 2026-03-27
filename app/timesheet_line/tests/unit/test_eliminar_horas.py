@@ -308,6 +308,7 @@ class TestListTimesheetLinesUseCase:
 
         # Mock: no hay timesheets en el rango de fechas (lista vacía)
         mock_timesheet_gateway.all.return_value = []
+        mock_notification_repository.get_by_timesheet_ids.return_value = []
 
         # Act
         result = use_case.execute(
@@ -325,8 +326,8 @@ class TestListTimesheetLinesUseCase:
         mock_timesheet_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, None, None, None, None
         )
-        # No se debe llamar get_by_timesheet_id si no hay timesheets
-        mock_notification_repository.get_by_timesheet_id.assert_not_called()
+        # Se consulta el batch con lista vacía
+        mock_notification_repository.get_by_timesheet_ids.assert_called_once_with([])
 
 
 # todos aquellos parametros seteados en none deben testearse
