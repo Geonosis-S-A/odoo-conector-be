@@ -22,7 +22,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Requiere acci
 | ID | Vulnerabilidad | CVSS | Estado |
 |----|----------------|------|--------|
 | VT-01 | Account Takeover vía `/auth/register` (sin verificación de OTP) | 9.8 | ✅ |
-| VT-02 | Fuga de tarifas salariales (`/employees-price/`) | 9.1 | ⏳ |
+| VT-02 | Fuga de tarifas salariales (`/employees-price/*`) | 9.1 | ✅ |
 | VT-12 | SSRF en agente IA con bypass de filtro LLM (IP decimal) | 9.0 | ⏳ |
 | VT-03 | Swagger `/docs` y `/openapi.json` públicos en producción | 8.2 | ✅ |
 
@@ -286,3 +286,204 @@ Flujo legítimo de registro (regresión manual desde la UI):
 - **VT-11** (OTP brute-forceable sin lockout): aunque ahora el OTP es obligatorio en el flujo de registro, sigue siendo de 6 dígitos sin rate limiting. Combinado con VT-05, un atacante puede probar 1 millón de combinaciones. Se aborda al llegar a VT-11/VT-05.
 - **Race condition en OTP** (ataques adicionales del informe): si un atacante envía múltiples requests de `password-recovery/reset` en paralelo con OTPs candidatos antes del fix de rate limiting, el bug podría reaparecer parcialmente. Se mitiga totalmente con VT-05 (rate limiting) + lockout de OTP.
 - **Refactor opcional**: el uso del flujo de "password recovery" para activar cuentas nuevas funciona pero es semánticamente confuso. Considerar a futuro un endpoint propio `/auth/register/complete` que reciba `{email, otp_code, password}` y lo manejen explícitamente. Fuera del scope de VT-01.
+
+---
+
+## VT-02 — Fuga de tarifas salariales / IDOR en `employees-price`
+
+| Atributo | Detalle |
+|---|---|
+| **Estado** | ✅ Resuelto |
+| **Severidad** | CRÍTICO — CVSS 9.1 |
+| **OWASP** | A01:2021 — Broken Access Control |
+| **CWE** | CWE-639 (Authorization Bypass Through User-Controlled Key) / BOLA |
+| **Endpoints** | `GET /api/v1/employees-price/history/{employee_id}`, `POST /api/v1/employees-price/` |
+| **Archivos afectados** | `app/employee_price/api/routers.py`, `app/shared/security/authorization.py` (nuevo), `app/employee_price/tests/integration/test_employee_price_routers.py` |
+| **Linear** | [GEO-1403](https://linear.app/) |
+| **Fecha de corrección** | 2026-05-11 |
+
+### Problema
+
+El reporte original señalaba `GET /api/v1/employees-price/` como un endpoint que devolvía sin restricciones todas las tarifas por hora de la empresa.
+
+> "Cualquier usuario aprobador puede consultar tarifas de toda la empresa".
+
+Esto se interpreta como datos financieros sensibles (costo de personal, base para cálculo de margen, indicador de salarios) expuestos a cualquier usuario aprobador, sin importar si gestiona o no a esos empleados.
+
+### Análisis técnico
+
+Al auditar el módulo `employee_price` encontramos un **matiz importante respecto del reporte original** y **dos IDORs no documentados explícitamente pero más graves**:
+
+#### Hallazgo 1: `GET /employees-price/` **no** era el verdadero problema
+
+Contrario a lo que sugería el reporte, este endpoint **sí** filtra por equipo. El use case `ListTeamEmployeePricesUseCase` resuelve `timesheet_line_gateway.get_team_users(user_id, employee_id)` que usa la jerarquía de Odoo (`timesheet_manager_id` + `child_of`) para devolver únicamente subordinados directos y descendentes. Un approver de un equipo ve solo a su equipo.
+
+> Lo que probablemente vio el pentester durante el assessment es que **un manager con muchísimo equipo bajo su responsabilidad** (caso real: `pablo.sosto@geonosis.com.ar`) recibe una lista enorme — pero estrictamente dentro de su scope. No es una fuga, es scope amplio.
+
+#### Hallazgo 2: IDOR real en `GET /employees-price/history/{employee_id}`
+
+Este endpoint **solo verificaba el rol** (`approver`) y luego consultaba el historial del `employee_id` indicado en el path **sin validar que perteneciera al equipo del solicitante**. Cualquier approver podía pedir el historial salarial completo de cualquier otro empleado (incluso CEOs, directivos, RRHH).
+
+```python
+# código vulnerable (antes del fix):
+if not is_approver:
+    raise HTTPException(403, ...)
+user_repository = SQLModelUserRepository(db)
+employee_data = user_repository.get_by_id(employee_id)  # ← sin scope check
+# devuelve el historial completo
+```
+
+#### Hallazgo 3: IDOR real en `POST /employees-price/`
+
+El endpoint de **creación/sobrescritura** del costo por hora tenía el mismo patrón: solo verificaba el rol `approver`, y luego operaba sobre `request.employee_id` sin validar scope.
+
+> Más grave que el GET porque permite no solo leer sino **modificar costos ajenos**. Un approver malintencionado podía, por ejemplo, sobrescribir el costo de un directivo a `$1/h` para distorsionar reportes financieros, o cerrar registros abiertos antes de tiempo.
+
+Ambos endpoints son explotables por **cualquiera de los ~17 approvers del sistema** contra cualquier empleado, ergo configuran el riesgo real que describe VT-02.
+
+#### Hallazgo bonus: enum de roles incorrecto en producción
+
+Como side-finding al investigar los chequeos de rol, encontramos que `app/shared/security/roles.py` cae por defecto a `role_enums/dev.py` cuando no encuentra `prod.py` (que **no existe**). En producción, los IDs de rol no coinciden con los de Odoo prod, lo que puede hacer que `user_has_role(...Roles.approver)` falle silenciosamente. Se documenta como issue separado (no bloqueante para VT-02, porque el sistema valida con los IDs de dev y aun así estos endpoints eran vulnerables).
+
+### Solución aplicada
+
+Se introdujo un **helper de autorización a nivel de scope** reutilizable y se aplicó a los dos endpoints vulnerables. El criterio de scope:
+
+- El solicitante puede operar sobre **su propio empleado** (self-access).
+- O bien sobre cualquier `employee_id` que esté en la lista que devuelve `TimesheetLineGateway.get_team_users(...)` (subordinados directos + cadena descendente vía `child_of` de Odoo).
+- En cualquier otro caso, **HTTP 403**.
+
+**1) Helper reusable `app/shared/security/authorization.py`** (también lo aprovechamos al llegar a VT-16, mismo patrón):
+
+```17:84:odoo-conector-be/app/shared/security/authorization.py
+def ensure_employee_in_team(
+    *,
+    requester_user_id: int,
+    target_employee_id: int,
+    employee_gateway: EmployeeGateway,
+    timesheet_gateway: TimesheetLineGateway,
+) -> None:
+    requester_employee = employee_gateway.get_by_id(requester_user_id)
+    if requester_employee is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El usuario no tiene un empleado asociado en Odoo",
+        )
+    if target_employee_id == requester_employee.id:
+        return
+    team_users = timesheet_gateway.get_team_users(
+        requester_user_id, requester_employee.id
+    )
+    team_ids = {member["id"] for member in team_users}
+    if target_employee_id not in team_ids:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para operar sobre este empleado",
+        )
+```
+
+**2) Scope check en `GET /history/{employee_id}`** — se aplica **antes** del lookup en BD para evitar que la diferencia entre 403 (fuera de scope) y 404 (no existe) sirva para enumerar IDs válidos:
+
+```111:160:odoo-conector-be/app/employee_price/api/routers.py
+@router.get("/history/{employee_id}", response_model=list[EmployeePriceHistoryItem])
+async def get_employee_price_history(
+    employee_id: int,
+    db: Session = Depends(get_db),
+    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    ...
+    if not is_approver:
+        raise HTTPException(...)
+
+    # Scope check (VT-02): ANTES de tocar la BD.
+    ensure_employee_in_team(
+        requester_user_id=current_user["user_id"],
+        target_employee_id=employee_id,
+        employee_gateway=employee_gateway,
+        timesheet_gateway=timesheet_gateway,
+    )
+    ...
+```
+
+**3) Scope check en `POST /employees-price/`**:
+
+```187:230:odoo-conector-be/app/employee_price/api/routers.py
+@router.post("/", response_model=CreateEmployeePriceResponse)
+async def create_employee_price(
+    request: CreateEmployeePriceRequest,
+    db: Session = Depends(get_db),
+    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    current_user: JWTPayload = Depends(get_current_user),
+):
+    ...
+    if not is_approver:
+        raise HTTPException(...)
+
+    ensure_employee_in_team(
+        requester_user_id=current_user["user_id"],
+        target_employee_id=request.employee_id,
+        employee_gateway=employee_gateway,
+        timesheet_gateway=timesheet_gateway,
+    )
+    ...
+```
+
+**4) Tests de regresión IDOR.** Se agregaron 7 tests específicos en `app/employee_price/tests/integration/test_employee_price_routers.py` que validan:
+
+- 403 al consultar history de un empleado fuera del equipo.
+- 403 al intentar crear/actualizar precio de un empleado fuera del equipo.
+- 403 cuando el solicitante no tiene `Employee` asociado en Odoo.
+- 200 cuando el solicitante consulta/edita su propio precio (self-access).
+- 403 idéntico para targets que existen y para targets inexistentes (no se filtra existencia vía response code).
+
+Todos los tests preexistentes se adaptaron para mockear los gateways de equipo (33 tests pasando en el módulo).
+
+### Verificación post-deploy
+
+```bash
+# Approver legítimo consultando un miembro de SU equipo:
+curl -i https://geo-timesheet-be.soportegeonosis.com.ar/api/v1/employees-price/history/<member_id> \
+  -H "Authorization: Bearer <token_approver>"
+# → 200 OK + historial
+
+# Mismo approver intentando consultar un empleado FUERA de su equipo:
+curl -i https://geo-timesheet-be.soportegeonosis.com.ar/api/v1/employees-price/history/<random_id> \
+  -H "Authorization: Bearer <token_approver>"
+# → 403 Forbidden — "No tienes permisos para operar sobre este empleado"
+
+# Intento de modificar el costo de un empleado fuera del equipo:
+curl -i -X POST https://geo-timesheet-be.soportegeonosis.com.ar/api/v1/employees-price/ \
+  -H "Authorization: Bearer <token_approver>" \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id": <other_team_id>, "date_from":"2026-05-11", "cost_per_hour": 1}'
+# → 403 Forbidden
+```
+
+Suite del módulo:
+
+```bash
+cd odoo-conector-be
+pytest app/employee_price/tests/integration -q
+# 33 passed
+```
+
+### Riesgos y regresiones evaluados
+
+| Riesgo | Mitigación |
+|---|---|
+| Romper a managers legítimos que veían empleados fuera de su jerarquía | El criterio de scope replica exactamente la lógica que `GET /employees-price/` ya usaba (sin quejas reportadas). Si surge un caso de manager "transversal", se incorpora vía Odoo (`timesheet_manager_id` / `child_of`), no relajando el helper. |
+| Latencia: cada request hace una llamada extra a Odoo (`get_team_users`) | Aceptable: ya pagábamos esa llamada en `GET /` sin problemas. Si se vuelve un cuello de botella, se cachea el resultado por user_id por unos segundos. |
+| El helper devuelve 403 también para usuarios sin Employee asociado | Decisión consciente. Antes, un user sin Employee podía golpear estos endpoints; ahora queda bloqueado. Es estrictamente más seguro. |
+| Que tests existentes asuman acceso libre | Se actualizaron los tests para mockear `get_team_users` y `OdooEmployeeGateway.get_by_id` con un "equipo amplio" por default, manteniendo la cobertura intacta. |
+| Que el cambio de `404 → 403` en `GET /history/{id}` para IDs inexistentes rompa algún flujo | El frontend nunca consulta IDs random; siempre vienen de un listado previo (que ya está scoped). No hay regresión de UX. |
+
+### Trabajo relacionado pendiente
+
+- **Bug de roles en producción** (hallazgo bonus): falta `app/shared/security/role_enums/prod.py`. Se crea issue aparte para no mezclar.
+- **VT-16** (IDOR en `/dashboard/summary/{employee_id}`): mismo patrón, mismo helper. Se aborda al llegar a VT-16 reusando `ensure_employee_in_team`.
+- **VT-04 / VT-14** (IDORs sobre timesheets): patrón análogo pero con ownership por `timesheet_line.id`. Se aborda con un helper hermano (`ensure_owns_timesheet` o `ensure_timesheets_in_team`).
+- **VT-08** (paginado y filtros del listado masivo): cierra el risco residual de "datos masivos legítimamente accesibles pero exportables a granel".
+- **Auditoría/logging** de accesos rechazados con 403 en `employees-price/*`: actualmente caen al exception handler genérico. Sería deseable un log estructurado con `requester_user_id`, `target_employee_id`, ruta, IP — para detectar barridos. Out of scope de VT-02; se puede tomar como hardening posterior.
