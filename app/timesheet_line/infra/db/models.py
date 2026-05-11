@@ -26,7 +26,6 @@ class TimesheetLineNotificationModel(SQLModel, table=True):
         description="Hasta cuándo es válida la notificación",
     )
 
-    # Relaciones opcionales (puedes omitirlas si no las necesitas)
     sender: Optional["UserModel"] = Relationship(
         sa_relationship_kwargs={
             "foreign_keys": "[TimesheetLineNotificationModel.approver_id]"

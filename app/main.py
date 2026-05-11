@@ -21,7 +21,8 @@ from app.timesheet_templates.api.routers import router as timesheet_templates_ro
 import logging
 
 
-ENV = os.getenv("ENV", "LOCAL")  # Por defecto, local
+ENV = os.getenv("ENV", "LOCAL").upper()  # Por defecto, local
+IS_PROD = ENV == "PROD"
 API_PREFIX = "/api/v1"
 
 
@@ -59,12 +60,9 @@ app = FastAPI(
     description="API para conectar con Odoo",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs"
-    if ENV != "production"
-    else None,  # Deshabilitamos Swagger en producción
-    redoc_url="/redoc"
-    if ENV != "production"
-    else None,  # Deshabilitamos ReDoc en producción
+    docs_url=None if IS_PROD else "/docs",
+    redoc_url=None if IS_PROD else "/redoc",
+    openapi_url=None if IS_PROD else "/openapi.json",
 )
 
 
