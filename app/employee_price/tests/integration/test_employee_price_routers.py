@@ -5,21 +5,80 @@ from fastapi import FastAPI
 from sqlmodel import Session
 from unittest.mock import Mock, patch
 
-from app.employee_price.api.routers import router
+from app.employee_price.api.routers import (
+    router,
+    get_timesheet_gateway,
+    get_employee_gateway,
+)
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.role_enums.dev import Roles
 from app.employee_price.infra.db.models import EmployeePriceModel
 from app.users.infra.db.models import UserModel
+from app.users.domain.models import Employee
 from app.shared.infra.db.session import get_db
+from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
+    OdooTimesheetLineGateway,
+)
+
+
+def _real_timesheet_gateway_override():
+    """Override que devuelve un `OdooTimesheetLineGateway` real con una
+    conexión Odoo fake. Lo usan los tests de `GET /employees-price/` que
+    parchean `OdooTimesheetLineGateway.get_team_users` a nivel de clase con
+    `@patch`: necesitamos la clase real para que el patch tenga efecto."""
+    return OdooTimesheetLineGateway(Mock())
 
 # Crear una aplicación de FastAPI para pruebas
 app = FastAPI()
 app.include_router(router)
 
 
+def _build_team_gateway_override(team_member_ids: list[int]):
+    """
+    Construye un override de `get_timesheet_gateway` que devuelve un mock cuyo
+    `get_team_users` reporta los IDs indicados como miembros del equipo.
+    Lo usamos para satisfacer el scope check introducido por VT-02 sin tocar
+    cada test individualmente.
+    """
+
+    def override():
+        gateway = Mock()
+        gateway.get_team_users.return_value = [
+            {
+                "id": member_id,
+                "name": f"User {member_id}",
+                "work_email": f"u{member_id}@example.com",
+            }
+            for member_id in team_member_ids
+        ]
+        return gateway
+
+    return override
+
+
+def _build_employee_gateway_override(requester_employee: Employee | None):
+    """
+    Construye un override de `get_employee_gateway` que devuelve un mock cuyo
+    `get_by_id` reporta el Employee indicado (o None) para el solicitante.
+    """
+
+    def override():
+        gateway = Mock()
+        gateway.get_by_id.return_value = requester_employee
+        return gateway
+
+    return override
+
+
 @pytest.fixture
 def client_admin(local_db_session):
-    """Fixture que proporciona un TestClient con usuario admin."""
+    """Fixture que proporciona un TestClient con usuario admin.
+
+    Por defecto, el admin (user_id=1) tiene como equipo a los sample_users
+    (IDs 1, 2 y 3) para que los tests existentes sigan funcionando luego de
+    introducir el scope check de VT-02 en `GET /history/{employee_id}` y
+    `POST /`. Tests específicos de IDOR pueden usar `client_admin_empty_team`.
+    """
 
     async def mock_admin_user():
         return {
@@ -34,6 +93,76 @@ def client_admin(local_db_session):
 
     app.dependency_overrides[get_current_user] = mock_admin_user
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_timesheet_gateway] = _build_team_gateway_override(
+        [1, 2, 3]
+    )
+    app.dependency_overrides[get_employee_gateway] = _build_employee_gateway_override(
+        Employee(id=1, email="admin@example.com", full_name="Admin User")
+    )
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_admin_empty_team(local_db_session):
+    """Fixture de admin cuyo equipo en Odoo está vacío.
+
+    Se usa para verificar el cierre del IDOR de VT-02: aunque el usuario tenga
+    rol `approver`, si el `employee_id` consultado no está en su equipo, la
+    respuesta debe ser 403.
+    """
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [Roles.approver],
+        }
+
+    def override_get_db():
+        yield local_db_session
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_timesheet_gateway] = _build_team_gateway_override([])
+    app.dependency_overrides[get_employee_gateway] = _build_employee_gateway_override(
+        Employee(id=1, email="admin@example.com", full_name="Admin User")
+    )
+    with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_admin_no_employee(local_db_session):
+    """Fixture de admin sin empleado asociado en Odoo.
+
+    Garantiza que `ensure_employee_in_team` devuelve 403 cuando el solicitante
+    no tiene un `Employee` en Odoo, evitando cualquier bypass por usuarios
+    huérfanos.
+    """
+
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [Roles.approver],
+        }
+
+    def override_get_db():
+        yield local_db_session
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_timesheet_gateway] = _build_team_gateway_override(
+        [2, 3]
+    )
+    app.dependency_overrides[get_employee_gateway] = _build_employee_gateway_override(
+        None
+    )
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -56,6 +185,10 @@ def client_regular(local_db_session):
 
     app.dependency_overrides[get_current_user] = mock_regular_user
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_timesheet_gateway] = _build_team_gateway_override([])
+    app.dependency_overrides[get_employee_gateway] = _build_employee_gateway_override(
+        Employee(id=2, email="user@example.com", full_name="Regular User")
+    )
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -259,22 +392,47 @@ def test_create_employee_price_closes_previous_open_record(
 
 
 @pytest.mark.integration
-def test_create_employee_price_employee_not_found(client_admin):
-    """Test de integración: error cuando el empleado no existe."""
-    # Arrange
-    request_data = {
-        "employee_id": 99999,
-        "date_from": "2024-06-01",
-        "cost_per_hour": 55.0,
-    }
+def test_create_employee_price_employee_not_found(local_db_session):
+    """Error 404 cuando el empleado está en el equipo pero no existe en la BD local."""
+    # Arrange: empleado 99999 forma parte del equipo del admin (Odoo) pero no
+    # existe en la BD local; el scope check pasa y caemos al 404 de la BD.
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [Roles.approver],
+        }
 
-    # Act
-    response = client_admin.post("/employees-price/", json=request_data)
+    def override_get_db():
+        yield local_db_session
 
-    # Assert
-    assert response.status_code == 404
-    error_detail = response.json()["detail"]
-    assert "El empleado 99999 no se ha registrado en el sistema" in error_detail
+    app.dependency_overrides[get_current_user] = mock_admin_user
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_timesheet_gateway] = _build_team_gateway_override(
+        [99999]
+    )
+    app.dependency_overrides[get_employee_gateway] = _build_employee_gateway_override(
+        Employee(id=1, email="admin@example.com", full_name="Admin User")
+    )
+
+    try:
+        with TestClient(app) as client:
+            request_data = {
+                "employee_id": 99999,
+                "date_from": "2024-06-01",
+                "cost_per_hour": 55.0,
+            }
+
+            # Act
+            response = client.post("/employees-price/", json=request_data)
+
+            # Assert
+            assert response.status_code == 404
+            error_detail = response.json()["detail"]
+            assert "El empleado 99999 no se ha registrado en el sistema" in error_detail
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.integration
@@ -437,18 +595,45 @@ def test_get_employee_price_history_empty_for_employee_without_prices(
 
 
 @pytest.mark.integration
-def test_get_employee_price_history_employee_not_found(client_admin):
-    """Test de integración: error cuando el empleado no existe."""
-    # Arrange
+def test_get_employee_price_history_employee_not_found(local_db_session):
+    """Error 404 cuando el empleado está en el equipo pero no existe en la BD local."""
+    # Arrange: empleado 99999 forma parte del equipo del admin pero no tiene
+    # registro en la BD local; el scope check pasa y caemos al 404.
     employee_id = 99999
 
-    # Act
-    response = client_admin.get(f"/employees-price/history/{employee_id}")
+    async def mock_admin_user():
+        return {
+            "user_id": 1,
+            "user_email": "admin@example.com",
+            "user_name": "Admin User",
+            "roles": [Roles.approver],
+        }
 
-    # Assert
-    assert response.status_code == 404
-    error_detail = response.json()["detail"]
-    assert f"Empleado con employee_id {employee_id} no encontrado" in error_detail
+    def override_get_db():
+        yield local_db_session
+
+    app.dependency_overrides[get_current_user] = mock_admin_user
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_timesheet_gateway] = _build_team_gateway_override(
+        [employee_id]
+    )
+    app.dependency_overrides[get_employee_gateway] = _build_employee_gateway_override(
+        Employee(id=1, email="admin@example.com", full_name="Admin User")
+    )
+
+    try:
+        with TestClient(app) as client:
+            # Act
+            response = client.get(f"/employees-price/history/{employee_id}")
+
+            # Assert
+            assert response.status_code == 404
+            error_detail = response.json()["detail"]
+            assert (
+                f"Empleado con employee_id {employee_id} no encontrado" in error_detail
+            )
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.mark.integration
@@ -540,6 +725,14 @@ def test_get_employee_price_history_with_open_and_closed_records(
 
 
 # ========== Tests para GET /employees-price/ (listar precios del equipo) ==========
+#
+# El endpoint `GET /employees-price/` NO recibe `get_employee_gateway` por
+# Depends (lo instancia inline), por eso los tests siguen usando `@patch` para
+# `OdooEmployeeGateway.get_by_id`. Pero sí recibe `get_timesheet_gateway`, que
+# la fixture `client_admin` ahora overridea por defecto para satisfacer el
+# scope check de VT-02. Antes de testear `GET /`, eliminamos ese override
+# puntual para que el `@patch` sobre `OdooTimesheetLineGateway.get_team_users`
+# vuelva a tener efecto.
 
 
 @pytest.mark.integration
@@ -558,7 +751,7 @@ def test_list_team_employee_prices_success(
 ):
     """Test de integración: listar precios del equipo exitosamente."""
     # Arrange
-    from app.users.domain.models import Employee
+    app.dependency_overrides[get_timesheet_gateway] = _real_timesheet_gateway_override
 
     mock_get_by_id.return_value = Employee(
         id=1, email="admin@example.com", full_name="Admin User"
@@ -602,7 +795,7 @@ def test_list_team_employee_prices_empty_team(
 ):
     """Test de integración: lista vacía cuando no hay equipo."""
     # Arrange
-    from app.users.domain.models import Employee
+    app.dependency_overrides[get_timesheet_gateway] = _real_timesheet_gateway_override
 
     mock_get_by_id.return_value = Employee(
         id=1, email="admin@example.com", full_name="Admin User"
@@ -630,6 +823,7 @@ def test_list_team_employee_prices_user_without_employee(
 ):
     """Test de integración: error cuando el usuario no tiene empleado asociado."""
     # Arrange
+    app.dependency_overrides[get_timesheet_gateway] = _real_timesheet_gateway_override
     mock_get_by_id.return_value = None  # Usuario sin empleado
     mock_odoo_connection.return_value = Mock()
 
@@ -657,7 +851,7 @@ def test_list_team_employee_prices_with_members_without_prices(
 ):
     """Test de integración: miembros del equipo sin registros de precio."""
     # Arrange
-    from app.users.domain.models import Employee
+    app.dependency_overrides[get_timesheet_gateway] = _real_timesheet_gateway_override
 
     mock_get_by_id.return_value = Employee(
         id=1, email="admin@example.com", full_name="Admin User"
@@ -699,7 +893,7 @@ def test_list_team_employee_prices_response_structure(
 ):
     """Test de integración: verifica estructura de respuesta."""
     # Arrange
-    from app.users.domain.models import Employee
+    app.dependency_overrides[get_timesheet_gateway] = _real_timesheet_gateway_override
 
     mock_get_by_id.return_value = Employee(
         id=1, email="admin@example.com", full_name="Admin User"
@@ -863,3 +1057,139 @@ def test_employee_price_endpoints_content_type(client_admin, sample_users):
     # Act & Assert - GET history
     response_history = client_admin.get("/employees-price/history/2")
     assert response_history.headers["content-type"] == "application/json"
+
+
+# ==========================================================================
+# Tests de regresión VT-02 (IDOR / Broken Object-Level Authorization)
+# ==========================================================================
+# Estos tests bloquean la regresión de la vulnerabilidad de fuga de datos
+# salariales reportada en el pentest 2026-04 (GEO-1403). Antes del fix,
+# cualquier usuario con rol `approver` podía:
+#   - Leer el historial de costo por hora de CUALQUIER empleado.
+#   - Sobrescribir el costo por hora de CUALQUIER empleado.
+# Después del fix, el solicitante debe ser miembro del equipo del target
+# (jerarquía Odoo) o el propio empleado.
+
+
+@pytest.mark.integration
+def test_get_employee_price_history_blocks_idor_when_target_not_in_team(
+    client_admin_empty_team, sample_users, sample_employee_prices
+):
+    """VT-02: 403 cuando el approver consulta el historial de un empleado
+    que NO pertenece a su equipo en Odoo."""
+    target_employee_id = 2  # existe en la BD, pero no en el equipo del admin
+
+    response = client_admin_empty_team.get(
+        f"/employees-price/history/{target_employee_id}"
+    )
+
+    assert response.status_code == 403
+    assert "permisos" in response.json()["detail"].lower()
+
+
+@pytest.mark.integration
+def test_create_employee_price_blocks_idor_when_target_not_in_team(
+    client_admin_empty_team, sample_users
+):
+    """VT-02: 403 cuando el approver intenta crear/sobrescribir el costo de un
+    empleado que NO pertenece a su equipo en Odoo."""
+    request_data = {
+        "employee_id": 2,  # existe en la BD, pero no en el equipo del admin
+        "date_from": "2024-06-01",
+        "cost_per_hour": 9999.0,
+    }
+
+    response = client_admin_empty_team.post("/employees-price/", json=request_data)
+
+    assert response.status_code == 403
+    assert "permisos" in response.json()["detail"].lower()
+
+
+@pytest.mark.integration
+def test_get_employee_price_history_blocks_when_requester_has_no_employee(
+    client_admin_no_employee, sample_users, sample_employee_prices
+):
+    """VT-02: 403 cuando el solicitante no tiene Employee asociado en Odoo,
+    aunque tenga rol approver y el target sí exista."""
+    response = client_admin_no_employee.get("/employees-price/history/2")
+
+    assert response.status_code == 403
+    assert "empleado asociado" in response.json()["detail"].lower()
+
+
+@pytest.mark.integration
+def test_create_employee_price_blocks_when_requester_has_no_employee(
+    client_admin_no_employee, sample_users
+):
+    """VT-02: 403 al crear precio cuando el solicitante no tiene Employee
+    asociado en Odoo."""
+    request_data = {
+        "employee_id": 2,
+        "date_from": "2024-06-01",
+        "cost_per_hour": 55.0,
+    }
+
+    response = client_admin_no_employee.post("/employees-price/", json=request_data)
+
+    assert response.status_code == 403
+    assert "empleado asociado" in response.json()["detail"].lower()
+
+
+@pytest.mark.integration
+def test_get_employee_price_history_allows_self_access(
+    client_admin_empty_team, sample_users, sample_employee_prices, local_db_session
+):
+    """VT-02: el solicitante siempre puede ver SU PROPIO historial, incluso si
+    el `get_team_users` devuelve un equipo vacío (self-access)."""
+    # El admin tiene Employee.id == 1 según la fixture; le creo un registro de
+    # precio propio para validar el camino feliz.
+    own_price = EmployeePriceModel(
+        user_id=1,
+        date_from=date(2024, 1, 1),
+        date_to=None,
+        cost_per_hour=80.0,
+    )
+    local_db_session.add(own_price)
+    local_db_session.commit()
+
+    try:
+        response = client_admin_empty_team.get("/employees-price/history/1")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert any(record["user_id"] == 1 for record in data)
+    finally:
+        local_db_session.delete(own_price)
+        local_db_session.commit()
+
+
+@pytest.mark.integration
+def test_create_employee_price_allows_self_access(
+    client_admin_empty_team, sample_users
+):
+    """VT-02: el solicitante puede crear/actualizar su propio costo aunque su
+    equipo en Odoo esté vacío (self-access permitido)."""
+    request_data = {
+        "employee_id": 1,  # el propio admin
+        "date_from": "2024-06-01",
+        "cost_per_hour": 90.0,
+    }
+
+    response = client_admin_empty_team.post("/employees-price/", json=request_data)
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+
+
+@pytest.mark.integration
+def test_get_employee_price_history_does_not_leak_existence_via_404(
+    client_admin_empty_team, sample_users, sample_employee_prices
+):
+    """VT-02: ante un target fuera de scope, la respuesta debe ser 403 sin
+    importar si el employee_id existe (2) o no (99999). Esto evita que un
+    atacante use el código de respuesta para enumerar IDs válidos."""
+    response_existing = client_admin_empty_team.get("/employees-price/history/2")
+    response_unknown = client_admin_empty_team.get("/employees-price/history/99999")
+
+    assert response_existing.status_code == 403
+    assert response_unknown.status_code == 403

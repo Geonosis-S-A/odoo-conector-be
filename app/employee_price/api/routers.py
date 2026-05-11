@@ -32,7 +32,9 @@ from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
+from app.users.domain.repositories import EmployeeGateway
 from app.shared.security.roles import user_has_role, Roles
+from app.shared.security.authorization import ensure_employee_in_team
 
 router = APIRouter(prefix="/employees-price", tags=["employees-price"])
 
@@ -46,6 +48,18 @@ def get_timesheet_gateway(
     except Exception:
         raise HTTPException(
             status_code=500, detail="Error al conectar con el gateway de timesheet"
+        )
+
+
+def get_employee_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> EmployeeGateway:
+    """Dependencia para obtener el gateway de empleados (Odoo)."""
+    try:
+        return OdooEmployeeGateway(odoo_connection)
+    except Exception:
+        raise HTTPException(
+            status_code=500, detail="Error al conectar con el gateway de empleados"
         )
 
 
@@ -110,6 +124,8 @@ async def list_team_employee_prices(
 async def get_employee_price_history(
     employee_id: int,
     db: Session = Depends(get_db),
+    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     current_user: JWTPayload = Depends(get_current_user),
 ):
     """
@@ -121,6 +137,8 @@ async def get_employee_price_history(
     Args:
         employee_id: ID del usuario/empleado del cual obtener el historial
         db: Sesión de base de datos
+        timesheet_gateway: Gateway para validar membresía de equipo
+        employee_gateway: Gateway para resolver el empleado del solicitante
         current_user: Usuario autenticado
 
     Returns:
@@ -128,9 +146,10 @@ async def get_employee_price_history(
 
     Raises:
         HTTPException 400: Si el employee_id es inválido
-        HTTPException 404: Si el empleado no existe
+        HTTPException 403: Si el empleado no pertenece al equipo del solicitante
+        HTTPException 404: Si el empleado existe en el scope pero no tiene
+            registro en la BD local
     """
-    # Verificar que el usuario existe
     roles: list[int] = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
     if not is_approver:
@@ -138,6 +157,17 @@ async def get_employee_price_history(
             status_code=403,
             detail="No tienes permisos para ver el historial de precios de un empleado",
         )
+
+    # Scope check (VT-02, pentest 2026-04): un approver solo puede ver el
+    # historial de empleados que pertenezcan a su equipo (jerarquía Odoo).
+    # Se valida ANTES de tocar la BD local para evitar enumeration vía 404.
+    ensure_employee_in_team(
+        requester_user_id=current_user["user_id"],
+        target_employee_id=employee_id,
+        employee_gateway=employee_gateway,
+        timesheet_gateway=timesheet_gateway,
+    )
+
     user_repository = SQLModelUserRepository(db)
     employee_data = user_repository.get_by_id(employee_id)
     if not employee_data:
@@ -177,6 +207,8 @@ async def get_employee_price_history(
 async def create_employee_price(
     request: CreateEmployeePriceRequest,
     db: Session = Depends(get_db),
+    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     current_user: JWTPayload = Depends(get_current_user),
 ):
     """
@@ -188,6 +220,8 @@ async def create_employee_price(
     Args:
         request: Datos del nuevo registro de precio de empleado
         db: Sesión de base de datos
+        timesheet_gateway: Gateway para validar membresía de equipo
+        employee_gateway: Gateway para resolver el empleado del solicitante
         current_user: Usuario autenticado
 
     Returns:
@@ -195,10 +229,10 @@ async def create_employee_price(
 
     Raises:
         HTTPException 400: Si los datos son inválidos (costo <= 0, fechas incorrectas, etc.)
-        HTTPException 404: Si el usuario no existe
-        HTTPException 403: Si el usuario no tiene permisos para crear un registro de precio de empleado
+        HTTPException 403: Si el usuario no tiene permisos o el empleado
+            objetivo no pertenece a su equipo
+        HTTPException 404: Si el usuario no existe en la BD local
     """
-    # Inicializar repositorios
     roles: list[int] = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
     if not is_approver:
@@ -206,10 +240,20 @@ async def create_employee_price(
             status_code=403,
             detail="No tienes permisos para crear un registro de precio de empleado",
         )
+
+    # Scope check (VT-02, pentest 2026-04): un approver solo puede crear/editar
+    # el costo de empleados de su equipo. Antes de este fix, cualquier approver
+    # podía sobrescribir el costo por hora de cualquier empleado del sistema.
+    ensure_employee_in_team(
+        requester_user_id=current_user["user_id"],
+        target_employee_id=request.employee_id,
+        employee_gateway=employee_gateway,
+        timesheet_gateway=timesheet_gateway,
+    )
+
     employee_price_repository = SQLModelEmployeePriceRepository(db)
     user_repository = SQLModelUserRepository(db)
 
-    # Verificar que el usuario existe
     user = user_repository.get_by_id(request.employee_id)
     if not user:
         raise HTTPException(
