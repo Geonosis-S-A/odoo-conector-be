@@ -21,7 +21,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 |----|----------------|------|--------|--------|
 | VT-01 | Account Takeover vía `/auth/register` (sin OTP) | 9.8 | GEO-1385 | ✅ |
 | VT-02 | Fuga de tarifas salariales (`/employees-price/*`) | 9.1 | GEO-1403 | ✅ |
-| VT-12 | SSRF en agente IA con bypass de filtro LLM (IP decimal) | 9.0 | GEO-1388 | ⏳ |
+| VT-12 | SSRF en agente IA con bypass de filtro LLM (IP decimal) | 9.0 | GEO-1388 | ✅ |
 | VT-03 | Swagger `/docs` y `/openapi.json` públicos en producción | 8.2 | GEO-1387 | ✅ |
 
 ### Altas (CVSS 7.0–8.5)
@@ -133,6 +133,43 @@ ownership y se bloquea la mutación de `employee_id`. En DELETE se aplica el
 scope al lote con semántica all-or-nothing. 13 tests de regresión.
 Archivos: `app/timesheet_line/api/routers.py`,
 `app/shared/security/authorization.py`.
+
+---
+
+### VT-12 — SSRF en agente IA con bypass del filtro LLM (IP decimal)
+
+**CVSS:** 9.0 · **Linear:** GEO-1388 · **Fix:** 2026-05-11
+
+**Problema.** El agente IA aceptaba en `description` cualquier URL escrita
+por el usuario. Para evitar exfiltración de metadata cloud
+(`http://169.254.169.254/...`) se intentó filtrar a nivel **LLM** dentro
+del system prompt — el pentest mostró que el filtro se bypassea con la IP
+en formato decimal (`http://2852039166/...`), porque el modelo no
+"entiende" representaciones numéricas alternativas. Aún no hay un sink HTTP
+real en backend que dispare la request, pero el payload tóxico igual se
+persistía en Odoo, contaminaba el `pending_confirmation` y dejaba sembrada
+una stored-XSS / SSRF latente para cualquier integración futura (preview de
+links en mail, autolink en frontend, etc.).
+
+**Solución.** Validación a nivel código en `app/shared/security/url_safety.py`
+que detecta IPs hacia recursos internos en **todas** las representaciones
+de `inet_aton(3)`: dotted clásico, octetos en hex/octal, entero de 32 bits
+en decimal, entero de 32 bits en hex, IPv6 nativo, IPv6 con IPv4 mapped y
+hostnames de metadata cloud (`metadata.google.internal`, etc.). Rangos
+prohibidos: RFC 1918, link-local (incl. AWS/GCP/Azure), loopback, CGNAT,
+ULA. Aplicada en tres capas:
+1. Pydantic validator en `CargarHorasRequest.name` y `EditTimesheetRequest.name`
+   (cubre el endpoint REST y todo lo que pase por esos schemas).
+2. Validación temprana en `prepare_summary` (tool del agente) → fail-fast
+   antes del `pending_confirmation`, el usuario nunca ve un confirm con
+   payload tóxico.
+3. Defensa profunda en `create_timesheet_entries` por si el LLM saltea
+   `prepare_summary`.
+
+56 tests unitarios cubren el detector (incluido el payload **literal** del
+pentest `2852039166`) + 36 tests de los schemas + 9 tests de las tools.
+Archivos: `app/shared/security/url_safety.py` (nuevo),
+`app/timesheet_line/api/schemas.py`, `agent/tools/project_tools.py`.
 
 ---
 

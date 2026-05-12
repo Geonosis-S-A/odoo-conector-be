@@ -1,9 +1,10 @@
 from typing import Optional, List
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import date, datetime
 
 from app.project.api.schemas import ProjectResponse
 from app.task.api.schemas import TaskInfoResponse
+from app.shared.security.url_safety import safe_text_validator
 
 
 class CargarHorasRequest(BaseModel):
@@ -13,6 +14,16 @@ class CargarHorasRequest(BaseModel):
     hours: float
     date: date
     task_id: int | None = None
+
+    # VT-12 (pentest 2026-04, GEO-1388): el campo `name` es texto libre que
+    # luego se persiste en Odoo. Bloqueamos URLs hacia recursos internos
+    # (link-local, RFC 1918, loopback, cloud metadata) en cualquier
+    # representación (decimal 32-bit, hex, octal, IPv6 mapped). El filtro
+    # previo era a nivel LLM y se bypasseaba con IP decimal.
+    @field_validator("name")
+    @classmethod
+    def _validate_name_safe(cls, v: Optional[str]) -> Optional[str]:
+        return safe_text_validator(v)
 
 
 class TimesheetLineNotificationResponse(BaseModel):
@@ -43,6 +54,12 @@ class EditTimesheetRequest(BaseModel):
     date: date
     task_id: Optional[int] = None
     validated: bool
+
+    # VT-12 (pentest 2026-04, GEO-1388): mismo bloqueo que en CargarHorasRequest.
+    @field_validator("name")
+    @classmethod
+    def _validate_name_safe(cls, v: str) -> str:
+        return safe_text_validator(v) or ""
 
 
 class DeleteTimesheetRequest(BaseModel):
