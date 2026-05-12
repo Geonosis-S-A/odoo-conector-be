@@ -25,6 +25,10 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetCreationError,
     TimesheetNotFoundError,
 )
+from app.shared.security.url_safety import (
+    UnsafeUrlError,
+    find_internal_url_targets,
+)
 
 
 # ============================================================================
@@ -471,6 +475,34 @@ def prepare_summary(entries_json: str, excluded_holidays_json: str = "") -> str:
                 ensure_ascii=False,
             )
 
+        # VT-12 (pentest 2026-04, GEO-1388) — validación temprana de SSRF:
+        # rechazamos descripciones que apunten a recursos internos (link-local,
+        # RFC 1918, loopback, metadata cloud) en cualquier representación
+        # (decimal 32-bit, hex, octal, IPv6 mapped). Esto se hace ANTES del
+        # `pending_confirmation` para que el LLM reciba feedback inmediato y
+        # el usuario nunca llegue a ver un confirm con payload tóxico. El
+        # endpoint REST equivalente tiene la misma validación a nivel Pydantic
+        # (defensa en profundidad).
+        for idx, entry in enumerate(entries_data):
+            if not isinstance(entry, dict):
+                continue
+            description = entry.get("description") or ""
+            targets = find_internal_url_targets(description)
+            if targets:
+                return json.dumps(
+                    {
+                        "success": False,
+                        "error": "URL no permitida",
+                        "message": (
+                            f"Entrada {idx + 1}: la descripción contiene una "
+                            f"URL hacia un recurso interno bloqueado "
+                            f"({targets[0]}). Pedile al usuario una "
+                            f"descripción distinta antes de continuar."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+
         # Obtener nombres de proyectos y tareas (solo lectura, no escribe en BBDD)
         odoo = get_odoo_connection()
         task_gateway = OdooTaskGateway(odoo)
@@ -639,10 +671,6 @@ def create_timesheet_entries(
                 ensure_ascii=False,
             )
 
-        # Obtener la conexión a Odoo
-        odoo_connection = get_odoo_connection()
-        timesheet_gateway = OdooTimesheetLineGateway(odoo_connection)
-
         # Validar que hay al menos 1 entrada
         if len(entries_data) == 0:
             return json.dumps(
@@ -653,6 +681,34 @@ def create_timesheet_entries(
                 },
                 ensure_ascii=False,
             )
+
+        # VT-12 — defensa profunda: si el LLM saltea `prepare_summary` y va
+        # directo a `create_timesheet_entries`, igual aplicamos el filtro.
+        # Se hace ANTES de abrir conexión a Odoo y de construir cualquier
+        # `CargarHorasRequest` para no exponer un stacktrace de
+        # `UnsafeUrlError` al modelo.
+        for idx, entry in enumerate(entries_data):
+            if not isinstance(entry, dict):
+                continue
+            description = entry.get("description") or ""
+            targets = find_internal_url_targets(description)
+            if targets:
+                return json.dumps(
+                    {
+                        "success": False,
+                        "error": "URL no permitida",
+                        "message": (
+                            f"Entrada {idx + 1}: la descripción contiene una "
+                            f"URL hacia un recurso interno bloqueado "
+                            f"({targets[0]})."
+                        ),
+                    },
+                    ensure_ascii=False,
+                )
+
+        # Obtener la conexión a Odoo
+        odoo_connection = get_odoo_connection()
+        timesheet_gateway = OdooTimesheetLineGateway(odoo_connection)
 
         # Crear todas las requests
         requests = []
