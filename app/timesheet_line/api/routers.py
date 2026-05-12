@@ -404,6 +404,11 @@ async def validate_timesheet_lines(
 
     Returns:
         Dict[str, bool]: Resultado de la validación
+
+    Raises:
+        HTTPException 403: Si el solicitante no es approver, si intenta usar
+            un `approver_mail` distinto al propio (spoofing) o si alguno de
+            los timesheets no pertenece a su equipo (VT-14, pentest 2026-04).
     """
     roles: list[int] = current_user["roles"]
     is_admin = user_has_role(roles, Roles.approver)
@@ -412,6 +417,33 @@ async def validate_timesheet_lines(
             status_code=403,
             detail="No tienes permisos para validar las líneas de timesheet",
         )
+
+    # VT-14 (pentest 2026-04) — anti-spoofing del approver:
+    # antes, el `approver_mail` se aceptaba tal cual desde el body, lo que
+    # permitía a un approver enviar mails al empleado diciendo "aprobado por
+    # <otro_aprobador>". Lo forzamos al email del solicitante autenticado.
+    if request.approver_mail != current_user["user_email"]:
+        raise HTTPException(
+            status_code=403,
+            detail="No podés validar timesheets en nombre de otro aprobador",
+        )
+
+    # VT-14 — scope check sobre el lote:
+    # un approver solo puede validar timesheets de empleados que estén bajo
+    # su jerarquía en Odoo. Atómico: si cualquier ID del lote queda fuera de
+    # scope, no se valida ninguno.
+    existing = gateway.get_by_ids(request.timesheetline_ids)
+    if not existing or len(existing) != len(request.timesheetline_ids):
+        raise HTTPException(
+            status_code=404,
+            detail="Uno o más timesheets no fueron encontrados",
+        )
+    ensure_owns_timesheets(
+        requester_user_id=current_user["user_id"],
+        target_employee_ids=[ts.employee_id for ts in existing],
+        employee_gateway=employee_gateway,
+        timesheet_gateway=gateway,
+    )
 
     try:
         use_case = ValidateTimesheetUseCase(gateway, email_service, employee_gateway, notification_repository)
@@ -457,6 +489,27 @@ async def review_mail(
             status_code=403,
             detail="No tienes permisos para enviar correos de revisión",
         )
+
+    # VT-14 (pentest 2026-04) — mismo patrón que /validate:
+    # 1) `approver_mail` se fuerza al email del solicitante (anti-spoofing).
+    # 2) Los timesheets del lote deben pertenecer a su equipo (scope check).
+    if request.approver_mail != current_user["user_email"]:
+        raise HTTPException(
+            status_code=403,
+            detail="No podés enviar correos de revisión en nombre de otro aprobador",
+        )
+    existing = timesheet_gateway.get_by_ids(request.timesheetline_ids)
+    if not existing or len(existing) != len(request.timesheetline_ids):
+        raise HTTPException(
+            status_code=404,
+            detail="Uno o más timesheets no fueron encontrados",
+        )
+    ensure_owns_timesheets(
+        requester_user_id=current_user["user_id"],
+        target_employee_ids=[ts.employee_id for ts in existing],
+        employee_gateway=employee_gateway,
+        timesheet_gateway=timesheet_gateway,
+    )
 
     try:
         use_case = ReviewTimesheetsUseCase(

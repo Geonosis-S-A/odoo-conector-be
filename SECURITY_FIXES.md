@@ -34,7 +34,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | — | ⏳ |
 | VT-05 | Sin rate limiting en endpoints de autenticación | 7.5 | GEO-1390 | ⏳ |
 | VT-06 | Enumeración de usuarios + roles | 7.5 | GEO-1396 | ⏳ |
-| VT-14 | BFLA: validar timesheets ajenos | 7.1 | — | ⏳ |
+| VT-14 | BFLA: validar timesheets ajenos | 7.1 | GEO-1392 | ✅ |
 | VT-07 | Headers de seguridad ausentes | 6.5 | — | ⏳ |
 
 ### Medias
@@ -133,3 +133,25 @@ ownership y se bloquea la mutación de `employee_id`. En DELETE se aplica el
 scope al lote con semántica all-or-nothing. 13 tests de regresión.
 Archivos: `app/timesheet_line/api/routers.py`,
 `app/shared/security/authorization.py`.
+
+---
+
+### VT-14 — BFLA en `POST /timesheet/validate` (+ bonus en `/review`)
+
+**CVSS:** 7.1 · **Linear:** GEO-1392 · **Fix:** 2026-05-11
+
+**Problema.** Dos vectores en `/timesheet/validate` (y los mismos en
+`/timesheet/review`):
+1. Solo se chequeaba rol `approver`, no la pertenencia de los timesheets al
+   equipo del solicitante → cualquier approver podía validar timesheets de
+   empleados de otros equipos.
+2. El campo `approver_mail` venía del body, no del JWT → un approver podía
+   suplantar a otro: el empleado recibía un correo "tu timesheet fue aprobado
+   por `<email_arbitrario>`".
+
+**Solución.** Reuso del helper `ensure_owns_timesheets(...)` ya construido
+para VT-04 (mismo `TeamScope`, sin queries extra a Odoo) y validación
+explícita de `request.approver_mail == current_user["user_email"]` (cierra
+el spoofing). Aplicado a `validate` y a `review` con semántica all-or-nothing
+sobre el lote. 8 tests de regresión nuevos.
+Archivos: `app/timesheet_line/api/routers.py`.
