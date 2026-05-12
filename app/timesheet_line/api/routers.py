@@ -70,6 +70,10 @@ from app.timesheet_line.application.excepctions.exceptions import (
     ApproverNotFoundError,
     TimesheetReviewError,
 )
+from app.shared.security.authorization import (
+    get_team_scope,
+    ensure_owns_timesheets,
+)
 
 
 router = APIRouter(prefix="/timesheet", tags=["timesheet"])
@@ -245,6 +249,7 @@ async def list_timesheet_lines(
 async def delete_timesheet_line(
     request: DeleteTimesheetRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -253,13 +258,37 @@ async def delete_timesheet_line(
     Args:
         request: Objeto con lista de IDs de las líneas de timesheet a eliminar
         gateway: Gateway de timesheet (inyectado)
+        employee_gateway: Gateway de empleados (para resolver scope)
+        current_user: Usuario autenticado
 
     Returns:
         Dict[str, str]: Mensaje de éxito
+
+    Raises:
+        HTTPException 403: Si alguno de los timesheets no pertenece al
+            solicitante ni a su equipo (IDOR check de VT-04, pentest 2026-04).
     """
+    # Ownership check (VT-04 + bonus, pentest 2026-04):
+    # Antes de este fix, cualquier usuario autenticado podía borrar timesheets
+    # de cualquier empleado. Ahora exigimos que el dueño sea el propio
+    # solicitante o esté bajo su jerarquía en Odoo, atómicamente para todos
+    # los IDs del lote (todo o nada).
+    existing = gateway.get_by_ids(request.ids)
+    if not existing or len(existing) != len(request.ids):
+        raise HTTPException(
+            status_code=404,
+            detail="Uno o más timesheets no fueron encontrados",
+        )
+    ensure_owns_timesheets(
+        requester_user_id=current_user["user_id"],
+        target_employee_ids=[ts.employee_id for ts in existing],
+        employee_gateway=employee_gateway,
+        timesheet_gateway=gateway,
+    )
+
     try:
         use_case = DeleteTimesheetUseCase(gateway)
-        success = use_case.execute(request.ids)
+        use_case.execute(request.ids)
         return {"message": "Líneas de timesheet eliminadas correctamente"}
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -275,6 +304,7 @@ def edit_timesheet(
     timesheet_id: int,
     req: EditTimesheetRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, bool]:
     """Edita una línea de hoja de tiempo existente.
@@ -283,11 +313,16 @@ def edit_timesheet(
         timesheet_id: ID de la línea de hoja de tiempo a editar
         req: Datos de la línea de hoja de tiempo
         gateway: Gateway para interactuar con Odoo
+        employee_gateway: Gateway de empleados (para resolver scope)
+        current_user: Usuario autenticado
 
     Returns:
         Dict[str, bool]: Resultado de la operación
 
     Raises:
+        HTTPException 403: Si el timesheet no pertenece al solicitante ni a su
+            equipo (IDOR check de VT-04), o si el body intenta cambiar
+            `employee_id` (transferencia de timesheet entre empleados).
         HTTPException: Si hay un error al editar la línea
     """
     roles: list[int] = current_user["roles"]
@@ -299,16 +334,46 @@ def edit_timesheet(
             detail="No tienes permisos para editar las líneas de timesheet si ya fueron validadas",
         )
 
-    try:
-        # Asegurar que el ID en la URL coincide con el ID en el body
-        if timesheet_id != req.id:
-            raise TimesheetIdMismatchError(timesheet_id, req.id)
+    # Asegurar que el ID en la URL coincide con el ID en el body (validación
+    # previa al ownership check para evitar mensajes confusos).
+    if timesheet_id != req.id:
+        raise HTTPException(
+            status_code=400,
+            detail=TimesheetIdMismatchError(timesheet_id, req.id).message,
+        )
 
+    # Ownership check (VT-04, pentest 2026-04):
+    # 1) El timesheet debe existir en Odoo.
+    # 2) Su dueño actual debe ser el solicitante, o estar en su equipo.
+    # 3) El body NO puede cambiar `employee_id` (eso sería transferir el
+    #    registro a un tercero, que también es un IDOR/integridad).
+    existing_timesheet = gateway.get_by_id(req.id)
+    if existing_timesheet is None:
+        raise HTTPException(
+            status_code=404,
+            detail=TimesheetNotFoundError([req.id]).message,
+        )
+
+    scope = get_team_scope(
+        requester_user_id=current_user["user_id"],
+        employee_gateway=employee_gateway,
+        timesheet_gateway=gateway,
+    )
+    if not scope.contains(existing_timesheet.employee_id):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para editar este timesheet",
+        )
+    if req.employee_id != existing_timesheet.employee_id:
+        raise HTTPException(
+            status_code=403,
+            detail="No se puede cambiar el empleado dueño de un timesheet existente",
+        )
+
+    try:
         use_case = EditTimesheetUseCase(gateway)
         success = use_case.execute(req)
         return {"success": success}
-    except TimesheetIdMismatchError as e:
-        raise HTTPException(status_code=400, detail=e.message)
     except InvalidHoursError as e:
         raise HTTPException(status_code=400, detail=e.message)
     except TimesheetNotFoundError as e:

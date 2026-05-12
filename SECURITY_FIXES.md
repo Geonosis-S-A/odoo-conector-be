@@ -30,7 +30,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Requiere acci
 
 | ID | Vulnerabilidad | CVSS | Estado |
 |----|----------------|------|--------|
-| VT-04 | IDOR: escritura de timesheets ajenos | 8.1 | ⏳ |
+| VT-04 | IDOR: escritura de timesheets ajenos (PUT + bonus DELETE) | 8.1 | ✅ |
 | VT-08 | 9.057 timesheets expuestos sin filtro/paginado | 8.0 | ⏳ |
 | VT-17 | Export Excel masivo con costos ARS/USD sin scope | 7.9 | ⏳ |
 | VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | ⏳ |
@@ -487,3 +487,182 @@ pytest app/employee_price/tests/integration -q
 - **VT-04 / VT-14** (IDORs sobre timesheets): patrón análogo pero con ownership por `timesheet_line.id`. Se aborda con un helper hermano (`ensure_owns_timesheet` o `ensure_timesheets_in_team`).
 - **VT-08** (paginado y filtros del listado masivo): cierra el risco residual de "datos masivos legítimamente accesibles pero exportables a granel".
 - **Auditoría/logging** de accesos rechazados con 403 en `employees-price/*`: actualmente caen al exception handler genérico. Sería deseable un log estructurado con `requester_user_id`, `target_employee_id`, ruta, IP — para detectar barridos. Out of scope de VT-02; se puede tomar como hardening posterior.
+
+---
+
+## VT-04 — IDOR en `PUT /timesheet/{id}` (+ bonus en `DELETE /timesheet/`)
+
+| Atributo | Detalle |
+|---|---|
+| **Estado** | ✅ Resuelto |
+| **Severidad** | ALTO — CVSS 8.1 |
+| **OWASP** | A01:2021 — Broken Access Control |
+| **CWE** | CWE-639 (Authorization Bypass Through User-Controlled Key) / BOLA |
+| **Endpoints** | `PUT /api/v1/timesheet/{id}`, `DELETE /api/v1/timesheet/` |
+| **Archivos afectados** | `app/timesheet_line/api/routers.py`, `app/shared/security/authorization.py`, `app/timesheet_line/tests/integration/test_timesheet_routers_ownership.py` (nuevo) |
+| **Linear** | [GEO-1389](https://linear.app/) |
+| **Fecha de corrección** | 2026-05-11 |
+
+### Problema
+
+El reporte original (VT-04) documentaba que `PUT /api/v1/timesheet/{timesheet_id}` aceptaba modificar el registro de cualquier empleado sin validar que el solicitante fuera el dueño:
+
+```
+PUT /api/v1/timesheet/39928
+Body: {"hours":999,"description":"manipulado","date":"2025-12-31","project_id":81}
+Empleado del registro: BORDONE, Francisco (ID diferente al atacante)
+→ Cambio aplicado.
+```
+
+### Análisis técnico
+
+Al auditar el módulo `timesheet_line` confirmamos el bug del PUT y encontramos **dos vectores adicionales** que el reporte no listaba explícitamente:
+
+**Vector 1 — IDOR clásico en `PUT` (el del reporte).** El handler verificaba:
+- Que el rol fuera `approver` si `req.validated == True` (regla parcial).
+- Que `timesheet_id` (URL) == `req.id` (body).
+
+…pero **nunca** que el dueño real del timesheet (`employee_id` en Odoo) tuviera relación con el solicitante.
+
+**Vector 2 — Transferencia de timesheet vía mutación de `employee_id`.** El body de `EditTimesheetRequest` incluye `employee_id`. Aun cuando el solicitante fuera dueño del timesheet, podía cambiar ese campo y **reasignarle el registro a otro empleado**, ensuciando sus horas reportadas. Era un IDOR de integridad, no de lectura/escritura simple.
+
+**Vector 3 — IDOR análogo en `DELETE /timesheet/` (hallazgo extra).** El handler aceptaba `{"ids": [...]}` y delegaba al use case sin validar dueño. Cualquier usuario autenticado podía borrar timesheets ajenos. Mismo patrón, misma severidad, misma raíz. Se fixea en este mismo PR porque separarlo en un VT distinto sería artificial.
+
+### Solución aplicada
+
+Se extendió el helper `app/shared/security/authorization.py` con dos primitivas reutilizables y se aplicaron en ambos endpoints.
+
+**1) Refactor en `authorization.py`** — se introduce `TeamScope` (snapshot del scope) + `get_team_scope(...)`. La función `ensure_employee_in_team` que existía desde VT-02 se reescribe en términos de estas primitivas (zero breaking change), y se agrega `ensure_owns_timesheets` para validación en batch sin N+1:
+
+```22:50:odoo-conector-be/app/shared/security/authorization.py
+@dataclass(frozen=True)
+class TeamScope:
+    requester_employee_id: int
+    team_member_ids: frozenset[int]
+
+    def contains(self, target_employee_id: int) -> bool:
+        return (
+            target_employee_id == self.requester_employee_id
+            or target_employee_id in self.team_member_ids
+        )
+```
+
+```52:84:odoo-conector-be/app/shared/security/authorization.py
+def get_team_scope(
+    *,
+    requester_user_id: int,
+    employee_gateway: EmployeeGateway,
+    timesheet_gateway: TimesheetLineGateway,
+) -> TeamScope:
+    """Resuelve el scope del solicitante con dos llamadas a Odoo."""
+    requester_employee = employee_gateway.get_by_id(requester_user_id)
+    if requester_employee is None:
+        raise HTTPException(403, "El usuario no tiene un empleado asociado en Odoo")
+    team_users = timesheet_gateway.get_team_users(
+        requester_user_id, requester_employee.id
+    )
+    return TeamScope(
+        requester_employee_id=requester_employee.id,
+        team_member_ids=frozenset(m["id"] for m in team_users),
+    )
+```
+
+**2) Scope check en `PUT /timesheet/{id}`** — se aplica después de validar `id` URL/body y antes de delegar al use case. Bloquea los tres vectores:
+
+```296:325:odoo-conector-be/app/timesheet_line/api/routers.py
+existing_timesheet = gateway.get_by_id(req.id)
+if existing_timesheet is None:
+    raise HTTPException(status_code=404, detail=...)
+
+scope = get_team_scope(
+    requester_user_id=current_user["user_id"],
+    employee_gateway=employee_gateway,
+    timesheet_gateway=gateway,
+)
+if not scope.contains(existing_timesheet.employee_id):
+    raise HTTPException(
+        status_code=403,
+        detail="No tienes permisos para editar este timesheet",
+    )
+if req.employee_id != existing_timesheet.employee_id:
+    raise HTTPException(
+        status_code=403,
+        detail="No se puede cambiar el empleado dueño de un timesheet existente",
+    )
+```
+
+**3) Scope check en `DELETE /timesheet/`** — usa `ensure_owns_timesheets` (batch) con semántica all-or-nothing: si cualquier ID del lote no pasa el check, no se borra ninguno. Esto cierra el "vector 3" descrito arriba y deja el endpoint coherente con el PUT:
+
+```265:280:odoo-conector-be/app/timesheet_line/api/routers.py
+existing = gateway.get_by_ids(request.ids)
+if not existing or len(existing) != len(request.ids):
+    raise HTTPException(status_code=404, detail=...)
+ensure_owns_timesheets(
+    requester_user_id=current_user["user_id"],
+    target_employee_ids=[ts.employee_id for ts in existing],
+    employee_gateway=employee_gateway,
+    timesheet_gateway=gateway,
+)
+```
+
+**4) Tests de regresión.** Nuevo archivo `app/timesheet_line/tests/integration/test_timesheet_routers_ownership.py` con 13 tests:
+
+- PUT: dueño edita propio (200), IDOR contra ajeno (403), approver edita miembro de equipo (200), approver fuera de scope (403), **transferencia de employee_id bloqueada (403)**, 404 en timesheet inexistente, 400 en URL/body mismatch, 403 si requester sin Employee.
+- DELETE: dueño borra propio (200), IDOR contra ajeno (403), **lote mixto propio+ajeno = todo o nada (403, no se borra nada)**, approver borra de equipo (200), 404 si algún ID no existe.
+
+**Decisión de diseño: no chequeamos rol `approver` en el helper.** La regla es puramente "el dueño está en tu scope". Un usuario regular solo verá su propio scope (= self) porque `get_team_users` para él devuelve lista vacía (no es manager de nadie). Esto cubre incidentalmente el caso de un manager Odoo sin rol `approver` en la app (raro pero legítimo: si Odoo te dice que sos manager, podés operar sobre tu equipo).
+
+### Verificación post-deploy
+
+Replicar el ataque del pentest contra producción:
+
+```bash
+# Atacante con sesión válida intenta modificar timesheet ajeno:
+curl -i -X PUT https://geo-timesheet-be.soportegeonosis.com.ar/api/v1/timesheet/39928 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"id":39928,"name":"x","employee_id":<otro>,"project_id":81,"hours":999,"date":"2025-12-31","validated":false}'
+# Antes: 200 OK + registro modificado.
+# Después: 403 Forbidden — "No tienes permisos para editar este timesheet"
+
+# Vector adicional: dueño legítimo intenta transferir su timesheet a otro empleado:
+curl -i -X PUT https://geo-timesheet-be.soportegeonosis.com.ar/api/v1/timesheet/<id_propio> \
+  -H "Authorization: Bearer <token_propio>" \
+  -H "Content-Type: application/json" \
+  -d '{"id":<id_propio>,"name":"x","employee_id":<otro>,"project_id":81,"hours":1,"date":"2026-05-11","validated":false}'
+# → 403 Forbidden — "No se puede cambiar el empleado dueño de un timesheet existente"
+
+# DELETE: atacante intenta borrar timesheet ajeno:
+curl -i -X DELETE https://geo-timesheet-be.soportegeonosis.com.ar/api/v1/timesheet/ \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"ids":[<id_ajeno>]}'
+# → 403 Forbidden
+```
+
+Suite del módulo:
+
+```bash
+cd odoo-conector-be
+pytest app/timesheet_line/tests/integration/test_timesheet_routers_ownership.py -q
+# 13 passed
+pytest app/timesheet_line/tests/unit app/employee_price/tests -q
+# 150 passed (no se rompen suites preexistentes ni del helper compartido)
+```
+
+### Riesgos y regresiones evaluados
+
+| Riesgo | Mitigación |
+|---|---|
+| Romper la edición legítima de timesheets | Los tests cubren el camino feliz (dueño edita propio, approver edita de su equipo). Si un caso del negocio requiere edición fuera de equipo (p. ej. un "superadmin"), se introducirá un nuevo rol explícito y un bypass dedicado. |
+| Latencia: cada PUT/DELETE agrega 2 llamadas a Odoo (`get_by_id`/`get_by_ids` + `get_team_users`) | Aceptable. `get_by_id` ya se hacía internamente en el use case; ahora vive en la capa de API. La duplicación es 1 lookup adicional como costo de la auth granular; se puede optimizar pasando `existing` al use case si se vuelve un cuello de botella. |
+| Romper editores que cambiaban `employee_id` por error UI | Verificado: el frontend nunca permite cambiar el dueño del timesheet en pantalla; siempre lo envía igual al del registro original. No hay regresión funcional. |
+| `DELETE` ahora hace `get_by_ids` extra (antes el use case ya lo hacía) | Duplicación equivalente al caso del PUT. Misma justificación. |
+| Cambio de 400 a 403 en escenarios sutiles (p. ej. body con `id` inexistente) | El 404 sigue siendo 404 cuando el ID no existe; el 403 aparece solo cuando el ID existe pero no es tuyo. Sin ambigüedad. |
+
+### Trabajo relacionado pendiente
+
+- **VT-14** (BFLA: validar timesheets ajenos en `POST /timesheet/validate`): mismo patrón, ahora se resuelve con una llamada a `ensure_owns_timesheets`. Se aborda al llegar a VT-14.
+- **VT-16** (IDOR en `/dashboard/summary/{employee_id}`): mismo patrón que VT-02; reusará `ensure_employee_in_team`.
+- **`EditTimesheetUseCase` y `DeleteTimesheetUseCase` repiten `get_by_id` / `get_by_ids`** después del ownership check. Se puede refactorizar para pasar el `existing` ya resuelto y ahorrar la llamada Odoo. Performance-only; no es bloqueante.
+- **Auditoría/logging** de 403 en endpoints de escritura: mismo TODO que VT-02.
