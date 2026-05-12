@@ -1,15 +1,14 @@
-"""Tests de regresión para el ownership check de VT-04 (GEO-1389).
+"""Tests de regresión de los ownership/scope checks en `/timesheet`.
 
-El pentest 2026-04 reportó un IDOR en `PUT /api/v1/timesheet/{id}` (cualquier
-usuario podía editar el timesheet de cualquier otro empleado pasando solo el
-ID). Durante el fix se descubrió que `DELETE /api/v1/timesheet/` tenía
-exactamente el mismo bug (recibe lista de IDs y borraba sin validar dueño).
-
-Estos tests cubren ambos endpoints y bloquean la regresión.
+Cubre:
+- VT-04 (GEO-1389): IDOR en `PUT /timesheet/{id}` y `DELETE /timesheet/`.
+- VT-14 (GEO-1392): BFLA en `POST /timesheet/validate` + bonus
+  `POST /timesheet/review` (mismo patrón: scope + anti-spoofing del
+  `approver_mail`).
 """
 
 from datetime import date
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fastapi import FastAPI
@@ -20,6 +19,7 @@ from app.timesheet_line.api.routers import (
     get_timesheet_gateway,
     get_employee_gateway,
 )
+from app.email.api.dependencies import get_common_email_service
 from app.timesheet_line.domain.models import DetailedTimesheetLine
 from app.project.domain.models import Project
 from app.users.domain.models import Employee
@@ -89,18 +89,32 @@ def _build_employee_gateway(requester_employee: Employee | None):
     return gateway
 
 
-def _override_user(user_id: int, *, is_approver: bool = False):
+def _override_user(
+    user_id: int,
+    *,
+    is_approver: bool = False,
+    user_email: str | None = None,
+):
     """Construye un override de `get_current_user` con el user_id indicado."""
 
     async def mock_user():
         return {
             "user_id": user_id,
-            "user_email": f"u{user_id}@example.com",
+            "user_email": user_email or f"u{user_id}@example.com",
             "user_name": f"User {user_id}",
             "roles": [Roles.approver] if is_approver else [1],
         }
 
     return mock_user
+
+
+def _build_email_service_mock():
+    """Mock minimal del `CommonResendEmailService` para los tests de validate
+    / review: los métodos enviados son async, así que usamos AsyncMock."""
+    service = Mock()
+    service.send_approved_mail = AsyncMock(return_value=True)
+    service.send_review_mail = AsyncMock(return_value=True)
+    return service
 
 
 # ----------------------------------------------------------------------
@@ -430,5 +444,247 @@ def test_delete_timesheet_not_found_returns_404():
             response = client.request("DELETE", "/timesheet/", json={"ids": [999]})
             assert response.status_code == 404
             gateway.delete.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ----------------------------------------------------------------------
+# Tests para POST /timesheet/validate (VT-14)
+# ----------------------------------------------------------------------
+
+
+def _setup_validate(
+    *,
+    timesheets: dict[int, DetailedTimesheetLine],
+    requester_employee: Employee | None,
+    team_member_ids: list[int],
+    user_id: int = 1,
+    user_email: str = "approver@example.com",
+    is_approver: bool = True,
+):
+    """Wiring común para los tests de validate/review: arma los overrides y
+    devuelve los mocks principales para hacer aserciones."""
+    gateway = _build_timesheet_gateway(
+        timesheets_by_id=timesheets, team_member_ids=team_member_ids
+    )
+    # `validate` use case llama también a `get_by_email` y `get_by_id` del
+    # employee_gateway; el primero resuelve el approver y debe existir.
+    employee_gateway = _build_employee_gateway(requester_employee)
+    employee_gateway.get_by_email.return_value = requester_employee
+    email_service = _build_email_service_mock()
+
+    app.dependency_overrides[get_timesheet_gateway] = lambda: gateway
+    app.dependency_overrides[get_employee_gateway] = lambda: employee_gateway
+    app.dependency_overrides[get_common_email_service] = lambda: email_service
+    app.dependency_overrides[get_current_user] = _override_user(
+        user_id, is_approver=is_approver, user_email=user_email
+    )
+    return gateway, employee_gateway, email_service
+
+
+@pytest.mark.integration
+def test_validate_approver_can_validate_team_members_timesheet():
+    """Camino feliz: approver valida timesheets de su equipo con su propio
+    email en `approver_mail`."""
+    ts = _detailed_timesheet(100, owner_employee_id=2)
+    gateway, _, _ = _setup_validate(
+        timesheets={100: ts},
+        requester_employee=Employee(id=1, email="approver@example.com", full_name="Approver"),
+        team_member_ids=[2, 3],
+    )
+    gateway.validate.return_value = True
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/validate",
+                json={"approver_mail": "approver@example.com", "timesheetline_ids": [100]},
+            )
+            assert response.status_code == 200
+            assert response.json()["success"] is True
+            gateway.validate.assert_called_once_with([100])
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_non_approver_blocked():
+    """Sin rol approver → 403 antes de cualquier otra cosa."""
+    ts = _detailed_timesheet(100, owner_employee_id=2)
+    gateway, _, _ = _setup_validate(
+        timesheets={100: ts},
+        requester_employee=Employee(id=1, email="user@example.com", full_name="User"),
+        team_member_ids=[],
+        user_email="user@example.com",
+        is_approver=False,
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/validate",
+                json={"approver_mail": "user@example.com", "timesheetline_ids": [100]},
+            )
+            assert response.status_code == 403
+            gateway.validate.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_blocks_idor_against_other_team():
+    """VT-14: approver intenta validar timesheet de empleado fuera de su
+    equipo → 403."""
+    ts = _detailed_timesheet(100, owner_employee_id=99)
+    gateway, _, _ = _setup_validate(
+        timesheets={100: ts},
+        requester_employee=Employee(id=1, email="approver@example.com", full_name="Approver"),
+        team_member_ids=[2, 3],
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/validate",
+                json={"approver_mail": "approver@example.com", "timesheetline_ids": [100]},
+            )
+            assert response.status_code == 403
+            gateway.validate.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_blocks_approver_mail_spoofing():
+    """VT-14 (vector adicional): un approver no puede usar el email de OTRO
+    aprobador para que el empleado reciba un mail diciendo "aprobado por X"."""
+    ts = _detailed_timesheet(100, owner_employee_id=2)
+    gateway, _, _ = _setup_validate(
+        timesheets={100: ts},
+        requester_employee=Employee(id=1, email="approver@example.com", full_name="Approver"),
+        team_member_ids=[2],
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/validate",
+                json={
+                    "approver_mail": "ceo@example.com",  # spoofing
+                    "timesheetline_ids": [100],
+                },
+            )
+            assert response.status_code == 403
+            assert "nombre de otro" in response.json()["detail"].lower()
+            gateway.validate.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_mixed_batch_all_or_nothing():
+    """Lote con 1 propio + 1 ajeno → ninguno se valida (atomic)."""
+    own = _detailed_timesheet(100, owner_employee_id=2)
+    foreign = _detailed_timesheet(101, owner_employee_id=99)
+    gateway, _, _ = _setup_validate(
+        timesheets={100: own, 101: foreign},
+        requester_employee=Employee(id=1, email="approver@example.com", full_name="Approver"),
+        team_member_ids=[2],
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/validate",
+                json={
+                    "approver_mail": "approver@example.com",
+                    "timesheetline_ids": [100, 101],
+                },
+            )
+            assert response.status_code == 403
+            gateway.validate.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_validate_returns_404_when_any_id_missing():
+    """Algún ID inexistente → 404 antes del scope check."""
+    gateway, _, _ = _setup_validate(
+        timesheets={},
+        requester_employee=Employee(id=1, email="approver@example.com", full_name="Approver"),
+        team_member_ids=[2],
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/validate",
+                json={
+                    "approver_mail": "approver@example.com",
+                    "timesheetline_ids": [999],
+                },
+            )
+            assert response.status_code == 404
+            gateway.validate.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+# ----------------------------------------------------------------------
+# Tests para POST /timesheet/review (mismo patrón, bonus de VT-14)
+# ----------------------------------------------------------------------
+
+
+@pytest.mark.integration
+def test_review_blocks_idor_against_other_team():
+    """`/timesheet/review` reusa el mismo helper. Scope ajeno → 403."""
+    ts = _detailed_timesheet(100, owner_employee_id=99)
+    gateway, _, _ = _setup_validate(
+        timesheets={100: ts},
+        requester_employee=Employee(id=1, email="approver@example.com", full_name="Approver"),
+        team_member_ids=[2, 3],
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/review",
+                json={
+                    "approver_mail": "approver@example.com",
+                    "timesheetline_ids": [100],
+                    "body": "Revisar por favor",
+                    "email_type": "review",
+                },
+            )
+            assert response.status_code == 403
+            gateway.validate.assert_not_called()
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.integration
+def test_review_blocks_approver_mail_spoofing():
+    """Mismo anti-spoofing en `/review`."""
+    ts = _detailed_timesheet(100, owner_employee_id=2)
+    gateway, _, _ = _setup_validate(
+        timesheets={100: ts},
+        requester_employee=Employee(id=1, email="approver@example.com", full_name="Approver"),
+        team_member_ids=[2],
+    )
+
+    try:
+        with TestClient(app) as client:
+            response = client.post(
+                "/timesheet/review",
+                json={
+                    "approver_mail": "ceo@example.com",
+                    "timesheetline_ids": [100],
+                    "body": "Revisar",
+                    "email_type": "review",
+                },
+            )
+            assert response.status_code == 403
+            assert "nombre de otro" in response.json()["detail"].lower()
     finally:
         app.dependency_overrides.clear()
