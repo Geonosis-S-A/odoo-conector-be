@@ -30,7 +30,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 |----|----------------|------|--------|--------|
 | VT-04 | IDOR escritura de timesheets (PUT + DELETE) | 8.1 | GEO-1389 | ✅ |
 | VT-08 | 9.057 timesheets expuestos sin filtro/paginado | 8.0 | GEO-1394 | ✅ |
-| VT-17 | Export Excel masivo con costos ARS/USD sin scope | 7.9 | — | ⏳ |
+| VT-17 | Export Excel masivo con costos ARS/USD sin scope | 7.9 | — | ✅ |
 | VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | GEO-1394 | ✅ |
 | VT-05 | Sin rate limiting en endpoints de autenticación | 7.5 | GEO-1390 | ⏳ |
 | VT-06 | Enumeración de usuarios + roles | 7.5 | GEO-1396 | ⏳ |
@@ -159,6 +159,26 @@ Archivos: `app/timesheet_line/domain/repositories.py`,
 `app/timesheet_line/api/schemas.py`, `app/timesheet_line/api/routers.py`,
 `odoo-conector-fe/src/features/timesheets/services/timesheetService.ts`,
 `odoo-conector-fe/src/features/validations/services/validationService.ts`.
+
+---
+
+### VT-17 — Export Excel `/dashboard/export-timesheets` con costos ARS/USD
+
+**CVSS:** 7.9 · **Linear:** — · **Fix:** 2026-05-12
+
+**Problema.** El caso de uso reutilizaba `all_by_employees_with_requester_user_id`,
+que en Odoo añade una rama OR: todas las líneas de timesheet sobre proyectos donde
+el usuario figura como `user_id`, además del filtro por equipo. Eso puede incluir
+cargas de **empleados externos** al equipo pero con proyecto compartido, y el Excel
+mezcla **nombre + horas + `costo_por_hora` / USD** derivados de BD local (`employee_price`),
+exponiendo información salarial sensible por encima del alcance esperado.
+
+**Solución.** En el router se resuelve el mismo **`TeamScope`** que VT-02/VT-04
+(`get_team_scope`) y sólo se consultan líneas `employee_id in {self ∪ team_members}` mediante
+`all_by_employees` — sin la rama de proyectos gestionados. Test de regresión del caso de uso.
+Archivos: `app/dashboard/api/routers.py`,
+`app/dashboard/application/use_cases/export_timesheets.py`,
+`app/dashboard/tests/application/use_cases/test_export_timesheets_strict_scope.py`.
 
 ---
 

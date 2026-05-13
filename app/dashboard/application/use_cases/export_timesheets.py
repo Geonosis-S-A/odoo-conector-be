@@ -1,10 +1,14 @@
-"""Caso de uso para exportar timesheets como excel."""
+"""Caso de uso para exportar timesheets como excel.
+
+VT-17 (pentest 2026-04): el export debe limitarse al mismo alcance jerárquico
+que otros endpoints sensible (solo empleados en ``scoped_employee_ids``). No debe
+usar la rama Odoo "(horas en proyectos que gestiono)" porque incorpora personas
+fuera del equipo y junto con tarifas supone filtración masiva ARS/USD.
+"""
 
 from datetime import date
 from typing import Dict, List, Optional
-from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
-from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
 from app.task.domain.models import TaskWithParentInfo
 from app.employee_price.domain.repositories import EmployeePriceRepository
@@ -18,16 +22,14 @@ class ExportTimesheetsByTeamUseCase:
     def __init__(
         self,
         timesheet_line_gateway: TimesheetLineGateway,
-        employee_gateway: EmployeeGateway,
         task_gateway: TaskGateway,
-        manager_employee_id: int,
+        scoped_employee_ids: list[int],
         employee_price_repository: Optional[EmployeePriceRepository] = None,
         dolar_value: float = 0,
     ):
         self.timesheet_line_gateway = timesheet_line_gateway
-        self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
-        self.manager_employee_id = manager_employee_id
+        self.scoped_employee_ids = scoped_employee_ids
         self.employee_price_repository = employee_price_repository
         self.dolar_value = dolar_value
 
@@ -60,22 +62,12 @@ class ExportTimesheetsByTeamUseCase:
         return max_depth
 
     def execute(self, date_from: date, date_to: date):
-        manager_user_id = self.employee_gateway.get_user_id_by_employee_id(
-            self.manager_employee_id
-        )
-        if not manager_user_id:
-            raise UserNotFound("Manager not found")
-        users = self.timesheet_line_gateway.get_team_users(
-            manager_user_id, self.manager_employee_id
-        )
-        team_employee_ids = [user["id"] for user in users]
-
-        # Obtengo los timesheets de los ids que paso y que pertenecen al equipo del manager
-        timesheet_lines = (
-            self.timesheet_line_gateway.all_by_employees_with_requester_user_id(
-                team_employee_ids, date_from, date_to, manager_user_id
+        if not self.scoped_employee_ids:
+            timesheet_lines: list = []
+        else:
+            timesheet_lines = self.timesheet_line_gateway.all_by_employees(
+                self.scoped_employee_ids, date_from, date_to
             )
-        )
 
         # Obtener precios de empleados si el repositorio está disponible
         price_index = {}
@@ -126,6 +118,23 @@ class ExportTimesheetsByTeamUseCase:
                     list(missing_parent_ids)
                 )
                 tasks_info.update(parent_tasks_info)
+
+        if not timesheet_lines:
+            return pd.DataFrame(
+                columns=[
+                    "empleado",
+                    "proyecto",
+                    "tarea",
+                    "fecha",
+                    "mes",
+                    "año",
+                    "cantidad",
+                    "costo_por_hora",
+                    "costo_por_hora_en_dolares",
+                    "descripcion",
+                    "fecha de carga",
+                ]
+            )
 
         df = pd.DataFrame(timesheet_lines)
 
@@ -191,7 +200,9 @@ class ExportTimesheetsByTeamUseCase:
         df["mes"] = df["date"].apply(lambda x: pd.to_datetime(x).month)
         df["año"] = df["date"].apply(lambda x: pd.to_datetime(x).year)
 
-        df = df.drop(columns=["employee_id", "project_id", "task_id", "id"])
+        df = df.drop(
+            columns=[c for c in ("employee_id", "project_id", "task_id", "id") if c in df.columns]
+        )
         df = df.rename(
             columns={
                 "date": "fecha",
