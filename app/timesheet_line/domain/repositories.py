@@ -24,7 +24,22 @@ class TimesheetLineGateway(ABC):
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
         team_members_ids: Optional[list[int]] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> list[DetailedTimesheetLine]: ...
+
+    @abstractmethod
+    def count(
+        self,
+        employee_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        project_id: Optional[int] = None,
+        validated: Optional[bool] = None,
+        team: Optional[bool] = None,
+        user_id: Optional[int] = None,
+        team_members_ids: Optional[list[int]] = None,
+    ) -> int: ...
 
     @abstractmethod
     def all_by_employees(

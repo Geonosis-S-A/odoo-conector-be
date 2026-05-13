@@ -308,6 +308,7 @@ class TestListTimesheetLinesUseCase:
 
         # Mock: no hay timesheets en el rango de fechas (lista vacía)
         mock_timesheet_gateway.all.return_value = []
+        mock_timesheet_gateway.count.return_value = 0
         mock_notification_repository.get_by_timesheet_ids.return_value = []
 
         # Act
@@ -316,15 +317,27 @@ class TestListTimesheetLinesUseCase:
         )
 
         # Assert
-        assert result == []
-        assert isinstance(result, list)
-        assert len(result) == 0
+        assert result.items == []
+        assert result.total == 0
+        assert len(result.items) == 0
 
         # Verificar que se llamaron los métodos correctos
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         mock_employee_gateway.all.assert_called_once()
-        mock_timesheet_gateway.all.assert_called_once_with(
+        mock_timesheet_gateway.count.assert_called_once_with(
             employee_id, date_from, date_to, None, None, None, None, None
+        )
+        mock_timesheet_gateway.all.assert_called_once_with(
+            employee_id,
+            date_from,
+            date_to,
+            None,
+            None,
+            None,
+            None,
+            None,
+            limit=100,
+            offset=0,
         )
         # Se consulta el batch con lista vacía
         mock_notification_repository.get_by_timesheet_ids.assert_called_once_with([])

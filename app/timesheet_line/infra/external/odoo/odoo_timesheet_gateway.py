@@ -125,7 +125,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         )
         return odoo_timesheet_ids
 
-    def all(
+    _INTERNAL_PROJECT_EXCLUSION = [3, 1, 87, 2]
+
+    def _build_timesheet_domain(
         self,
         employee_id: Optional[int] = None,
         date_from: Optional[date] = None,
@@ -135,10 +137,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
         team_members_ids: Optional[list[int]] = None,
-    ) -> List[DetailedTimesheetLine]:
-        """Obtiene todas las líneas de hoja de tiempo de Odoo."""
+    ) -> list[tuple[str, str, Any]]:
+        """Construye el dominio Odoo para listados / conteos de líneas de timesheet."""
         domain: list[tuple[str, str, Any]] = [("is_timesheet", "=", True)]
-        # Condición base
         if date_from is not None:
             domain.append(("date", ">=", date_from.isoformat()))
 
@@ -153,15 +154,93 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if employee_id is not None and team is None:
             domain.append(("employee_id", "=", employee_id))
 
-        # Excluir proyectos internos
-        proyecto_interno = [3, 1, 87, 2]
-        domain.append(("project_id", "not in", proyecto_interno))
+        domain.append(("project_id", "not in", self._INTERNAL_PROJECT_EXCLUSION))
 
-        if team and user_id is not None:
-            team_domain = [
-                ("employee_id", "in", team_members_ids),
-            ]
-            domain.extend(team_domain)
+        if team and user_id is not None and team_members_ids is not None:
+            domain.append(("employee_id", "in", team_members_ids))
+
+        return domain
+
+    def count(
+        self,
+        employee_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        project_id: Optional[int] = None,
+        validated: Optional[bool] = None,
+        team: Optional[bool] = None,
+        user_id: Optional[int] = None,
+        team_members_ids: Optional[list[int]] = None,
+    ) -> int:
+        domain = self._build_timesheet_domain(
+            employee_id,
+            date_from,
+            date_to,
+            project_id,
+            validated,
+            team,
+            user_id,
+            team_members_ids,
+        )
+        return int(
+            cast(
+                int,
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "account.analytic.line",
+                    "search_count",
+                    [domain],
+                ),
+            )
+        )
+
+    def all(
+        self,
+        employee_id: Optional[int] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+        project_id: Optional[int] = None,
+        validated: Optional[bool] = None,
+        team: Optional[bool] = None,
+        user_id: Optional[int] = None,
+        team_members_ids: Optional[list[int]] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> List[DetailedTimesheetLine]:
+        """Obtiene líneas de hoja de tiempo de Odoo.
+
+        Opcionalmente aplica limit/offset en Odoo (VT-08, pentest 2026-04).
+        """
+        domain = self._build_timesheet_domain(
+            employee_id,
+            date_from,
+            date_to,
+            project_id,
+            validated,
+            team,
+            user_id,
+            team_members_ids,
+        )
+
+        opts: dict[str, Any] = {
+            "fields": [
+                "name",
+                "date",
+                "unit_amount",
+                "employee_id",
+                "project_id",
+                "task_id",
+                "create_date",
+                "validated",
+            ],
+            "order": "date desc, id desc",
+        }
+        if limit is not None:
+            opts["limit"] = limit
+        if offset is not None:
+            opts["offset"] = offset
 
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
@@ -172,18 +251,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 "account.analytic.line",
                 "search_read",
                 [domain],
-                {
-                    "fields": [
-                        "name",
-                        "date",
-                        "unit_amount",
-                        "employee_id",
-                        "project_id",
-                        "task_id",
-                        "create_date",
-                        "validated",
-                    ],
-                },
+                opts,
             ),
         )
 

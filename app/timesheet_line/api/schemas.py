@@ -45,6 +45,15 @@ class DetailedTimesheetLineResponse(BaseModel):
     notification: Optional[TimesheetLineNotificationResponse] = None
 
 
+class PaginatedTimesheetLinesResponse(BaseModel):
+    """Listado paginado (VT-08, pentest 2026-04 — exposición masiva sin límite)."""
+
+    items: list[DetailedTimesheetLineResponse]
+    total: int
+    page: int
+    page_size: int
+
+
 class EditTimesheetRequest(BaseModel):
     id: int
     name: str

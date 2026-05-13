@@ -1,4 +1,4 @@
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import List
 from datetime import date
 
@@ -21,6 +21,14 @@ from app.timesheet_line.application.excepctions.exceptions import (
     EmployeeNotExistsError,
     EmployeeNotHasUserError,
 )
+
+
+@dataclass
+class ListTimesheetLinesResult:
+    """Resultado paginado del listado de timesheets (VT-08)."""
+
+    items: list[DetailedTimesheetLine]
+    total: int
 
 
 class ListTimesheetLinesUseCase:
@@ -47,7 +55,10 @@ class ListTimesheetLinesUseCase:
         validated: bool | None,
         team: bool | None,
         id: int | None,
-    ) -> List[DetailedTimesheetLine]:
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> ListTimesheetLinesResult:
         # Validación de employee_id
         if employee_id is not None and employee_id <= 0:
             raise InvalidEmployeeIdError(employee_id)
@@ -73,10 +84,30 @@ class ListTimesheetLinesUseCase:
         if date_from is not None and date_to is not None and date_from > date_to:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
 
-        
+        offset = max(0, (page - 1) * page_size)
+
+        total = self.timesheet_line_gateway.count(
+            employee_id,
+            date_from,
+            date_to,
+            project_id,
+            validated,
+            team,
+            user_id,
+            ids,
+        )
 
         timesheets = self.timesheet_line_gateway.all(
-            employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
+            employee_id,
+            date_from,
+            date_to,
+            project_id,
+            validated,
+            team,
+            user_id,
+            ids,
+            limit=page_size,
+            offset=offset,
         )
 
         if self.task_gateway and timesheets:
@@ -109,4 +140,4 @@ class ListTimesheetLinesUseCase:
                     sender_name=employees_dict[notification.approver_id].full_name,
                     sended_at=notification.created_at,
                 )
-        return timesheets
+        return ListTimesheetLinesResult(items=timesheets, total=total)

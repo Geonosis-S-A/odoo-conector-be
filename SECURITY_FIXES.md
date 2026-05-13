@@ -29,9 +29,9 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | ID | Vulnerabilidad | CVSS | Linear | Estado |
 |----|----------------|------|--------|--------|
 | VT-04 | IDOR escritura de timesheets (PUT + DELETE) | 8.1 | GEO-1389 | ✅ |
-| VT-08 | 9.057 timesheets expuestos sin filtro/paginado | 8.0 | GEO-1394 | ⏳ |
+| VT-08 | 9.057 timesheets expuestos sin filtro/paginado | 8.0 | GEO-1394 | ✅ |
 | VT-17 | Export Excel masivo con costos ARS/USD sin scope | 7.9 | — | ⏳ |
-| VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | — | ⏳ |
+| VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | GEO-1394 | ✅ |
 | VT-05 | Sin rate limiting en endpoints de autenticación | 7.5 | GEO-1390 | ⏳ |
 | VT-06 | Enumeración de usuarios + roles | 7.5 | GEO-1396 | ⏳ |
 | VT-14 | BFLA: validar timesheets ajenos | 7.1 | GEO-1392 | ✅ |
@@ -133,6 +133,32 @@ ownership y se bloquea la mutación de `employee_id`. En DELETE se aplica el
 scope al lote con semántica all-or-nothing. 13 tests de regresión.
 Archivos: `app/timesheet_line/api/routers.py`,
 `app/shared/security/authorization.py`.
+
+---
+
+### VT-08 — Listado masivo de timesheets (`GET /timesheet/`) + VT-15 (HPP)
+
+**CVSS:** 8.0 (VT-08) / 7.8 (VT-15) · **Linear:** GEO-1394 · **Fix:** 2026-05-12
+
+**Problema (VT-08).** `GET /timesheet/` podía devolver miles de registros en una
+sola respuesta; los usuarios con rol approver obtenían efectivamente un
+volcado global si no acotaban `employee_id` / equipo.
+
+**Problema (VT-15).** Repetir `employee_id` en la query string podía inducir
+ambigüedad (HTTP Parameter Pollution) sobre qué valor usaba el backend.
+
+**Solución.** Respuesta **paginada** obligatoria (`items`, `total`, `page`,
+`page_size`, máx. 100 por página). Sin `employee_id` ni `team`, un approver
+solo ve sus propios registros (misma línea que VT-04). `employee_id` se lee
+de forma única desde la request; más de un valor → HTTP 400. Caso de uso y
+gateway Odoo con `count` + `limit`/`offset`. Frontend: `timesheetService`
+itera páginas hasta agotar `total`.
+Archivos: `app/timesheet_line/domain/repositories.py`,
+`app/timesheet_line/infra/external/odoo/odoo_timesheet_gateway.py`,
+`app/timesheet_line/application/use_cases/obtener_horas.py`,
+`app/timesheet_line/api/schemas.py`, `app/timesheet_line/api/routers.py`,
+`odoo-conector-fe/src/features/timesheets/services/timesheetService.ts`,
+`odoo-conector-fe/src/features/validations/services/validationService.ts`.
 
 ---
 

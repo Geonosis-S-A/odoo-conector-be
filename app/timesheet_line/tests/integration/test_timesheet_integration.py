@@ -86,22 +86,21 @@ def test_list_timesheet_lines(test_client):
         f"/api/v1/timesheet/?employee_id=1&date_from={get_date_range_for_filtering()[0]}&date_to={get_date_range_for_filtering()[1]}"
     )
 
-    # Assert - Siempre debería devolver 200, con datos o lista vacía
+    # Assert - 200 con cuerpo paginado (VT-08): items + total + page + page_size
     assert response.status_code == 200
-    data = response.json()
+    payload = response.json()
+    assert "items" in payload and "total" in payload
+    data = payload["items"]
     assert isinstance(data, list)
 
-    # Verificar la estructura de los datos si hay resultados
     if len(data) > 0:
         assert all(isinstance(item["id"], int) for item in data)
         assert all(isinstance(item["name"], str) for item in data)
         assert all(isinstance(item["employee_id"], int) for item in data)
-        # Cambiado: project es un objeto, no un id plano
         assert all(isinstance(item["project"], dict) for item in data)
         assert all(isinstance(item["project"]["id"], int) for item in data)
         assert all(isinstance(item["hours"], (int, float)) for item in data)
         assert all(isinstance(item["date"], str) for item in data)
-        # Task puede ser None o un dict
         assert all(
             item["task"] is None or isinstance(item["task"], dict) for item in data
         )
@@ -168,7 +167,8 @@ def test_edit_timesheet_line(test_client):
     )
     assert get_response.status_code == 200
     updated_line = next(
-        (line for line in get_response.json() if line["id"] == created_id), None
+        (line for line in get_response.json()["items"] if line["id"] == created_id),
+        None,
     )
     assert updated_line is not None
     assert updated_line["name"] == "Test Timesheet Updated"
@@ -282,12 +282,10 @@ def test_list_timesheet_lines_with_employee_filter(test_client):
         assert response_without_filter.status_code == 404  # Empleado no existe
         assert "no existe en el sistema" in response_without_filter.json()["detail"]
 
-        data_with_filter = response_with_filter.json()
+        data_with_filter = response_with_filter.json()["items"]
 
-        # Verificar que el timesheet creado aparece en el filtro correcto
         assert any(item["id"] == created_id for item in data_with_filter)
 
-        # Verificar que todos los resultados filtrados son del empleado correcto
         assert all(item["employee_id"] == 1 for item in data_with_filter)
 
         # Limpieza
@@ -346,10 +344,9 @@ def test_list_timesheet_lines_with_date_filter(test_client):
 
     # Assert
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["items"]
     assert isinstance(data, list)
 
-    # Verificar que solo aparecen las líneas dentro del rango de fechas
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
     # Solo los primeros 2 timesheets deben estar en el rango
     assert len(created_ids_in_response) == 2
@@ -397,14 +394,12 @@ def test_list_timesheet_lines_with_date_from_filter(test_client):
 
     # Assert
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["items"]
     assert isinstance(data, list)
 
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
-    # Solo el timesheet nuevo debe estar en el rango
     assert len(created_ids_in_response) == 1
 
-    # Limpieza
     delete_response = test_client.request(
         "DELETE", "/api/v1/timesheet/", json={"ids": created_ids}
     )
@@ -447,13 +442,11 @@ def test_list_timesheet_lines_with_date_to_filter(test_client):
 
     # Assert
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["items"]
 
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
-    # Solo el timesheet viejo debe estar en el rango
     assert len(created_ids_in_response) == 1
 
-    # Limpieza
     delete_response = test_client.request(
         "DELETE", "/api/v1/timesheet/", json={"ids": created_ids}
     )
@@ -485,14 +478,12 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
 
     # Assert
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["items"]
     assert isinstance(data, list)
 
     created_ids_in_response = [item["id"] for item in data if item["id"] in created_ids]
-    # El timesheet del empleado 1 debe estar en la respuesta
     assert len(created_ids_in_response) == 1
 
-    # Verificar que todos los resultados son del empleado correcto
     assert all(item["employee_id"] == 1 for item in data)
 
     # Limpieza
@@ -503,17 +494,15 @@ def test_list_timesheet_lines_with_combined_filters(test_client):
 
 @pytest.mark.integration
 def test_list_timesheet_lines_no_results_returns_empty_list(test_client):
-    """Test de integración que verifica que cuando no hay resultados se devuelve una lista vacía."""
-    # Act - Buscar timesheets en un rango donde no hay datos
+    """Sin resultados: cuerpo paginado con items=[] y total=0."""
     response = test_client.get(
         "/api/v1/timesheet/?employee_id=1&date_from=1990-01-01&date_to=1990-01-02"
     )
 
-    # Assert
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list)
-    assert len(data) == 0
+    assert data["items"] == []
+    assert data["total"] == 0
 
 
 @pytest.mark.integration
@@ -985,7 +974,8 @@ def test_edit_non_validated_timesheet_any_user_allowed(test_client):
     )
     assert get_response.status_code == 200
     updated_line = next(
-        (line for line in get_response.json() if line["id"] == created_id), None
+        (line for line in get_response.json()["items"] if line["id"] == created_id),
+        None,
     )
     assert updated_line is not None
     assert updated_line["name"] == "Test Timesheet Updated by Normal User"

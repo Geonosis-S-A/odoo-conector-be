@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from typing import List, Dict
 from datetime import date
 import xmlrpc.client
@@ -18,6 +18,7 @@ from app.timesheet_line.api.schemas import (
     EditTimesheetRequest,
     DeleteTimesheetRequest,
     ValidateTimesheetRequest,
+    PaginatedTimesheetLinesResponse,
 )
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.application.use_cases.delete_timesheet import (
@@ -73,6 +74,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
 from app.shared.security.authorization import (
     get_team_scope,
     ensure_owns_timesheets,
+    ensure_employee_in_team,
 )
 
 
@@ -114,6 +116,33 @@ def get_notification_repository(
     db: Session = Depends(get_db),
 ) -> TimesheetLineNotificationRepository:
     return SQLModelTimesheetLineNotificationRepository(db)
+
+
+# VT-08 / VT-15 (pentest 2026-04): paginación obligatoria y rechazo de
+# `employee_id` duplicado en query (HTTP Parameter Pollution).
+VT08_MAX_PAGE_SIZE = 100
+
+
+def single_employee_id_query(request: Request) -> int | None:
+    """Un solo valor para `employee_id` en la query string."""
+    raw = request.query_params.getlist("employee_id")
+    if len(raw) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Parámetro employee_id duplicado",
+        )
+    if not raw or raw[0] == "":
+        return None
+    try:
+        v = int(raw[0])
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="employee_id debe ser un entero",
+        )
+    if v <= 0:
+        raise HTTPException(status_code=400, detail="employee_id inválido")
+    return v
 
 
 @router.post("/", response_model=list[DetailedTimesheetLineResponse])
@@ -167,11 +196,11 @@ async def create_timesheet_line(
         raise HTTPException(status_code=400, detail=e.message)
 
 
-@router.get("/", response_model=List[DetailedTimesheetLineResponse])
+@router.get("/", response_model=PaginatedTimesheetLinesResponse)
 async def list_timesheet_lines(
     gateway: OdooTimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
-    employee_id: int | None = Query(None, description="ID del empleado para filtrar"),
+    employee_id: int | None = Depends(single_employee_id_query),
     date_from: date | None = Query(
         None, description="Fecha de inicio del rango (YYYY-MM-DD)"
     ),
@@ -187,51 +216,72 @@ async def list_timesheet_lines(
         get_notification_repository
     ),
     task_gateway: TaskGateway = Depends(get_task_gateway),
-    team: bool | None = Query(None, description="Filtrar por equipo"),
+    team: bool | None = Query(None, description="Filtrar por equipo (subordinados)"),
+    page: int = Query(1, ge=1, description="Página (base 1)"),
+    page_size: int = Query(
+        100,
+        ge=1,
+        le=VT08_MAX_PAGE_SIZE,
+        description=f"Tamaño de página (máximo {VT08_MAX_PAGE_SIZE})",
+    ),
 ):
     """
-    Lista todas las líneas de timesheet con filtros obligatorios.
+    Lista líneas de timesheet con **paginación obligatoria** (máx. 100 por página).
 
-    Args:
-        gateway: Gateway de timesheet (inyectado)
-        employee_gateway: Gateway de empleados (inyectado)
-        employee_id: ID del empleado para filtrar (obligatorio)
-        date_from: Fecha de inicio del rango para filtrar (obligatorio)
-        date_to: Fecha de fin del rango para filtrar (obligatorio)
-        project_id: ID del proyecto para filtrar (opcional)
-        validated: Filtrar por estado de validación (opcional)
+    VT-08: un usuario con rol approver ya no puede obtener un volcado global de
+    toda la empresa omitiendo filtros; sin `employee_id` ni `team`, solo ve
+    sus propios registros. Un approver que pasa `employee_id` ajeno debe tener
+    scope de equipo (misma regla que VT-04).
 
-    Returns:
-        List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
+    VT-15: `employee_id` duplicado en la query se rechaza con HTTP 400.
     """
     roles: list[int] = current_user["roles"]
-    is_admin = user_has_role(roles, Roles.approver)
-    if (
-        (employee_id is not None and current_user["user_id"] != employee_id)
-        or (employee_id is None)
-    ) and (not is_admin):
-        raise HTTPException(
-            status_code=403, detail="No tienes permisos para ver esta información"
-        )
+    is_approver = user_has_role(roles, Roles.approver)
+    requester_id = current_user["user_id"]
+
+    effective_employee_id = employee_id
+    if is_approver:
+        if employee_id is not None:
+            ensure_employee_in_team(
+                requester_user_id=requester_id,
+                target_employee_id=employee_id,
+                employee_gateway=employee_gateway,
+                timesheet_gateway=gateway,
+            )
+        elif not team:
+            # Antes: sin filtro de empleado → Odoo devolvía miles de registros.
+            effective_employee_id = requester_id
+    else:
+        if employee_id is None or employee_id != requester_id:
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permisos para ver esta información",
+            )
 
     try:
-        id = current_user["user_id"]  # esto es el employee_id del f
         use_case = ListTimesheetLinesUseCase(
             gateway,
             employee_gateway,
             notification_repository,
             task_gateway,
         )
-        timesheets = use_case.execute(
-            employee_id,
+        result = use_case.execute(
+            effective_employee_id,
             date_from,
             date_to,
             project_id,
             validated,
             team,
-            id,
+            requester_id,
+            page=page,
+            page_size=page_size,
         )
-        return timesheets
+        return PaginatedTimesheetLinesResponse(
+            items=result.items,
+            total=result.total,
+            page=page,
+            page_size=page_size,
+        )
     except InvalidEmployeeIdError as e:
         raise HTTPException(status_code=400, detail=e.message)
     except EmployeeNotExistsError as e:
