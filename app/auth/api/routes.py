@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi.exceptions import HTTPException
-from fastapi import APIRouter, Depends, Response, Cookie
+from fastapi import APIRouter, Depends, Request, Response, Cookie
 from sqlmodel import Session
 from app.auth.api.schemas import (
     ChangePasswordRequest,
@@ -38,25 +38,26 @@ from app.auth.infra.db.repositories import (
     SQLModelTokenRepository,
     SQLModelUserCredentialsRepository,
 )
+from app.auth.infra.rate_limit_service import AccountLockoutService
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
+from app.shared.infra.redis_client import get_redis_client
 from app.shared.security.dependencies import get_current_user
 from app.users.infra.db.repositories import SQLModelUserRepository
 from pydantic import BaseModel
 
-# Importar las dependencias correctas
 from app.auth.api.dependencies import (
     get_auth_email_service_dependency,
     get_password_service,
 )
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.auth.application.services.crypt_service import BcryptPasswordService
+from app.shared.infra.limiter import limiter
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# Definir la función de dependencia antes de los endpoints que la usan
 def get_password_recovery_use_case(
     email_service=Depends(get_auth_email_service_dependency),
     password_service=Depends(get_password_service),
@@ -88,9 +89,22 @@ class AccessTokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+# NOTA DE SEGURIDAD (VT-01, pentest 2026-04):
+# El endpoint POST /auth/register fue eliminado porque no validaba OTP y permitía
+# tomar el control de cualquier cuenta (CVSS 9.8 — Account Takeover).
+# El flujo de registro vigente es:
+#   1) POST /auth/register/request-otp  (crea usuario inactivo + envía OTP)
+#   2) POST /auth/password-recovery/verify  (valida OTP)
+#   3) POST /auth/password-recovery/reset   (re-valida OTP, setea password y activa cuenta)
+
+
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(
-    login_data: LoginRequest, response: Response, db: Session = Depends(get_db)
+    request: Request,
+    login_data: LoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ):
     user_credentials_repository = SQLModelUserCredentialsRepository(db)
     token_repository = SQLModelTokenRepository(db)
@@ -98,15 +112,28 @@ async def login(
     login_use_case = LoginUseCase(
         auth_service, user_credentials_repository, token_repository
     )
+    email = login_data.email.lower()
+    lockout_service = AccountLockoutService(get_redis_client())
+
+    if lockout_service.is_locked(email):
+        remaining = lockout_service.get_remaining_lockout_seconds(email)
+        raise HTTPException(
+            status_code=429,
+            detail="Cuenta bloqueada temporalmente por demasiados intentos fallidos.",
+            headers={"Retry-After": str(remaining)},
+        )
+
     try:
-        login_data.email = login_data.email.lower()
-        tokens = login_use_case.execute(login_data.email, login_data.password)
-    except UserNotFound as e:
-        raise HTTPException(status_code=401, detail=str(e))
-    except PasswordNotMatch as e:
-        raise HTTPException(status_code=401, detail=str(e))
+        tokens = login_use_case.execute(email, login_data.password)
+        lockout_service.reset(email)
+    except UserNotFound:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
+    except PasswordNotMatch:
+        lockout_service.record_failure(email)
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
     except UserInactive as e:
         raise HTTPException(status_code=401, detail=str(e))
+
     response.set_cookie(
         key="refresh_token",
         value=tokens.refresh_token,
@@ -127,15 +154,6 @@ async def login(
             "roles": tokens.user.roles,
         },
     }
-
-
-# NOTA DE SEGURIDAD (VT-01, pentest 2026-04):
-# El endpoint POST /auth/register fue eliminado porque no validaba OTP y permitía
-# tomar el control de cualquier cuenta (CVSS 9.8 — Account Takeover).
-# El flujo de registro vigente es:
-#   1) POST /auth/register/request-otp  (crea usuario inactivo + envía OTP)
-#   2) POST /auth/password-recovery/verify  (valida OTP)
-#   3) POST /auth/password-recovery/reset   (re-valida OTP, setea password y activa cuenta)
 
 
 @router.post("/refresh", response_model=RefreshResponse)
@@ -186,9 +204,7 @@ async def change_password(
     )
 
     try:
-        # Obtener user_id del token en lugar del body
         user_id = current_user["user_id"]
-
         change_password_use_case.execute(
             user_id, request.current_password, request.new_password
         )
@@ -202,7 +218,9 @@ async def change_password(
 
 
 @router.post("/password-recovery/request")
+@limiter.limit("5/minute")
 async def request_otp(
+    request: Request,
     dto: RequestOTPDTO,
     password_recovery_use_case: PasswordRecoveryUseCase = Depends(
         get_password_recovery_use_case
@@ -212,7 +230,7 @@ async def request_otp(
         dto.email = dto.email.lower()
         await password_recovery_use_case.request_otp(dto)
         return {"message": "OTP sent successfully"}
-    except UserNotFound as e:
+    except UserNotFound:
         raise HTTPException(
             status_code=404,
             detail="El email no ha sido registrado en el sistema",
@@ -222,7 +240,9 @@ async def request_otp(
 
 
 @router.post("/register/request-otp")
+@limiter.limit("5/minute")
 async def request_otp_for_register(
+    request: Request,
     dto: RequestOTPDTO,
     request_otp_for_register_use_case: RequestOTPForRegisterUseCase = Depends(
         get_request_otp_for_register_use_case
@@ -239,35 +259,65 @@ async def request_otp_for_register(
 
 
 @router.post("/password-recovery/verify")
+@limiter.limit("5/minute")
 async def verify_otp(
+    request: Request,
     dto: VerifyOTPDTO,
     password_recovery_use_case: PasswordRecoveryUseCase = Depends(
         get_password_recovery_use_case
     ),
 ):
+    lockout_service = AccountLockoutService(get_redis_client())
+    email = dto.email.lower()
+
+    if lockout_service.is_locked(email):
+        remaining = lockout_service.get_remaining_lockout_seconds(email)
+        raise HTTPException(
+            status_code=429,
+            detail="Cuenta bloqueada temporalmente por demasiados intentos fallidos.",
+            headers={"Retry-After": str(remaining)},
+        )
+
     try:
-        dto.email = dto.email.lower()
+        dto.email = email
         await password_recovery_use_case.verify_otp(dto)
+        lockout_service.reset(email)
         return {"message": "OTP verified successfully"}
-    except UserNotFound as e:
+    except UserNotFound:
         raise HTTPException(status_code=404, detail="User not found")
-    except OTPNotFound as e:
+    except OTPNotFound:
+        lockout_service.record_failure(email)
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
 
 @router.post("/password-recovery/reset")
+@limiter.limit("5/minute")
 async def reset_password(
+    request: Request,
     dto: ResetPasswordDTO,
     password_recovery_use_case: PasswordRecoveryUseCase = Depends(
         get_password_recovery_use_case
     ),
 ):
+    lockout_service = AccountLockoutService(get_redis_client())
+    email = dto.email.lower()
+
+    if lockout_service.is_locked(email):
+        remaining = lockout_service.get_remaining_lockout_seconds(email)
+        raise HTTPException(
+            status_code=429,
+            detail="Cuenta bloqueada temporalmente por demasiados intentos fallidos.",
+            headers={"Retry-After": str(remaining)},
+        )
+
     try:
         await password_recovery_use_case.reset_password(dto)
+        lockout_service.reset(email)
         return {"message": "Password reset successfully"}
-    except PasswordNotMatch as e:
+    except PasswordNotMatch:
         raise HTTPException(status_code=400, detail="Passwords do not match")
-    except OTPNotFound as e:
+    except OTPNotFound:
+        lockout_service.record_failure(email)
         raise HTTPException(status_code=400, detail="Invalid OTP")
-    except UserNotFound as e:
+    except UserNotFound:
         raise HTTPException(status_code=404, detail="User not found")
