@@ -8,6 +8,8 @@ class DatabaseSettings:
     # Entorno actual (local, staging, production)
     ENV = os.getenv("ENV", "LOCAL")
 
+    REDIS_URL: str = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
     print(f"ENV: {ENV}")
     # Base de datos para desarrollo
     if ENV == "LOCAL":

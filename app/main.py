@@ -5,6 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.shared.infra.limiter import limiter
 
 from app.timesheet_line.api.routers import router as timesheet_router
 from app.users.api.routers import router as users_router
@@ -64,6 +67,9 @@ app = FastAPI(
     redoc_url=None if IS_PROD else "/redoc",
     openapi_url=None if IS_PROD else "/openapi.json",
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
 
 
 @app.exception_handler(Exception)

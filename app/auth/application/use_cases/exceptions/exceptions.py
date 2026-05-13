@@ -32,3 +32,7 @@ class TokenNotFound(Exception):
 
 class TokenRevoked(Exception):
     pass
+
+
+class AccountLocked(Exception):
+    pass

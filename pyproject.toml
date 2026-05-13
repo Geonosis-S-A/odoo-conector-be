@@ -23,12 +23,12 @@ dependencies = [
     "python-jose>=3.4.0",
     "rapidfuzz>=3.14.3",
     "redis>=5.0.0",
+    "slowapi>=0.1.9",
     "requests>=2.32.3",
     "resend>=2.11.0",
     "ruff>=0.11.9",
     "sendgrid>=6.12.2",
     "sqlmodel>=0.0.24",
-    "standard>=1.0.3",
     "azure-identity>=1.19.0",
 ]
 
