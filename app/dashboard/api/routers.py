@@ -50,7 +50,7 @@ from app.shared.infra.external.odoo.odoo_client import (
 )
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import user_has_role, Roles
-from app.shared.security.authorization import get_team_scope
+from app.shared.security.authorization import get_team_scope, ensure_employee_in_team
 from app.shared.security.employee_id_query import scalar_employee_id_optional
 from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
@@ -312,27 +312,30 @@ async def get_dashboard_summary_by_employee(
     current_user: dict = Depends(get_current_user),
 ):
     """
-    Obtiene el resumen del dashboard para el equipo del usuario en un período específico.
+    KPIs y totales para un empleado en un período (y opcional período previo).
 
-    Args:
-        date_from: Fecha de inicio del período (YYYY-MM-DD)
-        date_to: Fecha de fin del período (YYYY-MM-DD)
-        dashboard_gateway: Gateway de datos de dashboard (inyectado)
-        current_user: Usuario autenticado (inyectado)
-
-    Returns:
-        DashboardSummaryResponse: Resumen completo con KPIs y totales
+    Sin rol approver: sólo el propio ``employee_id`` (coincidente con JWT).
+    Con rol approver (VT-16): ``employee_id`` debe estar en el mismo ``TeamScope``
+    que export/timesheet (self + jerarquía Odoo).
     """
 
     roles: list[int] = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
-    if (
-        (employee_id is not None and current_user["user_id"] != employee_id)
-        or (employee_id is None)
-    ) and (not is_approver):
-        raise HTTPException(
-            status_code=403, detail="No tienes permisos para ver esta información"
+
+    if not is_approver:
+        if current_user["user_id"] != employee_id:
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permisos para ver esta información",
+            )
+    else:
+        ensure_employee_in_team(
+            requester_user_id=current_user["user_id"],
+            target_employee_id=employee_id,
+            employee_gateway=employee_gateway,
+            timesheet_gateway=timesheet_line_gateway,
         )
+
     try:
         # Validar que date_from no sea posterior a date_to
         if date_from > date_to:
