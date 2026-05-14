@@ -51,6 +51,7 @@ from app.shared.infra.external.odoo.odoo_client import (
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import user_has_role, Roles
 from app.shared.security.authorization import get_team_scope
+from app.shared.security.employee_id_query import scalar_employee_id_optional
 from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -215,7 +216,7 @@ async def get_task_detail(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
-    employee_id: int | None = Query(None, description="ID del empleado para filtrar"),
+    employee_id: int | None = Depends(scalar_employee_id_optional),
 ):
     """
     Obtiene el detalle de empleados que cargaron horas en una tarea específica o proyecto en un período.
