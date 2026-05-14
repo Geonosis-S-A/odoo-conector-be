@@ -43,7 +43,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 |----|----------------|------|--------|--------|
 | VT-11 | OTP de 6 dígitos sin lockout | 6.0 | GEO-1390 | ⏳ |
 | VT-16 | IDOR en `/dashboard/summary/{employee_id}` | 5.5 | — | ⏳ |
-| VT-09 | Email spoofing en `/email/support-mail` | 5.4 | — | ⏳ |
+| VT-09 | Email spoofing en `/email/support-mail` | 5.4 | — | ✅ |
 | VT-13 | IDOR en `DELETE /agent/conversation/{id}` | 5.3 | — | ⏳ |
 | VT-10 | Script Lovable.dev sin SRI | 5.0 | — | ⏳ |
 
@@ -187,6 +187,28 @@ para API JSON (`default-src 'none'`, `frame-ancestors 'none'`, `base-uri 'none'`
 sobre HTTP en desarrollo. SRI en scripts del frontend permanece en VT-10.
 Archivos: `app/shared/security/security_headers_middleware.py`, `app/main.py`,
 `app/tests/test_security_headers_vt07.py`.
+
+---
+
+### VT-09 — Email spoofing en `POST /email/support-mail`
+
+**CVSS:** 5.4 · **Linear:** — · **Fix:** 2026-05-12
+
+**Problema.** El body permitía `user_name` (y fecha) controlados por el cliente;
+el correo interno presentaba ese nombre como si fuera quien reportaba, permitiendo
+suplantación respecto del equipo de soporte.
+
+**Solución.** `SupportMailRequest` sólo acepta `subject` y `body` (`extra="forbid"`).
+`user_name` y `user_email` se toman **exclusivamente** del JWT; la marca temporal del
+reporte es `datetime.now(timezone.utc)` en servidor. Plantilla HTML actualizada con
+email verificado; envío Resend con `reply_to` al correo del JWT.
+Frontend deja de enviar identidad en el payload.
+Archivos: `app/email/api/schemas.py`, `app/email/api/routes.py`,
+`app/email/infra/email_service.py`, `app/shared/templates/email/support_mail.html`,
+`app/tests/test_support_mail_vt09.py`,
+`odoo-conector-fe/src/services/reportService.ts`,
+`odoo-conector-fe/src/components/ReportIssueButton.tsx`,
+`app/timesheet_line/tests/integration/test_review_mail_integration.py` (mock).
 
 ---
 

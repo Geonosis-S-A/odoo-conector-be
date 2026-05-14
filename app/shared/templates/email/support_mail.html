@@ -49,7 +49,10 @@
                                                     <!-- Usuario que reportó -->
                                                     <p
                                                         style="font-size:16px;line-height:24px;color:#333333;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:24px 0;margin-bottom:24px;margin-top:0;font-weight:600;">
-                                                        El usuario {{USER_NAME}} informó el siguiente problema:
+                                                        El usuario <strong>{{USER_NAME}}</strong>
+                                                        (<a href="mailto:{{USER_EMAIL}}"
+                                                            style="color:#FF9517;text-decoration:none;">{{USER_EMAIL}}</a>)
+                                                        informó el siguiente problema:
                                                     </p>
 
                                                     <!-- Descripción del problema -->
@@ -75,7 +78,7 @@
                                                     <p
                                                         style="font-size:14px;line-height:20px;color:#666666;font-family:'Inter Tight',-apple-system,BlinkMacSystemFont;margin:24px 0 0 0;">
                                                         <strong>Fecha del reporte:</strong> {{TIMESTAMP}}<br>
-                                                        <strong>Usuario:</strong> {{USER_NAME}}
+                                                        <strong>Cuenta:</strong> {{USER_NAME}} · {{USER_EMAIL}}
                                                     </p>
                                                 </td>
                                             </tr>

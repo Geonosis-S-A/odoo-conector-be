@@ -14,8 +14,9 @@ Este proyecto utiliza **uv** para la gestión de dependencias y entorno, junto c
 - Instalar dependencias: `uv sync`
 - Agregar dependencias: `uv add fastapi --standard`
 - Ejecutar scripts: `uv run <comando>`
-  - Ejemplo: `uv run uvicorn src.main:app`
-- Shortcut para el servidor: `uv run fastapi dev`
+  - Servidor con reload (solo código; evita vigilar `.venv` en Windows/OneDrive):
+    `uv run uvicorn app.main:app --reload --reload-dir app --reload-dir agent`
+- Shortcut para el servidor: `uv run fastapi dev` (si ves reload infinito por `WatchFiles` en `.venv`, usa el comando `uvicorn` de arriba)
 
 ---
 
@@ -40,7 +41,7 @@ El proyecto usa tipado estándar. Actívalo en **VSCode**.
 
 2. Corre el servidor en desarrollo:
    ```bash
-   uv run fastapi dev
+   uv run uvicorn app.main:app --reload --reload-dir app --reload-dir agent
    ```
 
 ---
