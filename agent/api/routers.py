@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from agent.services.cargar_horas import run_agent_service, delete_conversation, resume_agent_service
+from app.shared.security.agent_conversation_id import (
+    parse_agent_thread_owner,
+    thread_owned_by_user,
+)
 from app.shared.security.dependencies import get_current_user
 from app.auth.infra.auth_service import JWTPayload
 from pydantic import BaseModel
@@ -62,8 +66,20 @@ async def cargar_horas_agent(
             detail="Debes enviar 'prompt' (para iniciar) o 'decisions' (para reanudar)"
         )
     
-    # Obtener employee_id del usuario autenticado
     employee_id = current_user["user_id"]
+    if not thread_owned_by_user(request.conversation_id, employee_id):
+        if parse_agent_thread_owner(request.conversation_id) is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "conversation_id inválido: debe ser u{user_id}_ seguido de un id "
+                    "(por ejemplo el UUID del cliente)."
+                ),
+            )
+        raise HTTPException(
+            status_code=403,
+            detail="No tenés permiso para usar este conversation_id.",
+        )
 
     async def generate_sse():
         """
@@ -164,6 +180,21 @@ async def delete_conversation_endpoint(
     Returns:
         dict: Resultado de la operación de eliminación
     """
+    uid = current_user["user_id"]
+    if not thread_owned_by_user(conversation_id, uid):
+        if parse_agent_thread_owner(conversation_id) is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "conversation_id inválido: debe ser u{user_id}_ seguido de un id "
+                    "(por ejemplo el UUID del cliente)."
+                ),
+            )
+        raise HTTPException(
+            status_code=403,
+            detail="No tenés permiso para eliminar esta conversación.",
+        )
+
     result = delete_conversation(conversation_id)
 
     if not result["success"]:
