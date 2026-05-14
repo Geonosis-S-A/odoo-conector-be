@@ -42,7 +42,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | ID | Vulnerabilidad | CVSS | Linear | Estado |
 |----|----------------|------|--------|--------|
 | VT-11 | OTP de 6 dígitos sin lockout | 6.0 | GEO-1390 | ⏳ |
-| VT-16 | IDOR en `/dashboard/summary/{employee_id}` | 5.5 | — | ⏳ |
+| VT-16 | IDOR en `/dashboard/summary/{employee_id}` | 5.5 | — | ✅ |
 | VT-09 | Email spoofing en `/email/support-mail` | 5.4 | — | ✅ |
 | VT-13 | IDOR en `DELETE /agent/conversation/{id}` | 5.3 | — | ✅ |
 | VT-10 | Script Lovable.dev sin SRI | 5.0 | — | ⏳ |
@@ -204,6 +204,23 @@ Frontend genera `u{id}_${uuid}` al tener usuario en sesión.
 Archivos: `agent/api/routers.py`, `app/shared/security/agent_conversation_id.py`,
 `app/tests/test_agent_conversation_vt13.py`,
 `odoo-conector-fe/src/features/timesheets/agent/AITimesheetChat.tsx`.
+
+---
+
+### VT-16 — IDOR en `GET /dashboard/summary/{employee_id}`
+
+**CVSS:** 5.5 · **Linear:** — · **Fix:** 2026-05-12
+
+**Problema.** Usuarios con rol approver podían pedir el resumen por **cualquier**
+`employee_id` en el path; bastaba con ser approver, sin comprobar jerarquía Odoo.
+Eso exponía KPIs/totales por persona fuera del equipo del solicitante.
+
+**Solución.** Para approvers se aplica `ensure_employee_in_team` (mismo criterio que
+VT-02/VT-04/VT-17: `TeamScope` vía `employee_gateway` + `get_team_users`). Quien no
+es approver sigue limitado a **su propio** `employee_id` (coincidente con el JWT).
+Tests: `test_get_dashboard_summary_by_employee_success_admin_different_user` (mocks de
+equipo) + `test_get_dashboard_summary_by_employee_forbidden_approver_out_of_team`.
+Archivos: `app/dashboard/api/routers.py`, `app/dashboard/tests/api/test_dashboard_routers.py`.
 
 ---
 

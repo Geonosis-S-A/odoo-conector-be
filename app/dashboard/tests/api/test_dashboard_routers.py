@@ -23,6 +23,7 @@ from app.dashboard.domain.models import (
 )
 from app.shared.security.roles import Roles
 from app.shared.security.dependencies import get_current_user
+from app.users.domain.models import Employee
 
 
 class TestDashboardRouters:
@@ -393,11 +394,18 @@ class TestDashboardRouters:
     ):
         """Test exitoso del endpoint para admin consultando otro empleado."""
         # Arrange
-        test_employee_id = 5  # ID diferente al usuario autenticado (admin)
+        test_employee_id = 5  # Miembro del equipo del approver (Odoo), no el mismo id de sesión
         test_date_from = date(2024, 1, 1)
         test_date_to = date(2024, 1, 31)
 
         mock_use_case.execute.return_value = mock_dashboard_data_by_employee
+
+        mock_employee_gateway.get_by_id.return_value = Employee(
+            id=1, email="admin@example.com", full_name="Admin User"
+        )
+        mock_timesheet_gateway.get_team_users.return_value = [
+            {"id": 5, "name": "Otros"},
+        ]
 
         # Configurar overrides de dependencias
         app.dependency_overrides[get_current_user] = lambda: mock_current_user_admin
@@ -464,8 +472,59 @@ class TestDashboardRouters:
         # Assert
         assert response.status_code == 403
         assert (
-            "No tienes permisos para ver esta información" in response.json()["detail"]
+            "No tienes permisos para ver esta información"
+            in response.json()["detail"]
         )
+
+    def test_get_dashboard_summary_by_employee_forbidden_approver_out_of_team(
+        self,
+        app,
+        client,
+        mock_current_user_admin,
+        mock_dashboard_gateway,
+        mock_employee_gateway,
+        mock_task_gateway,
+        mock_timesheet_gateway,
+        mock_use_case,
+    ):
+        """VT-16: approver no puede ver resumen de empleado fuera de su TeamScope."""
+        test_employee_id = 99
+        test_date_from = date(2024, 1, 1)
+        test_date_to = date(2024, 1, 31)
+
+        mock_employee_gateway.get_by_id.return_value = Employee(
+            id=1, email="admin@example.com", full_name="Admin User"
+        )
+        mock_timesheet_gateway.get_team_users.return_value = [
+            {"id": 5, "name": "Sólo subordinado 5"},
+        ]
+
+        app.dependency_overrides[get_current_user] = lambda: mock_current_user_admin
+        app.dependency_overrides[get_dashboard_data_gateway] = (
+            lambda: mock_dashboard_gateway
+        )
+        app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
+        app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
+        app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+
+        with patch(
+            "app.dashboard.api.routers.GetDashboardSummaryByEmployeeUseCase",
+            return_value=mock_use_case,
+        ):
+            response = client.get(
+                f"/dashboard/summary/{test_employee_id}",
+                params={
+                    "date_from": test_date_from.isoformat(),
+                    "date_to": test_date_to.isoformat(),
+                },
+            )
+
+        assert response.status_code == 403
+        assert (
+            "No tienes permisos para operar sobre este empleado"
+            in response.json()["detail"]
+        )
+        mock_use_case.execute.assert_not_called()
 
     def test_get_dashboard_summary_by_employee_invalid_date_range(
         self,
