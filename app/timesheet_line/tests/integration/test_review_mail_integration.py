@@ -27,11 +27,22 @@ class MockEmailService:
         self.send_approved_mail_calls = []
 
     async def send_support_mail(
-        self, user_name: str, subject: str, body: str, date: datetime
+        self,
+        user_name: str,
+        user_email: str,
+        subject: str,
+        body: str,
+        reported_at: datetime,
     ) -> None:
         """Simula el envío de un email de soporte."""
         self.send_support_mail_calls.append(
-            {"user_name": user_name, "subject": subject, "body": body, "date": date}
+            {
+                "user_name": user_name,
+                "user_email": user_email,
+                "subject": subject,
+                "body": body,
+                "reported_at": reported_at,
+            }
         )
         # No hace nada real, solo registra la llamada
         pass

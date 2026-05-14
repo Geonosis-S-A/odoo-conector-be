@@ -10,8 +10,15 @@ from app.email.domain.email_types import TimesheetEmailType
 
 
 class CommonEmailService(Protocol):
-    async def send_support_mail(self, email: str, subject: str, body: str) -> None:
-        """Envía un email de soporte al usuario"""
+    async def send_support_mail(
+        self,
+        user_name: str,
+        user_email: str,
+        subject: str,
+        body: str,
+        reported_at: datetime,
+    ) -> None:
+        """Envía un email de soporte al equipo interno (identidad desde JWT)."""
         pass
 
     async def send_review_mail(
@@ -35,26 +42,30 @@ class CommonResendEmailService:
         resend.api_key = settings.RESEND_APIKEY
 
     async def send_support_mail(
-        self, user_name: str, subject: str, body: str, date: datetime
+        self,
+        user_name: str,
+        user_email: str,
+        subject: str,
+        body: str,
+        reported_at: datetime,
     ) -> None:
-        """Envía un email de soporte al usuario usando Resend"""
+        """Envía un email de soporte al equipo interno usando Resend."""
         try:
-            # Formatear la fecha para mostrar en el email
-            formatted_date = date.strftime("%d/%m/%Y")
+            formatted_date = reported_at.strftime("%d/%m/%Y %H:%M UTC")
 
-            # Usar el servicio de templates para renderizar el email
             html_body = email_template_service.render_template(
                 "support_mail",
                 SUBJECT=subject,
                 BODY=body,
                 USER_NAME=user_name,
+                USER_EMAIL=user_email,
                 TIMESTAMP=formatted_date,
             )
 
-            # Enviar email usando Resend
             resend.Emails.send(
                 {
                     "from": f"Geonosis <{settings.EMAIL_USER}>",
+                    "reply_to": user_email,
                     "to": "ia.sf@geonosis.com.ar",
                     "subject": f"{subject} 🚨",
                     "html": html_body,
