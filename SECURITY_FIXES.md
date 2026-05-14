@@ -33,7 +33,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | VT-17 | Export Excel masivo con costos ARS/USD sin scope | 7.9 | — | ✅ |
 | VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | GEO-1391 / GEO-1394 | ✅ |
 | VT-05 | Sin rate limiting en endpoints de autenticación | 7.5 | GEO-1390 | ⏳ |
-| VT-06 | Enumeración de usuarios + roles | 7.5 | GEO-1396 | ⏳ |
+| VT-06 | Enumeración de usuarios + roles | 7.5 | GEO-1396 | ✅ |
 | VT-14 | BFLA: validar timesheets ajenos | 7.1 | GEO-1392 | ✅ |
 | VT-07 | Headers de seguridad ausentes | 6.5 | GEO-1395 | ✅ |
 
@@ -266,3 +266,62 @@ explícita de `request.approver_mail == current_user["user_email"]` (cierra
 el spoofing). Aplicado a `validate` y a `review` con semántica all-or-nothing
 sobre el lote. 8 tests de regresión nuevos.
 Archivos: `app/timesheet_line/api/routers.py`.
+
+
+---
+
+### VT-06 — Enumeración de usuarios + roles via `/users/employees` y `/users/sync/{employee_id}`
+
+**CVSS:** 7.5 · **Linear:** GEO-1396 · **Fix:** 2026-05-14
+
+**Problema.** Tres vectores de exposición de información sensible (OWASP A07:2021):
+
+1. `GET /users/employees` devolvía el directorio completo de los 98 empleados
+   (nombre, email corporativo e ID interno de Odoo) a cualquier usuario autenticado,
+   independientemente de su rol. Los 98 emails `@geonosis.com.ar` son UPNs del
+   tenant de Microsoft 365 y constituyen una lista lista para password spray contra
+   `login.microsoftonline.com`.
+
+2. `POST /users/sync/{employee_id}` retornaba en `changes_made.roles` los IDs
+   exactos de grupo Odoo del empleado sincronizado (salary, approver, etc.) a
+   cualquier usuario autenticado, permitiendo mapear cuentas con privilegios
+   elevados antes de atacarlas.
+
+3. En el flujo de login, la excepción `UserInactive` emitía el mensaje interno de
+   la excepción (distinto a `"Credenciales inválidas"`), revelando que la cuenta
+   existe pero está inactiva (user enumeration por error diferencial).
+   El endpoint `POST /auth/password-recovery/request` respondía con `404` y el
+   mensaje `"El email no ha sido registrado en el sistema"` cuando el email no
+   existía, y `POST /auth/password-recovery/verify` respondía con `404 "User not
+   found"` separado del error de OTP inválido.
+
+**Solución.**
+
+*Directorio de empleados — control por rol:*
+Nuevo helper `is_privileged_user(user_roles)` en `app/shared/security/roles.py`
+que verifica el rol `approver` (el único rol elevado del sistema). El endpoint
+`GET /users/employees` bifurca la respuesta:
+- **Con rol `approver`** → respuesta completa `EmployeesListResponse` con
+  `{id, email, full_name}`.
+- **Sin rol `approver`** → respuesta reducida `EmployeesListPublicResponse` con
+  solo `{full_name}`, apta para autocomplete en UI sin exponer emails ni IDs
+  internos.
+
+*Roles en sync — filtrado por privilegio y ownership:*
+El endpoint `POST /users/sync/{employee_id}` omite el campo `roles` de
+`changes_made` cuando el solicitante no tiene rol `approver` **y** no está
+sincronizando su propia cuenta (compara `current_user["user_id"] == employee_id`).
+Un usuario básico puede ver sus propios cambios de rol (autoservicio), pero no los
+de terceros.
+
+*Normalización de mensajes de error — anti user-enumeration:*
+- `UserInactive` en login → mismo `"Credenciales inválidas"` genérico.
+- `POST /auth/password-recovery/request`: ante `UserNotFound` ya no lanza 404;
+  devuelve `200` con `"Si el email está registrado, recibirás un código OTP"`
+  (patrón estándar de reset seguro).
+- `POST /auth/password-recovery/verify`: `UserNotFound` tratado igual que
+  `OTPNotFound` → `400 "Invalid OTP"`, sin diferenciar si el email existe.
+
+Archivos: `app/shared/security/roles.py`,
+`app/users/api/schemas.py`, `app/users/api/routers.py`,
+`app/auth/api/routes.py`.
