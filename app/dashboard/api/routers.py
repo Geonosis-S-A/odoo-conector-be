@@ -50,6 +50,7 @@ from app.shared.infra.external.odoo.odoo_client import (
 )
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import user_has_role, Roles
+from app.shared.security.authorization import get_team_scope
 from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -370,6 +371,11 @@ async def export_timesheets(
         get_employee_price_repository
     ),
 ):
+    """
+    Exporta horas cargadas como Excel (.xlsx) con tarifas y columna opcional USD.
+
+    VT-17: sólo líneas del ``TeamScope`` (emisor + equipo Odoo autorizado).
+    """
     roles = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
     if not is_approver:
@@ -377,11 +383,22 @@ async def export_timesheets(
             status_code=403, detail="No tienes permisos para exportar timesheets"
         )
 
+    # VT-17: mismo alcance que VT-02/VT-04 (self + «child_of» / timesheet_manager),
+    # sin la rama Odoo de «todas las horas en proyectos que gestiono» que filtraba
+    # cargas de personas ajenas al equipo junto con costos ARS/USD.
+    scope = get_team_scope(
+        requester_user_id=current_user["user_id"],
+        employee_gateway=employee_gateway,
+        timesheet_gateway=timesheet_line_gateway,
+    )
+    scoped_employee_ids = sorted(
+        {scope.requester_employee_id, *scope.team_member_ids}
+    )
+
     use_case = ExportTimesheetsByTeamUseCase(
         timesheet_line_gateway,
-        employee_gateway,
         task_gateway,
-        current_user["user_id"],
+        scoped_employee_ids,
         employee_price_repository,
         dolar_value=dolar_value,
     )
