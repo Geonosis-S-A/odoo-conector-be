@@ -35,7 +35,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | VT-05 | Sin rate limiting en endpoints de autenticación | 7.5 | GEO-1390 | ⏳ |
 | VT-06 | Enumeración de usuarios + roles | 7.5 | GEO-1396 | ⏳ |
 | VT-14 | BFLA: validar timesheets ajenos | 7.1 | GEO-1392 | ✅ |
-| VT-07 | Headers de seguridad ausentes | 6.5 | — | ⏳ |
+| VT-07 | Headers de seguridad ausentes | 6.5 | GEO-1395 | ✅ |
 
 ### Medias
 
@@ -164,6 +164,29 @@ Archivos: `app/shared/security/employee_id_query.py`,
 `odoo-conector-fe/src/features/timesheets/services/timesheetService.ts`,
 `odoo-conector-fe/src/features/validations/services/validationService.ts`,
 `app/timesheet_line/tests/api/test_list_timesheet_hpp_vt15.py`.
+
+---
+
+### VT-07 — Headers de seguridad (CSP, X-Frame, nosniff, Permissions-Policy, HSTS)
+
+**CVSS:** 6.5 · **Linear:** GEO-1395 · **Fix:** 2026-05-12
+
+**Problema.** Las respuestas HTTP no incluían cabeceras de endurecimiento habituales
+(X-Content-Type-Options, X-Frame-Options, Referrer-Policy, CSP, etc.), lo que
+facilita abusos en contextos de cliente (MIME sniffing, clickjacking, filtrado
+de referrer) si la API se consume junto a contenido web.
+
+**Solución.** Middleware Starlette (`SecurityHeadersMiddleware`) registrado en
+`app/main.py` tras CORS, que en **todas** las respuestas añade:
+`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (cámara,
+mic, geolocalización, etc. deshabilitados), y `Content-Security-Policy` mínima
+para API JSON (`default-src 'none'`, `frame-ancestors 'none'`, `base-uri 'none'`,
+`form-action 'none'`). **`Strict-Transport-Security`** sólo si `ENV` es
+`PROD` o `STAGING` (HTTPS en despliegue); no en `LOCAL` para no forzar HSTS
+sobre HTTP en desarrollo. SRI en scripts del frontend permanece en VT-10.
+Archivos: `app/shared/security/security_headers_middleware.py`, `app/main.py`,
+`app/tests/test_security_headers_vt07.py`.
 
 ---
 
