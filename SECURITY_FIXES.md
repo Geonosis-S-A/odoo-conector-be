@@ -44,7 +44,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | VT-11 | OTP de 6 dígitos sin lockout | 6.0 | GEO-1390 | ⏳ |
 | VT-16 | IDOR en `/dashboard/summary/{employee_id}` | 5.5 | — | ⏳ |
 | VT-09 | Email spoofing en `/email/support-mail` | 5.4 | — | ✅ |
-| VT-13 | IDOR en `DELETE /agent/conversation/{id}` | 5.3 | — | ⏳ |
+| VT-13 | IDOR en `DELETE /agent/conversation/{id}` | 5.3 | — | ✅ |
 | VT-10 | Script Lovable.dev sin SRI | 5.0 | — | ⏳ |
 
 ### Acciones de infraestructura (fuera de código)
@@ -190,25 +190,20 @@ Archivos: `app/shared/security/security_headers_middleware.py`, `app/main.py`,
 
 ---
 
-### VT-09 — Email spoofing en `POST /email/support-mail`
+### VT-13 — IDOR en `DELETE /agent/conversation/{id}`
 
-**CVSS:** 5.4 · **Linear:** — · **Fix:** 2026-05-12
+**CVSS:** 5.3 · **Linear:** — · **Fix:** 2026-05-12
 
-**Problema.** El body permitía `user_name` (y fecha) controlados por el cliente;
-el correo interno presentaba ese nombre como si fuera quien reportaba, permitiendo
-suplantación respecto del equipo de soporte.
+**Problema.** Cualquier usuario autenticado podía borrar la conversación Redis/LangGraph
+de otro si conocía (o adivinaba) el `conversation_id` (thread id).
 
-**Solución.** `SupportMailRequest` sólo acepta `subject` y `body` (`extra="forbid"`).
-`user_name` y `user_email` se toman **exclusivamente** del JWT; la marca temporal del
-reporte es `datetime.now(timezone.utc)` en servidor. Plantilla HTML actualizada con
-email verificado; envío Resend con `reply_to` al correo del JWT.
-Frontend deja de enviar identidad en el payload.
-Archivos: `app/email/api/schemas.py`, `app/email/api/routes.py`,
-`app/email/infra/email_service.py`, `app/shared/templates/email/support_mail.html`,
-`app/tests/test_support_mail_vt09.py`,
-`odoo-conector-fe/src/services/reportService.ts`,
-`odoo-conector-fe/src/components/ReportIssueButton.tsx`,
-`app/timesheet_line/tests/integration/test_review_mail_integration.py` (mock).
+**Solución.** Formato obligatorio `u{user_id}_{sufijo}` (validado en
+`POST /agent/cargar-horas-agent` y `DELETE /agent/conversation/{id}`): el prefijo
+numérico debe coincidir con `user_id` del JWT. Helper `app/shared/security/agent_conversation_id.py`.
+Frontend genera `u{id}_${uuid}` al tener usuario en sesión.
+Archivos: `agent/api/routers.py`, `app/shared/security/agent_conversation_id.py`,
+`app/tests/test_agent_conversation_vt13.py`,
+`odoo-conector-fe/src/features/timesheets/agent/AITimesheetChat.tsx`.
 
 ---
 
