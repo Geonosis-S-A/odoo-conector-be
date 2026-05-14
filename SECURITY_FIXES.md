@@ -31,7 +31,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | VT-04 | IDOR escritura de timesheets (PUT + DELETE) | 8.1 | GEO-1389 | ✅ |
 | VT-08 | 9.057 timesheets expuestos sin filtro/paginado | 8.0 | GEO-1394 | ✅ |
 | VT-17 | Export Excel masivo con costos ARS/USD sin scope | 7.9 | — | ✅ |
-| VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | GEO-1394 | ✅ |
+| VT-15 | HTTP Parameter Pollution con `employee_id[]` | 7.8 | GEO-1391 / GEO-1394 | ✅ |
 | VT-05 | Sin rate limiting en endpoints de autenticación | 7.5 | GEO-1390 | ⏳ |
 | VT-06 | Enumeración de usuarios + roles | 7.5 | GEO-1396 | ⏳ |
 | VT-14 | BFLA: validar timesheets ajenos | 7.1 | GEO-1392 | ✅ |
@@ -144,21 +144,26 @@ Archivos: `app/timesheet_line/api/routers.py`,
 sola respuesta; los usuarios con rol approver obtenían efectivamente un
 volcado global si no acotaban `employee_id` / equipo.
 
-**Problema (VT-15).** Repetir `employee_id` en la query string podía inducir
-ambigüedad (HTTP Parameter Pollution) sobre qué valor usaba el backend.
+**Problema (VT-15 / GEO-1391).** Además de valores duplicados de `employee_id`, la
+notación `employee_id[]` / `employee_id[N]` hacía que el filtro escalar se perdiera
+y el backend respondiera como sin filtro (volcado masivo). **Linear:** GEO-1391.
 
 **Solución.** Respuesta **paginada** obligatoria (`items`, `total`, `page`,
 `page_size`, máx. 100 por página). Sin `employee_id` ni `team`, un approver
-solo ve sus propios registros (misma línea que VT-04). `employee_id` se lee
-de forma única desde la request; más de un valor → HTTP 400. Caso de uso y
-gateway Odoo con `count` + `limit`/`offset`. Frontend: `timesheetService`
+solo ve sus propios registros (misma línea que VT-04). Parsing centralizado en
+`scalar_employee_id_optional`: **un** parámetro `employee_id` entero; claves
+`employee_id[]` / `employee_id[…]`, duplicados o no enteros → **HTTP 400**.
+Mismo helper en `GET /dashboard/summary/detail` (`employee_id` query).
+Caso de uso y gateway Odoo con `count` + `limit`/`offset`. Frontend: `timesheetService`
 itera páginas hasta agotar `total`.
-Archivos: `app/timesheet_line/domain/repositories.py`,
+Archivos: `app/shared/security/employee_id_query.py`,
+`app/timesheet_line/domain/repositories.py`,
 `app/timesheet_line/infra/external/odoo/odoo_timesheet_gateway.py`,
 `app/timesheet_line/application/use_cases/obtener_horas.py`,
 `app/timesheet_line/api/schemas.py`, `app/timesheet_line/api/routers.py`,
 `odoo-conector-fe/src/features/timesheets/services/timesheetService.ts`,
-`odoo-conector-fe/src/features/validations/services/validationService.ts`.
+`odoo-conector-fe/src/features/validations/services/validationService.ts`,
+`app/timesheet_line/tests/api/test_list_timesheet_hpp_vt15.py`.
 
 ---
 

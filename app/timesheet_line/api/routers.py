@@ -76,6 +76,7 @@ from app.shared.security.authorization import (
     ensure_owns_timesheets,
     ensure_employee_in_team,
 )
+from app.shared.security.employee_id_query import scalar_employee_id_optional
 
 
 router = APIRouter(prefix="/timesheet", tags=["timesheet"])
@@ -118,31 +119,9 @@ def get_notification_repository(
     return SQLModelTimesheetLineNotificationRepository(db)
 
 
-# VT-08 / VT-15 (pentest 2026-04): paginación obligatoria y rechazo de
-# `employee_id` duplicado en query (HTTP Parameter Pollution).
+# VT-08: VT08_MAX_PAGE_SIZE — paginación obligatoria (ver ``list_timesheet_lines``).
+# VT-15 (GEO-1391): ``employee_id`` escalar vía ``scalar_employee_id_optional``.
 VT08_MAX_PAGE_SIZE = 100
-
-
-def single_employee_id_query(request: Request) -> int | None:
-    """Un solo valor para `employee_id` en la query string."""
-    raw = request.query_params.getlist("employee_id")
-    if len(raw) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Parámetro employee_id duplicado",
-        )
-    if not raw or raw[0] == "":
-        return None
-    try:
-        v = int(raw[0])
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="employee_id debe ser un entero",
-        )
-    if v <= 0:
-        raise HTTPException(status_code=400, detail="employee_id inválido")
-    return v
 
 
 @router.post("/", response_model=list[DetailedTimesheetLineResponse])
@@ -200,7 +179,7 @@ async def create_timesheet_line(
 async def list_timesheet_lines(
     gateway: OdooTimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
-    employee_id: int | None = Depends(single_employee_id_query),
+    employee_id: int | None = Depends(scalar_employee_id_optional),
     date_from: date | None = Query(
         None, description="Fecha de inicio del rango (YYYY-MM-DD)"
     ),
@@ -233,7 +212,7 @@ async def list_timesheet_lines(
     sus propios registros. Un approver que pasa `employee_id` ajeno debe tener
     scope de equipo (misma regla que VT-04).
 
-    VT-15: `employee_id` duplicado en la query se rechaza con HTTP 400.
+    VT-15: ``employee_id[]`` / ``employee_id[N]`` y duplicados se rechazan con HTTP 400.
     """
     roles: list[int] = current_user["roles"]
     is_approver = user_has_role(roles, Roles.approver)
