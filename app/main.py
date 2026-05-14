@@ -8,6 +8,9 @@ from pydantic import ValidationError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.shared.infra.limiter import limiter
+from app.shared.security.security_headers_middleware import (
+    SecurityHeadersMiddleware,
+)
 
 from app.timesheet_line.api.routers import router as timesheet_router
 from app.users.api.routers import router as users_router
@@ -26,6 +29,8 @@ import logging
 
 ENV = os.getenv("ENV", "LOCAL").upper()  # Por defecto, local
 IS_PROD = ENV == "PROD"
+# HSTS: STAGING/PROD detrás de HTTPS en Railway; no en LOCAL (HTTP dev).
+ENABLE_SECURITY_HSTS = ENV in ("PROD", "STAGING")
 API_PREFIX = "/api/v1"
 
 
@@ -107,6 +112,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(SecurityHeadersMiddleware, enable_hsts=ENABLE_SECURITY_HSTS)
 
 
 # Manejadores de errores globales
