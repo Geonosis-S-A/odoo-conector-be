@@ -131,8 +131,8 @@ async def login(
     except PasswordNotMatch:
         lockout_service.record_failure(email)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
-    except UserInactive as e:
-        raise HTTPException(status_code=401, detail=str(e))
+    except UserInactive:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     response.set_cookie(
         key="refresh_token",
@@ -229,14 +229,13 @@ async def request_otp(
     try:
         dto.email = dto.email.lower()
         await password_recovery_use_case.request_otp(dto)
-        return {"message": "OTP sent successfully"}
     except UserNotFound:
-        raise HTTPException(
-            status_code=404,
-            detail="El email no ha sido registrado en el sistema",
-        )
+        # Respuesta idéntica aunque el email no exista: evita user enumeration
+        # (un atacante no puede distinguir si la cuenta existe — OWASP A07).
+        pass
     except OTPNotFound as e:
         raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "Si el email está registrado, recibirás un código OTP"}
 
 
 @router.post("/register/request-otp")
@@ -284,7 +283,9 @@ async def verify_otp(
         lockout_service.reset(email)
         return {"message": "OTP verified successfully"}
     except UserNotFound:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Tratar como OTP inválido: no revelar que el email no existe (OWASP A07).
+        lockout_service.record_failure(email)
+        raise HTTPException(status_code=400, detail="Invalid OTP")
     except OTPNotFound:
         lockout_service.record_failure(email)
         raise HTTPException(status_code=400, detail="Invalid OTP")
