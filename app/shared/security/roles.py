@@ -29,3 +29,15 @@ def user_has_role(user_roles: list[int] | None, role: int) -> bool:
     if not user_roles:
         return False
     return int(role) in user_roles
+
+
+def is_privileged_user(user_roles: list[int] | None) -> bool:
+    """True si el usuario posee el rol approver.
+
+    Usado como gate para datos sensibles: directorio completo de empleados,
+    roles expuestos en sync, etc. Falla cerrado (False) si user_roles es
+    None o vacío.
+    """
+    if not user_roles:
+        return False
+    return int(Roles.approver) in user_roles

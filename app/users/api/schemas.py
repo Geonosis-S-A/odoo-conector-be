@@ -62,3 +62,21 @@ class EmployeesListResponse(BaseModel):
     message: str
     employees: List[EmployeeResponse]
     total_employees: int
+
+
+class EmployeePublicResponse(BaseModel):
+    """Respuesta reducida para usuarios sin privilegios.
+
+    Expone únicamente el nombre completo (útil para autocomplete en UI).
+    Omite email e ID interno para evitar que usuarios básicos puedan
+    construir un directorio completo susceptible a password spray (OWASP A07).
+    """
+
+    full_name: str
+
+
+class EmployeesListPublicResponse(BaseModel):
+    success: bool
+    message: str
+    employees: List[EmployeePublicResponse]
+    total_employees: int
