@@ -45,7 +45,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | VT-16 | IDOR en `/dashboard/summary/{employee_id}` | 5.5 | — | ✅ |
 | VT-09 | Email spoofing en `/email/support-mail` | 5.4 | — | ✅ |
 | VT-13 | IDOR en `DELETE /agent/conversation/{id}` | 5.3 | — | ✅ |
-| VT-10 | Script Lovable.dev sin SRI | 5.0 | — | ⏳ |
+| VT-10 | Script Lovable.dev sin SRI | 5.0 | — | ✅ |
 
 ### Acciones de infraestructura (fuera de código)
 
@@ -54,7 +54,7 @@ Leyenda: ✅ Resuelto · 🟡 En progreso · ⏳ Pendiente · 🔒 Infraestructu
 | Reset de contraseñas comprometidas (`pablo.sosto`, `gabriel.gugliotella`) | 🔒 |
 | Conditional Access en Entra ID: MFA obligatorio + bloqueo legacy auth | 🔒 |
 | IMDSv2 enforced en Railway / bloqueo de IMDS desde la app | 🔒 (GEO-1402) |
-| SRI o migración fuera de Lovable/GPT Engineer en el frontend | 🔒 |
+| CDN externo Lovable/GPT Engineer retirado del `index.html` (VT-10) | ✅ |
 
 ---
 
@@ -184,9 +184,29 @@ mic, geolocalización, etc. deshabilitados), y `Content-Security-Policy` mínima
 para API JSON (`default-src 'none'`, `frame-ancestors 'none'`, `base-uri 'none'`,
 `form-action 'none'`). **`Strict-Transport-Security`** sólo si `ENV` es
 `PROD` o `STAGING` (HTTPS en despliegue); no en `LOCAL` para no forzar HSTS
-sobre HTTP en desarrollo. SRI en scripts del frontend permanece en VT-10.
+sobre HTTP en desarrollo. El script de terceros Lovable/GPT Engineer en el frontend
+quedó cubierto en **VT-10** (eliminación del tag en `index.html`).
 Archivos: `app/shared/security/security_headers_middleware.py`, `app/main.py`,
 `app/tests/test_security_headers_vt07.py`.
+
+---
+
+### VT-10 — Script Lovable.dev / GPT Engineer sin SRI (`cdn.gpteng.co`)
+
+**CVSS:** 5.0 · **Linear:** — · **Fix:** 2026-05-13
+
+**Problema.** `index.html` cargaba ``https://cdn.gpteng.co/gptengineer.js`` desde un CDN
+sin **Subresource Integrity (SRI)**. Si el CDN o la cuenta asociada se comprometen, se
+podría ejecutar código arbitrario en el origen del timesheet (**supply chain /
+MITM en el recurso externo**). Mantener un `integrity` estable es poco práctico si el
+tercero rota el bundle sin proceso acordado.
+
+**Solución.** Eliminación del tag de script externo para despliegues GeoTimesheet:
+la app sólo monta ``/src/main.tsx`` como entrada Vite (código revisado en el repo y
+fingerprints del artefacto de build propio). En desarrollo, `lovable-tagger` en
+`vite.config.ts` permanece sólo cuando `mode === 'development'` (no sale al bundle
+servido como sitio público igual que el CDN retirado).
+Archivos: `odoo-conector-fe/index.html`, `SECURITY_FIXES.md`.
 
 ---
 
@@ -278,6 +298,17 @@ ULA. Aplicada en tres capas:
 pentest `2852039166`) + 36 tests de los schemas + 9 tests de las tools.
 Archivos: `app/shared/security/url_safety.py` (nuevo),
 `app/timesheet_line/api/schemas.py`, `agent/tools/project_tools.py`.
+
+---
+
+### VT-12 [INFRA] — SSRF en agente IA con bypass del filtro LLM (IP decimal)
+
+Resolución: No aplicable — IMDS no accesible en infraestructura de Railway
+Se realizó una verificación empírica del acceso al Instance Metadata Service (IMDS) de AWS desde el contenedor de producción del backend de GeoTimesheet.
+Método: Conexión SSH al contenedor del backend via Railway CLI, seguido de un intento de conexión HTTP a http://169.254.169.254/latest/meta-data/ con timeout de 3 segundos usando Python 3.
+Resultado: URLError: timed out — la dirección no responde desde el contenedor.
+Conclusión: Railway opera en infraestructura propia (data centers propios desde 2024, no en AWS EC2), por lo que el IMDS de AWS no existe en este entorno. El vector de ataque documentado en el pentest — obtener credenciales IAM temporales via SSRF apuntando a 169.254.169.254 — no es explotable en esta configuración.
+El issue se cierra como no aplicable. No se requiere acción adicional a nivel infraestructura. La remediación a nivel código (GEO-1388) que valida y bloquea IPs privadas en el campo descripción del agente sigue siendo recomendable como defensa en profundidad.
 
 ---
 
