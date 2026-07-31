@@ -408,6 +408,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         try:
             # Construir dominio para obtener empleados del equipo que estén activos
             subordinates_domain = [
+                # solo trae empleados activos
+                ("active", "=", True), 
                 # Condición 1: El empleado NO debo ser yo
                 ("id", "!=", employee_id),
                 # Condición 2: Y debe cumplir la lógica de equipo
