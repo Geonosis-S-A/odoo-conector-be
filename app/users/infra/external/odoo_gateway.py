@@ -173,7 +173,7 @@ class OdooEmployeeGateway(EmployeeGateway):
                 [[]],  # Sin filtros (obtiene todos los empleados)
                 {
                     "fields": ["id", "name", "work_email"],
-                    "limit": 100,
+                    "limit": 150,
                 },
             ),
         )
