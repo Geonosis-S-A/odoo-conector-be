@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Dict
+from typing import List, Dict, Any
 from datetime import date
 import xmlrpc.client
 
@@ -319,7 +319,7 @@ def edit_timesheet(
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
 
-@router.post("/validate", response_model=Dict[str, bool])
+@router.post("/validate", response_model=Dict[str, Any])
 async def validate_timesheet_lines(
     request: ApprovedMailRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
@@ -332,13 +332,7 @@ async def validate_timesheet_lines(
 ):
     """
     Valida múltiples líneas de timesheet (marca validated=True).
-
-    Args:
-        request: Objeto con lista de IDs de las líneas de timesheet a validar
-        gateway: Gateway de timesheet (inyectado)
-
-    Returns:
-        Dict[str, bool]: Resultado de la validación
+    Solo aprueba las horas de empleados que pertenecen al equipo del aprobador.
     """
     roles: list[int] = current_user["roles"]
     is_admin = user_has_role(roles, Roles.approver)
@@ -347,17 +341,23 @@ async def validate_timesheet_lines(
             status_code=403,
             detail="No tienes permisos para validar las líneas de timesheet",
         )
-
     try:
-        use_case = ValidateTimesheetUseCase(gateway, email_service, employee_gateway, notification_repository)
-        success = await use_case.execute(request.timesheetline_ids, request.approver_mail)
-        return {"success": success}
+        use_case = ValidateTimesheetUseCase(
+            gateway, email_service, employee_gateway, notification_repository
+        )
+        result = await use_case.execute(request.timesheetline_ids, request.approver_mail)
+        return {
+            "success": True,
+            "validated": result["validated"],
+            "rejected": result["rejected"],
+        }
+    except ApproverNotFoundError as e:
+        raise HTTPException(status_code=404, detail=e.message)
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
     except TimesheetValidateError as e:
         raise HTTPException(status_code=422, detail=e.message)
     except TimesheetDomainError as e:
-        # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
 
 
