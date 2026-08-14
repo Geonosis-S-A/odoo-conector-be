@@ -64,6 +64,9 @@ class ValidateTimesheetUseCase:
         existing_timesheets = self.timesheet_gateway.get_by_ids(timesheet_ids)
         if not existing_timesheets or len(existing_timesheets) != len(timesheet_ids):
             raise TimesheetNotFoundError(timesheet_ids)
+        
+        logger.warning("DEBUG timesheet_ids recibidos: %s", timesheet_ids)
+        logger.warning("DEBUG existing_timesheets employee_ids: %s", [ts.employee_id for ts in existing_timesheets])
 
         # Separar los que puede aprobar de los que no
         allowed_ids: list[int] = []
@@ -90,6 +93,7 @@ class ValidateTimesheetUseCase:
                 raise
             except Exception as e:
                 raise TimesheetValidateError(allowed_ids, str(e))
+            
 
             # Enviar emails de aprobación
             employees_bucket: dict = {}
