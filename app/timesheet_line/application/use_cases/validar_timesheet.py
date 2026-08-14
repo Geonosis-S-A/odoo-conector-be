@@ -8,6 +8,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
 from app.email.infra.email_service import CommonResendEmailService
 from app.users.domain.repositories import EmployeeGateway
 from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
+import logging
 
 
 class ValidateTimesheetUseCase:
@@ -53,6 +54,11 @@ class ValidateTimesheetUseCase:
         # Obtener equipo del aprobador
         team = self.timesheet_gateway.get_team_users(approver_user_id, approver.id)
         team_employee_ids = {member["id"] for member in team}
+        
+        
+        logger = logging.getLogger(__name__)
+        logger.warning("DEBUG team_employee_ids: %s", [m['id'] for m in team])
+        logger.warning("DEBUG approver_user_id: %s approver.id: %s", approver_user_id, approver.id)
 
         # Verificar que las líneas existen
         existing_timesheets = self.timesheet_gateway.get_by_ids(timesheet_ids)
