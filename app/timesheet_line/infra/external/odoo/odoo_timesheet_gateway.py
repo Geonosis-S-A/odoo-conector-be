@@ -5,6 +5,7 @@ from app.task.domain.models import TaskInfo
 from app.project.domain.models import Project
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.shared.infra.external.odoo.odoo_client import OdooConnection
+import logging
 
 
 class OdooTimesheetLineGateway(TimesheetLineGateway):
@@ -398,7 +399,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             [timesheet_line_ids],
             {},
         )
-
+        logger = logging.getLogger(__name__)
+        logger.warning("DEBUG validate response: %s para IDs: %s", response, timesheet_line_ids)
         return bool(response)
 
     def get_team_users(self, user_id: int, employee_id: int) -> list[Dict[str, Any]]:
