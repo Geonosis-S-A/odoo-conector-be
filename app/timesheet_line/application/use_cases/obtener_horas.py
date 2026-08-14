@@ -99,8 +99,9 @@ class ListTimesheetLinesUseCase:
 
         # Obtener equipo del aprobador para marcar is_approver
         team_employee_ids: set[int] = set()
-        if user_id is not None:
-            team_users = self.timesheet_line_gateway.get_team_users(user_id, id)
+        approver_user_id = self.employee_gateway.get_user_id_by_employee_id(id) if id is not None else None
+        if approver_user_id is not None:
+            team_users = self.timesheet_line_gateway.get_team_users(approver_user_id, id)
             team_employee_ids = {u["id"] for u in team_users}
 
         for timesheet in timesheets:
