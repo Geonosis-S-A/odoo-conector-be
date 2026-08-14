@@ -52,6 +52,7 @@ class DetailedTimesheetLine:
     hours: float
     date: date_t
     validated: bool
+    is_approver: bool = False
     create_date: Optional[datetime] = None
     notification: Optional[TimesheetLineNotificationResponse] = None
 

@@ -32,6 +32,7 @@ class DetailedTimesheetLineResponse(BaseModel):
     create_date: Optional[datetime] = None
     validated: bool
     notification: Optional[TimesheetLineNotificationResponse] = None
+    is_approver: bool = False
 
 
 class EditTimesheetRequest(BaseModel):

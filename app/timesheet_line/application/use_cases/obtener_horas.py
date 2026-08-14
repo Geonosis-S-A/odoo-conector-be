@@ -68,12 +68,9 @@ class ListTimesheetLinesUseCase:
                 users = self.timesheet_line_gateway.get_team_users(user_id, id)
                 ids = [user["id"] for user in users]
 
-
         # Validación de rango de fechas
         if date_from is not None and date_to is not None and date_from > date_to:
             raise InvalidDateRangeError(date_from.isoformat(), date_to.isoformat())
-
-        
 
         timesheets = self.timesheet_line_gateway.all(
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
@@ -95,13 +92,19 @@ class ListTimesheetLinesUseCase:
         employees = self.employee_gateway.all()
         employees_dict = {employee.id: employee for employee in employees}
 
-        # Una sola query batch para todas las notificaciones (reemplaza el loop N+1)
         notifications = self.notification_repository.get_by_timesheet_ids(
             [t.id for t in timesheets]
         )
         notifications_map = {n.timesheet_line_id: n for n in notifications}
 
+        # Obtener equipo del aprobador para marcar is_approver
+        team_employee_ids: set[int] = set()
+        if user_id is not None:
+            team_users = self.timesheet_line_gateway.get_team_users(user_id, id)
+            team_employee_ids = {u["id"] for u in team_users}
+
         for timesheet in timesheets:
+            timesheet.is_approver = timesheet.employee_id in team_employee_ids
             notification = notifications_map.get(timesheet.id)
             if notification is not None:
                 timesheet.notification = TimesheetLineNotificationResponse(
@@ -109,4 +112,5 @@ class ListTimesheetLinesUseCase:
                     sender_name=employees_dict[notification.approver_id].full_name,
                     sended_at=notification.created_at,
                 )
+
         return timesheets
