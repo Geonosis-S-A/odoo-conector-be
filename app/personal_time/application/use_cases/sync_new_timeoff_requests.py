@@ -513,6 +513,15 @@ class SyncNewTimeOffRequestsUseCase:
                 current_odoo_state = self.odoo_gateway.get_timeoff_request_state(
                     mapping.odoo_request_id
                 )
+            except ValueError:
+                # El registro fue eliminado de Odoo; saltear sin registrar error
+                logger.warning(
+                    "Solicitud Odoo ID %s (Humand ID %s) no encontrada en Odoo, se omite.",
+                    mapping.odoo_request_id,
+                    humand_request.id,
+                )
+                result.add_skipped()
+                return
             except Exception as e:
                 import traceback
                 from xmlrpc.client import Fault

@@ -266,6 +266,8 @@ class OdooTimeOffeGateway(OdooTimeOffGateway):
             # Retornar el estado de la solicitud
             return result[0]["state"]
 
+        except ValueError:
+            raise
         except Exception as e:
             raise Exception(
                 f"Error al obtener el estado de la solicitud desde Odoo: {str(e)}"
