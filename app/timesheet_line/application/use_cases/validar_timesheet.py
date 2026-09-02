@@ -62,6 +62,16 @@ class ValidateTimesheetUseCase:
         # llega, se cae al approver resuelto por email.
         approved_by_id = validator_employee_id or approver.id
 
+        import logging
+        logging.getLogger(__name__).info(
+            "ValidateTimesheet: validator_employee_id=%s approver_mail=%s "
+            "approver.id=%s -> approved_by_id=%s",
+            validator_employee_id,
+            approver_mail,
+            approver.id,
+            approved_by_id,
+        )
+
         # Validar en Odoo
         try:
             success = self.timesheet_gateway.validate(timesheet_ids, approved_by_id)

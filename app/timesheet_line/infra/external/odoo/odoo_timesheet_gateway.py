@@ -390,6 +390,9 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if not timesheet_line_ids:
             return True
 
+        import logging
+        log = logging.getLogger(__name__)
+
         self.odoo_client["models"].execute_kw(
             self.odoo_client["ODOO_DB"],
             self.odoo_client["uid"],
@@ -407,10 +410,18 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             "account.analytic.line",
             "read",
             [timesheet_line_ids],
-            {"fields": ["validated"]},
+            {"fields": ["validated", "x_validated_by"]},
         )
 
         all_validated = all(r["validated"] for r in results)
+        log.info(
+            "validate(): ids=%s all_validated=%s x_validated_by_actual=%s "
+            "approved_by_employee_id=%s",
+            timesheet_line_ids,
+            all_validated,
+            [r.get("x_validated_by") for r in results],
+            approved_by_employee_id,
+        )
 
         if all_validated:
             try:
@@ -422,11 +433,23 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                     "write",
                     [timesheet_line_ids, {"x_validated_by": approved_by_employee_id}],
                 )
+                check = self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "account.analytic.line",
+                    "read",
+                    [timesheet_line_ids],
+                    {"fields": ["x_validated_by"]},
+                )
+                log.info(
+                    "validate(): x_validated_by escrito=%s -> post-write=%s",
+                    approved_by_employee_id,
+                    [r.get("x_validated_by") for r in check],
+                )
             except Exception:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "No se pudo escribir x_validated_by (employee_id=%s) en Odoo, "
-                    "omitiendo escritura",
+                log.error(
+                    "No se pudo escribir x_validated_by (employee_id=%s) en Odoo",
                     approved_by_employee_id,
                     exc_info=True,
                 )
