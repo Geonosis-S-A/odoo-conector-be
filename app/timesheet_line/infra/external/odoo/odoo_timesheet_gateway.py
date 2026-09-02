@@ -377,19 +377,20 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             for line_data in odoo_data
         ]
 
-    def validate(self, timesheet_line_ids: list[int]) -> bool:
+    def validate(self, timesheet_line_ids: list[int], approved_by_employee_id: int) -> bool:
         """Valida múltiples líneas de hoja de tiempo en Odoo (marca validated=True).
 
         Args:
             timesheet_line_ids: Lista de IDs de las líneas de hoja de tiempo a validar
+            approved_by_employee_id: ID del empleado (hr.employee) que aprueba
 
         Returns:
-            bool: True si la validación fue exitosa, False en caso contrario
+            bool: True si todas las líneas quedaron validated=True, False en caso contrario
         """
         if not timesheet_line_ids:
             return True
 
-        response = self.odoo_client["models"].execute_kw(
+        self.odoo_client["models"].execute_kw(
             self.odoo_client["ODOO_DB"],
             self.odoo_client["uid"],
             self.odoo_client["ODOO_PASSWORD"],
@@ -399,7 +400,38 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             {},
         )
 
-        return bool(response)
+        results = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "read",
+            [timesheet_line_ids],
+            {"fields": ["validated"]},
+        )
+
+        all_validated = all(r["validated"] for r in results)
+
+        if all_validated:
+            try:
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "account.analytic.line",
+                    "write",
+                    [timesheet_line_ids, {"x_validated_by": approved_by_employee_id}],
+                )
+            except Exception:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "No se pudo escribir x_validated_by (employee_id=%s) en Odoo, "
+                    "omitiendo escritura",
+                    approved_by_employee_id,
+                    exc_info=True,
+                )
+
+        return all_validated
 
     def get_team_users(self, user_id: int, employee_id: int) -> list[Dict[str, Any]]:
         """

@@ -12,6 +12,7 @@ from app.email.domain.email_types import TimesheetEmailType
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import Roles, user_has_role
+from app.team.infra.db.repositories import SQLModelTeamRepository
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
     DetailedTimesheetLineResponse,
@@ -112,6 +113,12 @@ def get_notification_repository(
     return SQLModelTimesheetLineNotificationRepository(db)
 
 
+def get_team_repository(
+    db: Session = Depends(get_db),
+) -> SQLModelTeamRepository:
+    return SQLModelTeamRepository(db)
+
+
 @router.post("/", response_model=list[DetailedTimesheetLineResponse])
 async def create_timesheet_line(
     request: list[CargarHorasRequest],
@@ -184,6 +191,7 @@ async def list_timesheet_lines(
     ),
     task_gateway: TaskGateway = Depends(get_task_gateway),
     team: bool | None = Query(None, description="Filtrar por equipo"),
+    team_repository: SQLModelTeamRepository = Depends(get_team_repository),
 ):
     """
     Lista todas las líneas de timesheet con filtros obligatorios.
@@ -202,21 +210,32 @@ async def list_timesheet_lines(
     """
     roles: list[int] = current_user["roles"]
     is_admin = user_has_role(roles, Roles.approver)
-    if (
-        (employee_id is not None and current_user["user_id"] != employee_id)
-        or (employee_id is None)
-    ) and (not is_admin):
-        raise HTTPException(
-            status_code=403, detail="No tienes permisos para ver esta información"
-        )
+    current_employee_id: int = current_user["user_id"]
+
+    # Determinar si el usuario tiene acceso de equipo (admin o miembro con view en equipo local)
+    if not is_admin:
+        can_view_team = False
+        if team:
+            member = team_repository.get_member_record(current_employee_id)
+            can_view_team = member is not None
+
+        requires_elevated = (
+            employee_id is not None and current_employee_id != employee_id
+        ) or (employee_id is None)
+
+        if requires_elevated and not can_view_team:
+            raise HTTPException(
+                status_code=403, detail="No tienes permisos para ver esta información"
+            )
 
     try:
-        id = current_user["user_id"]  # esto es el employee_id del f
+        id = current_employee_id
         use_case = ListTimesheetLinesUseCase(
             gateway,
             employee_gateway,
             notification_repository,
             task_gateway,
+            team_repository,
         )
         timesheets = use_case.execute(
             employee_id,
@@ -328,29 +347,35 @@ async def validate_timesheet_lines(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
+    team_repository: SQLModelTeamRepository = Depends(get_team_repository),
     current_user: dict = Depends(get_current_user),
 ):
     """
     Valida múltiples líneas de timesheet (marca validated=True).
-
-    Args:
-        request: Objeto con lista de IDs de las líneas de timesheet a validar
-        gateway: Gateway de timesheet (inyectado)
-
-    Returns:
-        Dict[str, bool]: Resultado de la validación
+    Permitido para: admins (Roles.approver) y miembros de equipo con can_validate=True.
     """
     roles: list[int] = current_user["roles"]
     is_admin = user_has_role(roles, Roles.approver)
+    validator_employee_id: int = current_user["user_id"]
+
     if not is_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="No tienes permisos para validar las líneas de timesheet",
-        )
+        member = team_repository.get_member_record(validator_employee_id)
+        if member is None or not member.can_validate:
+            raise HTTPException(
+                status_code=403,
+                detail="No tienes permisos para validar las líneas de timesheet",
+            )
 
     try:
-        use_case = ValidateTimesheetUseCase(gateway, email_service, employee_gateway, notification_repository)
-        success = await use_case.execute(request.timesheetline_ids, request.approver_mail)
+        use_case = ValidateTimesheetUseCase(
+            gateway, email_service, employee_gateway, notification_repository, team_repository
+        )
+        success = await use_case.execute(
+            request.timesheetline_ids,
+            request.approver_mail,
+            is_admin=is_admin,
+            validator_employee_id=validator_employee_id,
+        )
         return {"success": success}
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)

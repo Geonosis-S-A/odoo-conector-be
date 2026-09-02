@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import List
+from typing import List, Optional
 from datetime import date
 
 from app.timesheet_line.api.schemas import TimesheetLineNotificationResponse
@@ -21,6 +21,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     EmployeeNotExistsError,
     EmployeeNotHasUserError,
 )
+from app.team.domain.repositories import TeamRepository
 
 
 class ListTimesheetLinesUseCase:
@@ -30,6 +31,7 @@ class ListTimesheetLinesUseCase:
         employee_gateway: EmployeeGateway,
         notification_repository: TimesheetLineNotificationRepository,
         task_gateway: TaskGateway | None = None,
+        team_repository: Optional[TeamRepository] = None,
     ) -> None:
         self.timesheet_line_gateway = timesheet_line_gateway
         self.employee_gateway = employee_gateway
@@ -37,6 +39,7 @@ class ListTimesheetLinesUseCase:
             notification_repository
         )
         self.task_gateway = task_gateway
+        self.team_repository = team_repository
 
     def execute(
         self,
@@ -61,10 +64,16 @@ class ListTimesheetLinesUseCase:
         user_id = None
         ids = None
         if id is not None and team and employee_id is None:
-            user_id = self.employee_gateway.get_user_id_by_employee_id(id)
-            if user_id is None:
-                raise EmployeeNotHasUserError(id)
-            if id is not None:
+            # 1. Buscar equipo en BD local (soporta sub_leaders sin usuario Odoo)
+            if self.team_repository:
+                local_ids = self.team_repository.get_team_member_ids_by_any_leader(id)
+                if local_ids:
+                    ids = local_ids
+            # 2. Fallback: jerarquía de Odoo (comportamiento legacy)
+            if ids is None:
+                user_id = self.employee_gateway.get_user_id_by_employee_id(id)
+                if user_id is None:
+                    raise EmployeeNotHasUserError(id)
                 users = self.timesheet_line_gateway.get_team_users(user_id, id)
                 ids = [user["id"] for user in users]
 

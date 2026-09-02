@@ -18,6 +18,7 @@ from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
 from app.saved_prompts.api.routers import router as saved_prompts_router
 from app.timesheet_templates.api.routers import router as timesheet_templates_router
+from app.team.api.routes import router as team_router
 import logging
 
 
@@ -135,6 +136,7 @@ app.include_router(accounting_router, prefix=API_PREFIX)
 app.include_router(agent_router, prefix=API_PREFIX)
 app.include_router(saved_prompts_router, prefix=API_PREFIX)
 app.include_router(timesheet_templates_router, prefix=API_PREFIX)
+app.include_router(team_router, prefix=API_PREFIX)
 
 
 @app.get("/")

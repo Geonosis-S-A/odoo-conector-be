@@ -91,9 +91,39 @@ class TestValidateTimesheetUseCase:
         # Assert
         assert result is True
         mock_gateway.get_by_ids.assert_called_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_called_once_with([1], 999)
         mock_employee_gateway.get_by_email.assert_called_once_with(approver_mail)
         mock_email_service.send_approved_mail.assert_called_once()
+
+    async def test_validate_uses_validator_employee_id_when_provided(
+        self, use_case, mock_gateway, mock_employee_gateway
+    ):
+        """El id enviado a Odoo debe ser el del usuario Geo que ejecuta la acción,
+        no el del approver resuelto por email."""
+        # Arrange
+        timesheet_ids = [1]
+        approver_mail = "approver@test.com"
+        mock_gateway.get_by_ids.return_value = [
+            DetailedTimesheetLine(
+                id=1,
+                name="Test Timesheet",
+                employee_id=1,
+                project=Project(id=1, name="Test Project"),
+                task=None,
+                hours=8.0,
+                date=date(2024, 3, 20),
+                validated=False,
+            )
+        ]
+        mock_gateway.validate.return_value = True
+
+        # Act
+        await use_case.execute(
+            timesheet_ids, approver_mail, validator_employee_id=42
+        )
+
+        # Assert
+        mock_gateway.validate.assert_called_once_with([1], 42)
 
     async def test_validate_multiple_timesheets_success(
         self, use_case, mock_gateway, mock_email_service, mock_employee_gateway
@@ -144,7 +174,7 @@ class TestValidateTimesheetUseCase:
         # Assert
         assert result is True
         mock_gateway.get_by_ids.assert_called_with([1, 2, 3])
-        mock_gateway.validate.assert_called_once_with([1, 2, 3])
+        mock_gateway.validate.assert_called_once_with([1, 2, 3], 999)
         mock_employee_gateway.get_by_email.assert_called_once_with(approver_mail)
         mock_email_service.send_approved_mail.assert_called_once()
 
@@ -230,7 +260,7 @@ class TestValidateTimesheetUseCase:
             await use_case.execute(timesheet_ids, approver_mail)
 
         mock_gateway.get_by_ids.assert_called_once_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_called_once_with([1], 999)
 
     async def test_validate_timesheet_validate_exception(self, use_case, mock_gateway):
         """Test que verifica el comportamiento cuando validate lanza una excepción."""
@@ -261,7 +291,7 @@ class TestValidateTimesheetUseCase:
             await use_case.execute(timesheet_ids, approver_mail)
 
         mock_gateway.get_by_ids.assert_called_once_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_called_once_with([1], 999)
 
     async def test_validate_empty_list(self, use_case, mock_gateway):
         """Test que verifica el comportamiento cuando se pasa una lista vacía de IDs."""
@@ -328,7 +358,7 @@ class TestValidateTimesheetUseCase:
         )
 
         mock_gateway.get_by_ids.assert_called_once_with([1, 2])
-        mock_gateway.validate.assert_called_once_with([1, 2])
+        mock_gateway.validate.assert_called_once_with([1, 2], 999)
 
     async def test_validate_timesheet_approver_not_found(
         self, use_case, mock_gateway, mock_employee_gateway
@@ -351,7 +381,6 @@ class TestValidateTimesheetUseCase:
                 validated=False,
             )
         ]
-        mock_gateway.validate.return_value = True
         # Mock para que el approver no se encuentre
         mock_employee_gateway.get_by_email.return_value = None
 
@@ -362,6 +391,7 @@ class TestValidateTimesheetUseCase:
         ):
             await use_case.execute(timesheet_ids, approver_mail)
 
+        # El approver se verifica antes de validar en Odoo
         mock_gateway.get_by_ids.assert_called_once_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_not_called()
         mock_employee_gateway.get_by_email.assert_called_once_with(approver_mail)
