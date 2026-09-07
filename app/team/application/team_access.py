@@ -21,6 +21,9 @@ class TeamMemberInfo:
 _VIEW_LEVELS = {PermissionLevel.view, PermissionLevel.validate}
 _VALIDATE_LEVELS = {PermissionLevel.validate}
 
+# Empleados ya logueados como "sin res.users": evita repetir el log en cada request.
+_logged_no_user: Set[int] = set()
+
 
 class TeamAccessService:
     """Resuelve equipos desde la jerarquía de Odoo y los cruza con los permisos locales.
@@ -57,11 +60,16 @@ class TeamAccessService:
             leader_employee_id
         )
         if user_id is None:
-            logger.warning(
-                "El empleado %s no tiene res.users vinculado en Odoo; su "
-                "equipo se resolverá vacío (no podrá ver ni validar equipo).",
-                leader_employee_id,
-            )
+            # Normal para un miembro sin usuario Odoo. Sólo importa si la
+            # persona debería liderar un equipo (ahí se verá como "equipo vacío").
+            if leader_employee_id not in _logged_no_user:
+                _logged_no_user.add(leader_employee_id)
+                logger.info(
+                    "El empleado %s no tiene res.users en Odoo: no se resuelve "
+                    "equipo por jerarquía (su acceso, si tiene, viene de un "
+                    "permiso otorgado).",
+                    leader_employee_id,
+                )
             team: List[Dict[str, Any]] = []
         else:
             team = (
