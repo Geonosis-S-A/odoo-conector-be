@@ -1,4 +1,5 @@
 import os
+import threading
 from typing import Optional, TypedDict, cast
 from dotenv import load_dotenv
 from fastapi import HTTPException, Depends
@@ -51,6 +52,8 @@ class OdooClient:
         self._uid: Optional[int] = None
         self._models: Optional[xmlrpc.client.ServerProxy] = None
         self._common: Optional[xmlrpc.client.ServerProxy] = None
+        # Protege la autenticación perezosa ante ráfagas concurrentes (threadpool)
+        self._auth_lock = threading.Lock()
 
     @property
     def uid(self) -> Optional[int]:
@@ -110,18 +113,26 @@ class OdooClient:
             HTTPException: Si hay un error al conectar con Odoo
         """
         try:
-            if not self.uid:
-                self.authenticate()
+            if not self._uid:
+                with self._auth_lock:
+                    if not self._uid:
+                        self.authenticate()
 
-            if not self.models:
-                self.models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
+            # Un ServerProxy nuevo por cada llamada: xmlrpc.client NO es
+            # thread-safe (comparte una única http.client.HTTPConnection).
+            # Con los endpoints sync de FastAPI corriendo en un threadpool,
+            # un proxy global compartido provoca
+            # "http.client.CannotSendRequest: Request-sent" bajo concurrencia.
+            # Crear el proxy es barato (no abre socket hasta la primera llamada);
+            # las llamadas dentro de un mismo request reutilizan la conexión.
+            models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
 
-            if not self.uid or not self.models:
+            if not self._uid:
                 raise Exception("No se pudo establecer la conexión con Odoo")
 
             return OdooConnection(
-                uid=self.uid,
-                models=self.models,
+                uid=self._uid,
+                models=models,
                 ODOO_DB=self.db,
                 ODOO_PASSWORD=self.password,
             )

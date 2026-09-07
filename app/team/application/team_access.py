@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set
 
@@ -5,6 +6,8 @@ from app.team.domain.models import PermissionLevel
 from app.team.domain.repositories import TeamPermissionRepository
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -54,6 +57,11 @@ class TeamAccessService:
             leader_employee_id
         )
         if user_id is None:
+            logger.warning(
+                "El empleado %s no tiene res.users vinculado en Odoo; su "
+                "equipo se resolverá vacío (no podrá ver ni validar equipo).",
+                leader_employee_id,
+            )
             team: List[Dict[str, Any]] = []
         else:
             team = (

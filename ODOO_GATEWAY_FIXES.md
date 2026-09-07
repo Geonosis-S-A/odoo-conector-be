@@ -445,9 +445,12 @@ Los endpoints **no cambian de forma**; cambia quién tiene permiso.
 
 La API previa de equipos (`POST/GET/PUT/DELETE /teams`, `/teams/{id}/members`, roles `leader/pm/sub_leader/member`) **fue eliminada**. Reemplazar todo el consumo por `/teams/mine` (+ `/teams/{leaderId}` para la vista admin).
 
-## ⏳ Pendiente (fuera de este alcance)
+## ⏳ YA ESTA DESARROLLADO EN ODOO
 
 - Módulo Odoo `geo_timesheet_approver/` con campo `x_validated_by` en `account.analytic.line`.
+
+## FALTA IMPLEMENTAR 
+
 - Rol *Timesheets Administrator* al usuario de servicio en Odoo.
 
 ---
