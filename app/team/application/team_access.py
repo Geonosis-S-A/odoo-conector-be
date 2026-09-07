@@ -121,3 +121,41 @@ class TeamAccessService:
 
     def can_validate_team(self, employee_id: int) -> bool:
         return bool(self.validatable_employee_ids(employee_id))
+
+    def visible_team_members(self, employee_id: int) -> List[TeamMemberInfo]:
+        """Miembros (id + nombre + email) cuyas horas puede VER ``employee_id``.
+
+        Mismo conjunto que ``visible_employee_ids`` pero con los datos de
+        cada persona (para pintar la lista en el front). ``level`` va siempre
+        en None: acá no se administran permisos.
+        """
+        by_id: Dict[int, TeamMemberInfo] = {}
+
+        def _add(u: Dict[str, Any]) -> None:
+            eid = u["id"]
+            if eid == employee_id or eid in by_id:
+                return
+            by_id[eid] = TeamMemberInfo(
+                employee_odoo_id=eid,
+                name=u.get("name"),
+                email=u.get("work_email") or None,
+                level=None,
+            )
+
+        # Equipo propio (si lidera en Odoo)
+        for u in self.get_led_team(employee_id):
+            _add(u)
+
+        # Equipos donde tiene permiso como miembro
+        for perm in self.permission_repo.list_by_member(employee_id):
+            leader_id = perm.leader_employee_odoo_id
+            team = self.get_led_team(leader_id)
+            if employee_id not in {u["id"] for u in team}:
+                # El permiso dejó de aplicar: Odoo sacó a la persona del equipo.
+                continue
+            for u in team:
+                if u["id"] == leader_id:
+                    continue
+                _add(u)
+
+        return list(by_id.values())

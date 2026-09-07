@@ -116,3 +116,29 @@ class TestTeamAccessService:
 
         assert service.get_led_team(99) == []
         assert service.is_leader(99) is False
+
+    def test_visible_team_members_for_leader(self, service, permission_repo):
+        permission_repo.list_by_member.return_value = []
+
+        members = service.visible_team_members(10)
+        by_id = {m.employee_odoo_id: m for m in members}
+        assert set(by_id) == {1, 2, 3}
+        assert by_id[1].name == "Ana"
+        assert by_id[1].email == "ana@x.com"
+        assert by_id[3].email is None  # work_email False -> None
+        assert all(m.level is None for m in members)
+
+    def test_visible_team_members_for_member_with_permission(
+        self, service, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = [
+            _perm(10, 2, PermissionLevel.view)
+        ]
+
+        members = service.visible_team_members(2)
+        assert {m.employee_odoo_id for m in members} == {1, 3}
+
+    def test_visible_team_members_empty_when_no_access(self, service, permission_repo):
+        permission_repo.list_by_member.return_value = []
+
+        assert service.visible_team_members(1) == []

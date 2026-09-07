@@ -8,7 +8,13 @@ from app.team.api.dependencies import (
     get_permission_repository,
     get_team_access_service,
 )
-from app.team.api.schemas import SetPermissionRequest, TeamMemberView, TeamView
+from app.team.api.schemas import (
+    MyTeamAccessView,
+    SetPermissionRequest,
+    TeamMemberBasicView,
+    TeamMemberView,
+    TeamView,
+)
 from app.team.application.team_access import TeamAccessService, TeamMemberInfo
 from app.team.application.use_cases.get_team import GetTeamUseCase
 from app.team.application.use_cases.set_member_permission import (
@@ -80,6 +86,29 @@ def _apply_permission(
             return _member_to_view(m)
     raise HTTPException(
         status_code=404, detail="El miembro ya no pertenece al equipo"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Cualquier usuario: qué puede hacer con "su equipo" (para el gating del front)
+# ---------------------------------------------------------------------------
+@router.get("/my-access", response_model=MyTeamAccessView)
+def get_my_team_access(
+    access: TeamAccessService = Depends(get_team_access_service),
+    current_user: dict = Depends(get_current_user),
+):
+    employee_id: int = current_user["user_id"]
+    members = access.visible_team_members(employee_id)
+    return MyTeamAccessView(
+        is_leader=access.is_leader(employee_id),
+        can_view_team=bool(members),
+        can_validate_team=access.can_validate_team(employee_id),
+        members=[
+            TeamMemberBasicView(
+                employee_odoo_id=m.employee_odoo_id, name=m.name, email=m.email
+            )
+            for m in members
+        ],
     )
 
 

@@ -358,6 +358,35 @@ Base URL: `/api/v1`. Todas las llamadas con el **Bearer token** actual (mismo au
 - El equipo **no se administra**: es la jerarquía de Odoo en vivo.
 - Lo único editable es el **permiso por persona** (`null` / `"view"` / `"validate"`).
 
+### 0. `GET /teams/my-access` — gating del front (llamar al cargar la app)
+
+Una sola llamada que dice qué puede hacer el usuario logueado con "su equipo".
+Sirve para decidir qué menús / pantallas / botones mostrar, incluido el
+estado **intermedio** (ver el equipo sin poder aprobar).
+
+**200** (siempre 200, incluso sin acceso)
+```json
+{
+  "is_leader": false,
+  "can_view_team": true,
+  "can_validate_team": false,
+  "members": [
+    { "employee_odoo_id": 101, "name": "Ana Pérez", "email": "ana@x.com" },
+    { "employee_odoo_id": 102, "name": "Beto Ruiz", "email": null }
+  ]
+}
+```
+
+`members` = los empleados cuyas horas puede VER (equipo propio si lidera, o la
+unión de los equipos de sus líderes otorgantes, sin el líder ni él mismo).
+
+| Respuesta | UI |
+| --------- | -- |
+| `can_view_team: false` | Sin sección de equipo. Solo sus horas. |
+| `can_view_team: true` + `can_validate_team: false` | **Intermedio**: pantalla de equipo listando `members` + sus horas (`GET /timesheet/?team=true`), **sin botón Validar**. |
+| `can_validate_team: true` (o `is_leader: true`) | Igual + botón **Validar**. |
+| `is_leader: true` | Además, mostrar la pantalla de administración de permisos (`GET /teams/mine`). |
+
 ### 1. `GET /teams/mine` — pantalla del líder
 
 Trae el equipo del usuario logueado (según Odoo) + el permiso actual de cada uno.
@@ -421,14 +450,15 @@ Los endpoints **no cambian de forma**; cambia quién tiene permiso.
 
 ### Cómo decidir qué mostrar
 
-| Llamada | Resultado | UI |
-| ------- | --------- | -- |
-| `GET /teams/mine` | 200 | Es líder → pantalla de permisos + vista equipo + validar |
-| `GET /teams/mine` | 403 | No es líder → depende de sus permisos como miembro |
-| `GET /timesheet/?team=true` | 200 / 403 | Mostrar / ocultar vista "equipo" |
-| `POST /timesheet/validate` | 403 al intentar | Ocultar acción de validar |
+Usar **`GET /teams/my-access`** (sección 0) al cargar la app. Con esa única
+respuesta el front decide todo:
 
-> No hay endpoint "¿qué puedo hacer yo?". Patrón: `GET /teams/mine` para saber si es líder; para el rol de miembro, intentar `GET /timesheet/?team=true` y degradar ante 403.
+| `my-access` | UI |
+| ----------- | -- |
+| `can_view_team: false` | Nada de equipo. |
+| `can_view_team: true`, `can_validate_team: false` | Vista de equipo (lista `members` + `GET /timesheet/?team=true`), **sin** botón Validar. |
+| `can_validate_team: true` | Vista de equipo **con** botón Validar (`POST /timesheet/validate`). |
+| `is_leader: true` | Además, pantalla de permisos (`GET /teams/mine` + `PUT`). |
 
 ### Errores — resumen
 
