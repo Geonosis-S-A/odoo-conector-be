@@ -443,6 +443,14 @@ Los endpoints **no cambian de forma**; cambia quién tiene permiso.
   - Funciona para: admins, líderes de Odoo, y miembros con `level` `view` **o** `validate`.
   - **403** si no aplica → no ofrecer la vista "equipo" a ese usuario.
   - Para un miembro no incluye las horas del líder.
+  - **Cada línea trae `can_validate: bool`** = el usuario logueado puede validar
+    ESA línea. El front muestra el botón "Validar" por fila donde `can_validate: true`.
+    - **admin** (`Roles.approver`): `can_validate = !validated` en cualquier
+      línea, **con o sin** `team=true`.
+    - **miembro / líder**: `can_validate = (employee_id ∈ su alcance de
+      validación) && !validated`, sólo en requests con `team=true`.
+    - resto de casos: `false`.
+    > No existe ningún campo `is_approver` en esta API — usar `can_validate`.
 - `POST /timesheet/validate` (body actual: `{ "timesheetline_ids": [...], "approver_mail": "..." }`)
   - Permitido para: admins, líderes de Odoo, y miembros con `level: "validate"`.
   - **403** si no tiene ese permiso.

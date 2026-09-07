@@ -50,6 +50,7 @@ class ListTimesheetLinesUseCase:
         validated: bool | None,
         team: bool | None,
         id: int | None,
+        is_admin: bool = False,
     ) -> List[DetailedTimesheetLine]:
         # Validación de employee_id
         if employee_id is not None and employee_id <= 0:
@@ -85,6 +86,23 @@ class ListTimesheetLinesUseCase:
         timesheets = self.timesheet_line_gateway.all(
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
         )
+
+        # Marcar por línea si el usuario puede validarla (para el botón del front).
+        if timesheets and is_admin:
+            # El admin puede validar cualquier línea no validada, con o sin team.
+            for line in timesheets:
+                line.can_validate = not line.validated
+        elif (
+            team
+            and timesheets
+            and self.team_access is not None
+            and id is not None
+        ):
+            validatable = self.team_access.validatable_employee_ids(id)
+            for line in timesheets:
+                line.can_validate = (
+                    line.employee_id in validatable and not line.validated
+                )
 
         if self.task_gateway and timesheets:
             task_ids = [t.task.id for t in timesheets if t.task is not None]

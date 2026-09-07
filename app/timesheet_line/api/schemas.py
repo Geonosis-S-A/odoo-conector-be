@@ -32,6 +32,8 @@ class DetailedTimesheetLineResponse(BaseModel):
     create_date: Optional[datetime] = None
     validated: bool
     notification: Optional[TimesheetLineNotificationResponse] = None
+    # Vista de equipo: True si el usuario logueado puede validar esta línea.
+    can_validate: bool = False
 
 
 class EditTimesheetRequest(BaseModel):

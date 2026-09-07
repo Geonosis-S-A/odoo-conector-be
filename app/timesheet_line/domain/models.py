@@ -54,6 +54,8 @@ class DetailedTimesheetLine:
     validated: bool
     create_date: Optional[datetime] = None
     notification: Optional[TimesheetLineNotificationResponse] = None
+    # True si el usuario que consulta puede validar ESTA línea (vista de equipo).
+    can_validate: bool = False
 
 
 @dataclass

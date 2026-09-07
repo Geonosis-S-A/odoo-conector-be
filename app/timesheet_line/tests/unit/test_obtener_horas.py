@@ -1197,3 +1197,77 @@ class TestListTimesheetLinesUseCase:
             use_case.execute(employee_id, date_from, date_to, None, None, False, id)
 
         assert "Notification DB error" in str(exc_info.value)
+
+
+class TestListTimesheetLinesCanValidateFlag:
+    """`can_validate` por línea en la vista de equipo (`team=True`)."""
+
+    def _line(self, line_id: int, employee_id: int, validated: bool):
+        return DetailedTimesheetLine(
+            id=line_id,
+            name=f"ts-{line_id}",
+            employee_id=employee_id,
+            project=Project(id=1, name="P"),
+            task=None,
+            hours=8.0,
+            date=date(2026, 9, 8),
+            validated=validated,
+        )
+
+    def _use_case(self, lines, team_access):
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = lines
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        emp_gw.all.return_value = []
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        notif.get_by_timesheet_ids.return_value = []
+        return ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
+        )
+
+    def test_member_can_validate_only_lines_in_scope_and_pending(self):
+        lines = [
+            self._line(1, employee_id=20, validated=False),  # en alcance, pendiente
+            self._line(2, employee_id=20, validated=True),   # en alcance, ya validada
+            self._line(3, employee_id=99, validated=False),  # fuera de alcance
+        ]
+        team_access = Mock()
+        team_access.visible_employee_ids.return_value = {20, 99}
+        team_access.validatable_employee_ids.return_value = {20}
+
+        result = self._use_case(lines, team_access).execute(
+            None, None, None, None, None, True, 5
+        )
+
+        by_id = {l.id: l for l in result}
+        assert by_id[1].can_validate is True
+        assert by_id[2].can_validate is False
+        assert by_id[3].can_validate is False
+
+    def test_admin_can_validate_every_pending_line_even_without_team(self):
+        lines = [
+            self._line(1, employee_id=20, validated=False),
+            self._line(2, employee_id=99, validated=True),
+        ]
+        team_access = Mock()
+
+        result = self._use_case(lines, team_access).execute(
+            20, None, None, None, None, False, 5, is_admin=True
+        )
+
+        by_id = {l.id: l for l in result}
+        assert by_id[1].can_validate is True
+        assert by_id[2].can_validate is False
+        # admin no depende de validatable_employee_ids
+        team_access.validatable_employee_ids.assert_not_called()
+
+    def test_non_team_request_leaves_can_validate_false(self):
+        lines = [self._line(1, employee_id=5, validated=False)]
+        team_access = Mock()
+        result = self._use_case(lines, team_access).execute(
+            5, None, None, None, None, False, 5
+        )
+
+        assert result[0].can_validate is False
+        team_access.validatable_employee_ids.assert_not_called()

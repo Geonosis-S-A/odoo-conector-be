@@ -239,6 +239,7 @@ async def list_timesheet_lines(
             validated,
             team,
             id,
+            is_admin=is_admin,
         )
         return timesheets
     except InvalidEmployeeIdError as e:
