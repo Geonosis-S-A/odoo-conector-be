@@ -1,44 +1,21 @@
-from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel
 
-from app.team.domain.models import TeamRole
 
-
-class TeamMemberResponse(BaseModel):
-    id: int
-    team_id: int
+class TeamMemberView(BaseModel):
     employee_odoo_id: int
-    role: TeamRole
-    can_validate: bool
-    created_at: Optional[datetime] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    # None = sin permiso: la persona sólo ve sus propias horas
+    level: Optional[Literal["view", "validate"]] = None
 
 
-class TeamResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str] = None
-    created_at: Optional[datetime] = None
-    members: List[TeamMemberResponse] = []
+class TeamView(BaseModel):
+    leader_employee_odoo_id: int
+    members: List[TeamMemberView] = []
 
 
-class CreateTeamRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-
-class UpdateTeamRequest(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-
-class AddMemberRequest(BaseModel):
-    employee_odoo_id: int
-    role: TeamRole
-    can_validate: bool = False
-
-
-class UpdateMemberRequest(BaseModel):
-    role: TeamRole
-    can_validate: bool = False
+class SetPermissionRequest(BaseModel):
+    # "none" elimina el permiso (la persona vuelve a ver sólo sus horas)
+    level: Literal["view", "validate", "none"]

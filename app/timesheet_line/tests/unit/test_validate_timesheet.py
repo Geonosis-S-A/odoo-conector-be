@@ -360,6 +360,59 @@ class TestValidateTimesheetUseCase:
         mock_gateway.get_by_ids.assert_called_once_with([1, 2])
         mock_gateway.validate.assert_called_once_with([1, 2], 999)
 
+    async def test_non_admin_cannot_validate_outside_validatable_team(
+        self, mock_gateway, mock_email_service, mock_employee_gateway,
+        mock_notification_repository,
+    ):
+        """Un no-admin no puede validar horas de empleados fuera de su alcance."""
+        team_access = Mock()
+        team_access.validatable_employee_ids.return_value = {2, 3}
+        use_case = ValidateTimesheetUseCase(
+            mock_gateway, mock_email_service, mock_employee_gateway,
+            mock_notification_repository, team_access,
+        )
+        mock_gateway.get_by_ids.return_value = [
+            DetailedTimesheetLine(
+                id=1, name="ts", employee_id=7,
+                project=Project(id=1, name="P"), task=None, hours=8.0,
+                date=date(2024, 3, 20), validated=False,
+            )
+        ]
+
+        with pytest.raises(TimesheetValidateError, match="fuera de tu equipo"):
+            await use_case.execute(
+                [1], "approver@test.com", is_admin=False, validator_employee_id=5
+            )
+        mock_gateway.validate.assert_not_called()
+        team_access.validatable_employee_ids.assert_called_once_with(5)
+
+    async def test_non_admin_validates_within_validatable_team(
+        self, mock_gateway, mock_email_service, mock_employee_gateway,
+        mock_notification_repository,
+    ):
+        """Un no-admin sí puede validar horas de empleados dentro de su alcance."""
+        team_access = Mock()
+        team_access.validatable_employee_ids.return_value = {2, 3, 7}
+        use_case = ValidateTimesheetUseCase(
+            mock_gateway, mock_email_service, mock_employee_gateway,
+            mock_notification_repository, team_access,
+        )
+        mock_gateway.get_by_ids.return_value = [
+            DetailedTimesheetLine(
+                id=1, name="ts", employee_id=7,
+                project=Project(id=1, name="P"), task=None, hours=8.0,
+                date=date(2024, 3, 20), validated=False,
+            )
+        ]
+        mock_gateway.validate.return_value = True
+
+        result = await use_case.execute(
+            [1], "approver@test.com", is_admin=False, validator_employee_id=5
+        )
+
+        assert result is True
+        mock_gateway.validate.assert_called_once_with([1], 5)
+
     async def test_validate_timesheet_approver_not_found(
         self, use_case, mock_gateway, mock_employee_gateway
     ):

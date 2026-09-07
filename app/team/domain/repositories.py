@@ -1,58 +1,33 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
 
-from app.team.domain.models import Team, TeamMember
+from app.team.domain.models import TeamMemberPermission
 
 
-class TeamRepository(ABC):
-
-    @abstractmethod
-    def create(self, team: Team) -> Team: ...
+class TeamPermissionRepository(ABC):
+    """Persistencia de los permisos (líder, miembro) -> nivel."""
 
     @abstractmethod
-    def get_by_id(self, team_id: int) -> Optional[Team]: ...
+    def get(
+        self, leader_employee_odoo_id: int, member_employee_odoo_id: int
+    ) -> Optional[TeamMemberPermission]: ...
 
     @abstractmethod
-    def get_all(self) -> List[Team]: ...
+    def list_by_leader(
+        self, leader_employee_odoo_id: int
+    ) -> List[TeamMemberPermission]: ...
 
     @abstractmethod
-    def get_by_employee_odoo_id(self, employee_odoo_id: int) -> List[Team]:
-        """Retorna todos los equipos donde el empleado es miembro (cualquier rol)."""
+    def list_by_member(
+        self, member_employee_odoo_id: int
+    ) -> List[TeamMemberPermission]: ...
+
+    @abstractmethod
+    def upsert(self, permission: TeamMemberPermission) -> TeamMemberPermission:
+        """Crea o actualiza el permiso para el par (líder, miembro)."""
         ...
 
     @abstractmethod
-    def update(self, team: Team) -> Team: ...
-
-    @abstractmethod
-    def delete(self, team_id: int) -> bool: ...
-
-    @abstractmethod
-    def add_member(self, member: TeamMember) -> TeamMember: ...
-
-    @abstractmethod
-    def update_member(self, member: TeamMember) -> TeamMember: ...
-
-    @abstractmethod
-    def remove_member(self, team_id: int, employee_odoo_id: int) -> bool: ...
-
-    @abstractmethod
-    def get_member(self, team_id: int, employee_odoo_id: int) -> Optional[TeamMember]: ...
-
-    @abstractmethod
-    def get_member_employee_ids(self, team_id: int) -> List[int]:
-        """Retorna los employee_odoo_id de todos los miembros de un equipo."""
-        ...
-
-    @abstractmethod
-    def get_member_record(self, employee_odoo_id: int) -> Optional[TeamMember]:
-        """Retorna el registro de miembro del empleado (busca en todos los equipos)."""
-        ...
-
-    @abstractmethod
-    def get_team_member_ids_by_any_leader(self, employee_odoo_id: int) -> List[int]:
-        """
-        Si el empleado es leader/pm/sub_leader (con view) en algún equipo,
-        retorna los employee_odoo_id de los demás miembros de ese equipo.
-        Retorna lista vacía si no pertenece a ningún equipo con acceso de vista.
-        """
-        ...
+    def delete(
+        self, leader_employee_odoo_id: int, member_employee_odoo_id: int
+    ) -> bool: ...

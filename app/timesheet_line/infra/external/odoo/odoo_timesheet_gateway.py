@@ -157,11 +157,11 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         proyecto_interno = [3, 1, 87, 2]
         domain.append(("project_id", "not in", proyecto_interno))
 
-        if team and user_id is not None:
-            team_domain = [
-                ("employee_id", "in", team_members_ids),
-            ]
-            domain.extend(team_domain)
+        if team:
+            # La vista de equipo siempre se acota a la lista explícita de
+            # empleados resuelta por TeamAccessService. Lista vacía => sin
+            # resultados (nunca "todos").
+            domain.append(("employee_id", "in", team_members_ids or []))
 
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],

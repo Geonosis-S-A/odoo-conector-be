@@ -2,168 +2,88 @@ from typing import List, Optional
 
 from sqlmodel import Session, select
 
-from app.team.domain.models import Team, TeamMember, TeamRole, ROLES_WITH_TEAM_VIEW
-from app.team.domain.repositories import TeamRepository
-from app.team.infra.db.models import TeamMemberModel, TeamModel
+from app.team.domain.models import PermissionLevel, TeamMemberPermission
+from app.team.domain.repositories import TeamPermissionRepository
+from app.team.infra.db.models import TeamMemberPermissionModel
 
 
-def _member_model_to_domain(m: TeamMemberModel) -> TeamMember:
-    return TeamMember(
+def _to_domain(m: TeamMemberPermissionModel) -> TeamMemberPermission:
+    return TeamMemberPermission(
         id=m.id,
-        team_id=m.team_id,
-        employee_odoo_id=m.employee_odoo_id,
-        role=TeamRole(m.role),
-        can_validate=m.can_validate,
+        leader_employee_odoo_id=m.leader_employee_odoo_id,
+        member_employee_odoo_id=m.member_employee_odoo_id,
+        level=PermissionLevel(m.level),
         created_at=m.created_at,
     )
 
 
-def _team_model_to_domain(t: TeamModel) -> Team:
-    return Team(
-        id=t.id,
-        name=t.name,
-        description=t.description,
-        created_at=t.created_at,
-        members=[_member_model_to_domain(m) for m in (t.members or [])],
-    )
-
-
-class SQLModelTeamRepository(TeamRepository):
+class SQLModelTeamPermissionRepository(TeamPermissionRepository):
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def create(self, team: Team) -> Team:
-        model = TeamModel(name=team.name, description=team.description)
-        self.db.add(model)
-        self.db.commit()
-        self.db.refresh(model)
-        return _team_model_to_domain(model)
-
-    def get_by_id(self, team_id: int) -> Optional[Team]:
-        model = self.db.get(TeamModel, team_id)
-        if model is None:
-            return None
-        self.db.refresh(model)
-        return _team_model_to_domain(model)
-
-    def get_all(self) -> List[Team]:
-        models = self.db.exec(select(TeamModel)).all()
-        return [_team_model_to_domain(t) for t in models]
-
-    def get_by_employee_odoo_id(self, employee_odoo_id: int) -> List[Team]:
-        member_rows = self.db.exec(
-            select(TeamMemberModel).where(
-                TeamMemberModel.employee_odoo_id == employee_odoo_id
-            )
-        ).all()
-        teams = []
-        seen = set()
-        for member in member_rows:
-            if member.team_id not in seen:
-                seen.add(member.team_id)
-                team_model = self.db.get(TeamModel, member.team_id)
-                if team_model:
-                    teams.append(_team_model_to_domain(team_model))
-        return teams
-
-    def update(self, team: Team) -> Team:
-        model = self.db.get(TeamModel, team.id)
-        if model is None:
-            raise ValueError(f"Equipo {team.id} no encontrado")
-        model.name = team.name
-        model.description = team.description
-        self.db.add(model)
-        self.db.commit()
-        self.db.refresh(model)
-        return _team_model_to_domain(model)
-
-    def delete(self, team_id: int) -> bool:
-        model = self.db.get(TeamModel, team_id)
-        if model is None:
-            return False
-        # Eliminar miembros primero
-        members = self.db.exec(
-            select(TeamMemberModel).where(TeamMemberModel.team_id == team_id)
-        ).all()
-        for m in members:
-            self.db.delete(m)
-        self.db.delete(model)
-        self.db.commit()
-        return True
-
-    def add_member(self, member: TeamMember) -> TeamMember:
-        model = TeamMemberModel(
-            team_id=member.team_id,
-            employee_odoo_id=member.employee_odoo_id,
-            role=member.role.value,
-            can_validate=member.can_validate,
-        )
-        self.db.add(model)
-        self.db.commit()
-        self.db.refresh(model)
-        return _member_model_to_domain(model)
-
-    def update_member(self, member: TeamMember) -> TeamMember:
-        model = self.db.get(TeamMemberModel, member.id)
-        if model is None:
-            raise ValueError(f"Miembro {member.id} no encontrado")
-        model.role = member.role.value
-        model.can_validate = member.can_validate
-        self.db.add(model)
-        self.db.commit()
-        self.db.refresh(model)
-        return _member_model_to_domain(model)
-
-    def remove_member(self, team_id: int, employee_odoo_id: int) -> bool:
-        model = self.db.exec(
-            select(TeamMemberModel).where(
-                TeamMemberModel.team_id == team_id,
-                TeamMemberModel.employee_odoo_id == employee_odoo_id,
+    def _find(
+        self, leader_employee_odoo_id: int, member_employee_odoo_id: int
+    ) -> Optional[TeamMemberPermissionModel]:
+        return self.db.exec(
+            select(TeamMemberPermissionModel).where(
+                TeamMemberPermissionModel.leader_employee_odoo_id
+                == leader_employee_odoo_id,
+                TeamMemberPermissionModel.member_employee_odoo_id
+                == member_employee_odoo_id,
             )
         ).first()
-        if model is None:
-            return False
-        self.db.delete(model)
-        self.db.commit()
-        return True
 
-    def get_member(self, team_id: int, employee_odoo_id: int) -> Optional[TeamMember]:
-        model = self.db.exec(
-            select(TeamMemberModel).where(
-                TeamMemberModel.team_id == team_id,
-                TeamMemberModel.employee_odoo_id == employee_odoo_id,
-            )
-        ).first()
-        if model is None:
-            return None
-        return _member_model_to_domain(model)
+    def get(
+        self, leader_employee_odoo_id: int, member_employee_odoo_id: int
+    ) -> Optional[TeamMemberPermission]:
+        m = self._find(leader_employee_odoo_id, member_employee_odoo_id)
+        return _to_domain(m) if m is not None else None
 
-    def get_member_employee_ids(self, team_id: int) -> List[int]:
+    def list_by_leader(
+        self, leader_employee_odoo_id: int
+    ) -> List[TeamMemberPermission]:
         rows = self.db.exec(
-            select(TeamMemberModel.employee_odoo_id).where(
-                TeamMemberModel.team_id == team_id
+            select(TeamMemberPermissionModel).where(
+                TeamMemberPermissionModel.leader_employee_odoo_id
+                == leader_employee_odoo_id
             )
         ).all()
-        return list(rows)
+        return [_to_domain(m) for m in rows]
 
-    def get_member_record(self, employee_odoo_id: int) -> Optional[TeamMember]:
-        model = self.db.exec(
-            select(TeamMemberModel).where(
-                TeamMemberModel.employee_odoo_id == employee_odoo_id
+    def list_by_member(
+        self, member_employee_odoo_id: int
+    ) -> List[TeamMemberPermission]:
+        rows = self.db.exec(
+            select(TeamMemberPermissionModel).where(
+                TeamMemberPermissionModel.member_employee_odoo_id
+                == member_employee_odoo_id
             )
-        ).first()
-        if model is None:
-            return None
-        return _member_model_to_domain(model)
+        ).all()
+        return [_to_domain(m) for m in rows]
 
-    def get_team_member_ids_by_any_leader(self, employee_odoo_id: int) -> List[int]:
-        view_roles = [r.value for r in ROLES_WITH_TEAM_VIEW]
-        my_member = self.db.exec(
-            select(TeamMemberModel).where(
-                TeamMemberModel.employee_odoo_id == employee_odoo_id,
-                TeamMemberModel.role.in_(view_roles),  # type: ignore[attr-defined]
+    def upsert(self, permission: TeamMemberPermission) -> TeamMemberPermission:
+        m = self._find(
+            permission.leader_employee_odoo_id, permission.member_employee_odoo_id
+        )
+        if m is None:
+            m = TeamMemberPermissionModel(
+                leader_employee_odoo_id=permission.leader_employee_odoo_id,
+                member_employee_odoo_id=permission.member_employee_odoo_id,
+                level=permission.level.value,
             )
-        ).first()
-        if my_member is None:
-            return []
-        return self.get_member_employee_ids(my_member.team_id)
+        else:
+            m.level = permission.level.value
+        self.db.add(m)
+        self.db.commit()
+        self.db.refresh(m)
+        return _to_domain(m)
+
+    def delete(
+        self, leader_employee_odoo_id: int, member_employee_odoo_id: int
+    ) -> bool:
+        m = self._find(leader_employee_odoo_id, member_employee_odoo_id)
+        if m is None:
+            return False
+        self.db.delete(m)
+        self.db.commit()
+        return True

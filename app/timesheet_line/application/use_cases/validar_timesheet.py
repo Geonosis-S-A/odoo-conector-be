@@ -10,7 +10,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
 from app.email.infra.email_service import CommonResendEmailService
 from app.users.domain.repositories import EmployeeGateway
 from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
-from app.team.domain.repositories import TeamRepository
+from app.team.application.team_access import TeamAccessService
 
 
 class ValidateTimesheetUseCase:
@@ -20,13 +20,13 @@ class ValidateTimesheetUseCase:
         email_service: CommonResendEmailService,
         employee_gateway: EmployeeGateway,
         notification_repository: TimesheetLineNotificationRepository,
-        team_repository: Optional[TeamRepository] = None,
+        team_access: Optional[TeamAccessService] = None,
     ):
         self.timesheet_gateway = timesheet_gateway
         self.email_service = email_service
         self.employee_gateway = employee_gateway
         self.notification_repository = notification_repository
-        self.team_repository = team_repository
+        self.team_access = team_access
 
     async def execute(
         self,
@@ -40,13 +40,15 @@ class ValidateTimesheetUseCase:
         if not existing_timesheets or len(existing_timesheets) != len(timesheet_ids):
             raise TimesheetNotFoundError(timesheet_ids)
 
-        # Si no es admin, verificar que todas las líneas pertenecen a empleados de su equipo
-        if not is_admin and validator_employee_id is not None and self.team_repository:
-            team_employee_ids = self.team_repository.get_team_member_ids_by_any_leader(
+        # Si no es admin, cada línea debe pertenecer a un empleado que el
+        # validador pueda aprobar (equipo Odoo del líder en vivo + permisos
+        # 'validate'). Nunca incluye al propio validador ni a sus líderes.
+        if not is_admin and validator_employee_id is not None and self.team_access:
+            allowed_employee_ids = self.team_access.validatable_employee_ids(
                 validator_employee_id
             )
             timesheet_employee_ids = {t.employee_id for t in existing_timesheets}
-            outside = timesheet_employee_ids - set(team_employee_ids)
+            outside = timesheet_employee_ids - allowed_employee_ids
             if outside:
                 raise TimesheetValidateError(
                     timesheet_ids,

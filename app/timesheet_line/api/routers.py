@@ -12,7 +12,8 @@ from app.email.domain.email_types import TimesheetEmailType
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import Roles, user_has_role
-from app.team.infra.db.repositories import SQLModelTeamRepository
+from app.team.api.dependencies import get_team_access_service
+from app.team.application.team_access import TeamAccessService
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
     DetailedTimesheetLineResponse,
@@ -113,12 +114,6 @@ def get_notification_repository(
     return SQLModelTimesheetLineNotificationRepository(db)
 
 
-def get_team_repository(
-    db: Session = Depends(get_db),
-) -> SQLModelTeamRepository:
-    return SQLModelTeamRepository(db)
-
-
 @router.post("/", response_model=list[DetailedTimesheetLineResponse])
 async def create_timesheet_line(
     request: list[CargarHorasRequest],
@@ -191,7 +186,7 @@ async def list_timesheet_lines(
     ),
     task_gateway: TaskGateway = Depends(get_task_gateway),
     team: bool | None = Query(None, description="Filtrar por equipo"),
-    team_repository: SQLModelTeamRepository = Depends(get_team_repository),
+    team_access: TeamAccessService = Depends(get_team_access_service),
 ):
     """
     Lista todas las líneas de timesheet con filtros obligatorios.
@@ -216,8 +211,7 @@ async def list_timesheet_lines(
     if not is_admin:
         can_view_team = False
         if team:
-            member = team_repository.get_member_record(current_employee_id)
-            can_view_team = member is not None
+            can_view_team = team_access.can_view_team(current_employee_id)
 
         requires_elevated = (
             employee_id is not None and current_employee_id != employee_id
@@ -235,7 +229,7 @@ async def list_timesheet_lines(
             employee_gateway,
             notification_repository,
             task_gateway,
-            team_repository,
+            team_access,
         )
         timesheets = use_case.execute(
             employee_id,
@@ -347,28 +341,27 @@ async def validate_timesheet_lines(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
-    team_repository: SQLModelTeamRepository = Depends(get_team_repository),
+    team_access: TeamAccessService = Depends(get_team_access_service),
     current_user: dict = Depends(get_current_user),
 ):
     """
     Valida múltiples líneas de timesheet (marca validated=True).
-    Permitido para: admins (Roles.approver) y miembros de equipo con can_validate=True.
+    Permitido para: admins (Roles.approver), líderes de Odoo y miembros con
+    permiso 'validate' en el equipo de su líder.
     """
     roles: list[int] = current_user["roles"]
     is_admin = user_has_role(roles, Roles.approver)
     validator_employee_id: int = current_user["user_id"]
 
-    if not is_admin:
-        member = team_repository.get_member_record(validator_employee_id)
-        if member is None or not member.can_validate:
-            raise HTTPException(
-                status_code=403,
-                detail="No tienes permisos para validar las líneas de timesheet",
-            )
+    if not is_admin and not team_access.can_validate_team(validator_employee_id):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para validar las líneas de timesheet",
+        )
 
     try:
         use_case = ValidateTimesheetUseCase(
-            gateway, email_service, employee_gateway, notification_repository, team_repository
+            gateway, email_service, employee_gateway, notification_repository, team_access
         )
         success = await use_case.execute(
             request.timesheetline_ids,

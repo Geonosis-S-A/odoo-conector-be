@@ -14,6 +14,7 @@ from app.auth.infra.db.models import (
 from app.employee_price.infra.db.models import EmployeePriceModel
 from app.saved_prompts.infra.db.models import SavedPromptModel
 from app.timesheet_templates.infra.db.models import TimesheetTemplateModel
+from app.team.infra.db.models import TeamMemberPermissionModel
 from app.shared.infra.db.config import settings
 
 # this is the Alembic Config object, which provides
