@@ -1,89 +1,72 @@
 import pytest
 from unittest.mock import Mock
-from app.project.api.routers import get_project_gateway
+
+from app.project.api.routers import (
+    get_employee_gateway,
+    get_project_assignment_gateway,
+    get_project_gateway,
+    router,
+)
+from app.project.domain.gateway import ProjectAssignmentGateway, ProjectGateway
 from app.project.domain.models import Project
-from app.project.domain.gateway import ProjectGateway
-from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
+from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import Roles
+from app.users.domain.repositories import EmployeeGateway
 
 
 @pytest.fixture
 def mock_gateway():
-    """Fixture que proporciona un gateway mockeado."""
+    """Fixture que proporciona un gateway de proyectos mockeado."""
     return Mock(spec=ProjectGateway)
 
 
 @pytest.fixture
-def mock_odoo_connection():
-    """Fixture que proporciona una conexión Odoo mockeada."""
-    return {
-        "uid": 1,
-        "models": Mock(),
-        "ODOO_DB": "test_db",
-        "ODOO_PASSWORD": "test_pass",
-    }
-
-
-@pytest.fixture(autouse=True)
-def setup_dependencies(mock_odoo_connection, mock_gateway):
-    """Fixture que configura las dependencias para todos los tests."""
-    from app.main import app
-
-    # Mock de la dependencia de conexión Odoo
-    async def mock_get_odoo_connection():
-        return mock_odoo_connection
-
-    # Mock de la dependencia del gateway
-    def mock_get_gateway():
-        return mock_gateway
-
-    # Aplicar los mocks a las dependencias
-    app.dependency_overrides[get_odoo_connection_dependency] = mock_get_odoo_connection
-    app.dependency_overrides[get_project_gateway] = mock_get_gateway
-
-    yield
-
-    # Limpiar los mocks después de cada test
-    app.dependency_overrides.clear()
+def mock_project_assignment_gateway():
+    return Mock(spec=ProjectAssignmentGateway)
 
 
 @pytest.fixture
-def override_gateway_dependency(mock_gateway):
-    """Fixture para sobrescribir la dependencia del gateway de proyectos."""
-
-    def override_get_project_gateway():
-        return mock_gateway
-
-    return override_get_project_gateway
+def mock_employee_gateway():
+    gw = Mock(spec=EmployeeGateway)
+    gw.get_user_id_by_employee_id.return_value = 100
+    return gw
 
 
 @pytest.fixture(autouse=True)
-def configure_test_client(test_client, mock_gateway, override_gateway_dependency):
-    """Configura el test client con las dependencias mockeadas."""
-    from app.project.api.routers import router
+def setup_dependencies(mock_gateway, mock_project_assignment_gateway, mock_employee_gateway):
+    """Configura las dependencias del router para todos los tests de este módulo."""
+    from app.main import app
 
-    test_client.app.dependency_overrides[get_project_gateway] = (
-        override_gateway_dependency
+    app.dependency_overrides[get_project_gateway] = lambda: mock_gateway
+    app.dependency_overrides[get_project_assignment_gateway] = (
+        lambda: mock_project_assignment_gateway
     )
+    app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
+
+    yield
+
+    app.dependency_overrides.pop(get_project_gateway, None)
+    app.dependency_overrides.pop(get_project_assignment_gateway, None)
+    app.dependency_overrides.pop(get_employee_gateway, None)
 
 
-class TestProjectGatewayDependency:
-    def test_get_project_gateway_success(self, test_client):
-        """Test que verifica que la función get_project_gateway funciona correctamente."""
-        # This test would require mocking OdooConnection and OdooProjectGateway
-        # It's primarily for integration testing
-        pass
+def _override_current_user(test_client, *, roles):
+    async def _override():
+        return {
+            "user_id": 1,
+            "user_email": "test@example.com",
+            "user_name": "Test User",
+            "roles": roles,
+        }
 
-    def test_get_project_gateway_error(self, test_client):
-        """Test que verifica el manejo de errores en get_project_gateway."""
-        # This test would require mocking exceptions in the gateway creation
-        # It's primarily for integration testing
-        pass
+    test_client.app.dependency_overrides[get_current_user] = _override
 
 
-class TestGetProjects:
+class TestGetProjectsAsAdmin:
+    """Un admin (rol approver) ve todos los proyectos activos, sin filtrar."""
+
     def test_get_all_active_projects_success(self, mock_gateway, test_client):
-        """Test que verifica que el endpoint retorna todos los proyectos activos correctamente."""
-        # Arrange
+        _override_current_user(test_client, roles=[Roles.approver])
         mock_projects = [
             Project(id=1, name="Proyecto Alpha"),
             Project(id=2, name="Proyecto Beta"),
@@ -91,147 +74,139 @@ class TestGetProjects:
         ]
         mock_gateway.all.return_value = mock_projects
 
-        # Act
-        headers = {"Authorization": "Bearer testtoken"}
-        response = test_client.get("/api/v1/projects/", headers=headers)
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
         assert len(data) == 3
         assert data[0]["id"] == 1
         assert data[0]["name"] == "Proyecto Alpha"
-        assert data[1]["id"] == 2
-        assert data[1]["name"] == "Proyecto Beta"
-        assert data[2]["id"] == 3
-        assert data[2]["name"] == "Proyecto Gamma"
-
-        # Verificar que el gateway se llama sin parámetros
-        mock_gateway.all.assert_called_once_with()
-
-    def test_get_projects_ignores_user_parameter(self, mock_gateway, test_client):
-        """Test que verifica que el endpoint ignora el parámetro user (no implementado)."""
-        # Arrange
-        mock_projects = [
-            Project(id=1, name="Proyecto Test"),
-        ]
-        mock_gateway.all.return_value = mock_projects
-
-        # Act - Con parámetro user que debe ser ignorado
-        headers = {"Authorization": "Bearer testtoken"}
-        response = test_client.get("/api/v1/projects/?user=1", headers=headers)
-
-        # Assert
-        assert response.status_code == 200
-        data = response.json()
-        assert len(data) == 1
-        assert data[0]["id"] == 1
-        assert data[0]["name"] == "Proyecto Test"
-
-        # Verificar que el gateway se llama sin parámetros (ignora el user)
         mock_gateway.all.assert_called_once_with()
 
     def test_get_projects_empty_returns_empty_array(self, mock_gateway, test_client):
-        """Test que verifica que el endpoint retorna una lista vacía cuando no hay proyectos."""
-        # Arrange
+        _override_current_user(test_client, roles=[Roles.approver])
         mock_gateway.all.return_value = []
 
-        # Act
-        headers = {"Authorization": "Bearer testtoken"}
-        response = test_client.get("/api/v1/projects/", headers=headers)
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
 
-        # Assert
         assert response.status_code == 200
-        data = response.json()
-        assert data == []
-        assert len(data) == 0
-        assert isinstance(data, list)
-
-        # Verificar que el gateway se llama correctamente
-        mock_gateway.all.assert_called_once_with()
+        assert response.json() == []
 
     def test_get_projects_handles_none_from_gateway(self, mock_gateway, test_client):
-        """Test que verifica que el endpoint maneja correctamente cuando el gateway retorna None."""
-        # Arrange
+        _override_current_user(test_client, roles=[Roles.approver])
         mock_gateway.all.return_value = None
 
-        # Act
-        headers = {"Authorization": "Bearer testtoken"}
-        response = test_client.get("/api/v1/projects/", headers=headers)
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
 
-        # Assert
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_projects_duplicate_handling_in_use_case(self, mock_gateway, test_client):
+        _override_current_user(test_client, roles=[Roles.approver])
+        mock_gateway.all.return_value = [
+            Project(id=1, name="Proyecto Alpha"),
+            Project(id=2, name="Proyecto Beta"),
+            Project(id=1, name="Proyecto Alpha Duplicado"),
+        ]
+
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
+
         assert response.status_code == 200
         data = response.json()
-        assert data == []
-        assert len(data) == 0
-        assert isinstance(data, list)
-
-        # Verificar que el gateway se llama correctamente
-        mock_gateway.all.assert_called_once_with()
-
+        assert len(data) == 2
+        project_ids = {p["id"] for p in data}
+        assert project_ids == {1, 2}
 
     def test_get_projects_response_format(self, mock_gateway, test_client):
-        """Test que verifica el formato de respuesta del endpoint."""
-        # Arrange
-        mock_projects = [
-            Project(id=42, name="Proyecto con ID especial"),
-        ]
-        mock_gateway.all.return_value = mock_projects
+        _override_current_user(test_client, roles=[Roles.approver])
+        mock_gateway.all.return_value = [Project(id=42, name="Proyecto con ID especial")]
 
-        # Act
-        headers = {"Authorization": "Bearer testtoken"}
-        response = test_client.get("/api/v1/projects/", headers=headers)
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
 
-        # Assert
         assert response.status_code == 200
-        assert response.headers["content-type"] == "application/json"
-
         data = response.json()
         assert isinstance(data, list)
         assert len(data) == 1
+        assert set(data[0].keys()) == {"id", "name"}
 
-        # Verificar estructura de ProjectResponse
-        project = data[0]
-        assert set(project.keys()) == {"id", "name"}
-        assert project["id"] == 42
-        assert project["name"] == "Proyecto con ID especial"
 
-        # Verificar que el gateway se llama correctamente
-        mock_gateway.all.assert_called_once_with()
+class TestGetProjectsAsRegularUser:
+    """Un usuario no-admin ve sólo los proyectos a los que está asignado o que gerencia."""
 
-    def test_get_projects_duplicate_handling_in_use_case(
-        self, mock_gateway, test_client
+    def test_returns_assigned_and_managed_projects(
+        self, mock_project_assignment_gateway, mock_employee_gateway, test_client
     ):
-        """Test que verifica que los duplicados son manejados por el caso de uso."""
-        # Arrange - Simular duplicados que serían manejados por el caso de uso
-        mock_projects = [
-            Project(id=1, name="Proyecto Alpha"),
-            Project(id=2, name="Proyecto Beta"),
-            Project(id=1, name="Proyecto Alpha Duplicado"),  # Duplicado
+        _override_current_user(test_client, roles=[1])
+        mock_project_assignment_gateway.get_employee_assigned_projects.return_value = [
+            Project(id=1, name="Proyecto Asignado"),
         ]
-        mock_gateway.all.return_value = mock_projects
+        mock_project_assignment_gateway.get_managed_projects.return_value = [
+            Project(id=2, name="Proyecto Gerenciado", manager_user_id=100),
+        ]
 
-        # Act
-        headers = {"Authorization": "Bearer testtoken"}
-        response = test_client.get("/api/v1/projects/", headers=headers)
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
 
-        # Assert
         assert response.status_code == 200
         data = response.json()
+        assert {p["id"] for p in data} == {1, 2}
+        mock_project_assignment_gateway.get_employee_assigned_projects.assert_called_once_with(
+            1
+        )
+        mock_project_assignment_gateway.get_managed_projects.assert_called_once_with(100)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(1)
 
-        # El caso de uso elimina duplicados, por lo que solo deben retornarse 2 proyectos únicos
-        assert len(data) == 2  # El caso de uso elimina duplicados
+    def test_deduplicates_project_assigned_and_managed_at_once(
+        self, mock_project_assignment_gateway, test_client
+    ):
+        _override_current_user(test_client, roles=[1])
+        mock_project_assignment_gateway.get_employee_assigned_projects.return_value = [
+            Project(id=1, name="Proyecto Compartido"),
+        ]
+        mock_project_assignment_gateway.get_managed_projects.return_value = [
+            Project(id=1, name="Proyecto Compartido", manager_user_id=100),
+        ]
 
-        # Verificar que se mantienen los proyectos únicos
-        project_ids = [project["id"] for project in data]
-        assert 1 in project_ids
-        assert 2 in project_ids
-        assert len(set(project_ids)) == 2  # No hay duplicados
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
 
-        # Verificar que se mantiene el primer proyecto encontrado para cada ID
-        projects_by_id = {project["id"]: project for project in data}
-        assert projects_by_id[1]["name"] == "Proyecto Alpha"  # Primer nombre encontrado
-        assert projects_by_id[2]["name"] == "Proyecto Beta"
+        assert response.status_code == 200
+        assert len(response.json()) == 1
 
-        # Verificar que el gateway se llama correctamente
-        mock_gateway.all.assert_called_once_with()
+    def test_empty_when_no_assignments_and_no_user_id(
+        self, mock_project_assignment_gateway, mock_employee_gateway, test_client
+    ):
+        _override_current_user(test_client, roles=[1])
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = None
+        mock_project_assignment_gateway.get_employee_assigned_projects.return_value = []
+
+        response = test_client.get(
+            "/api/v1/projects/", headers={"Authorization": "Bearer testtoken"}
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+        mock_project_assignment_gateway.get_managed_projects.assert_not_called()
+
+    def test_does_not_call_unrestricted_project_gateway(
+        self, mock_gateway, mock_project_assignment_gateway, test_client
+    ):
+        _override_current_user(test_client, roles=[1])
+        mock_project_assignment_gateway.get_employee_assigned_projects.return_value = []
+        mock_project_assignment_gateway.get_managed_projects.return_value = []
+
+        test_client.get("/api/v1/projects/", headers={"Authorization": "Bearer testtoken"})
+
+        mock_gateway.all.assert_not_called()

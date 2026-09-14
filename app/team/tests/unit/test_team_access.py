@@ -28,9 +28,9 @@ class TestTeamAccessService:
         return gw
 
     @pytest.fixture
-    def timesheet_gateway(self):
+    def project_assignment_gateway(self):
         gw = Mock()
-        # equipo Odoo por líder (excluye siempre al propio líder)
+        # equipo (proyectos gerenciados) por líder (excluye siempre al propio líder)
         teams = {
             10: [
                 {"id": 1, "name": "Ana", "work_email": "ana@x.com"},
@@ -42,7 +42,11 @@ class TestTeamAccessService:
                 {"id": 4, "name": "Dino", "work_email": "dino@x.com"},
             ],
         }
-        gw.get_team_users.side_effect = lambda user_id, emp_id: teams.get(emp_id, [])
+        gw.get_team_users.side_effect = (
+            lambda user_id, emp_id, date_from=None, date_to=None: teams.get(
+                emp_id, []
+            )
+        )
         return gw
 
     @pytest.fixture
@@ -50,8 +54,10 @@ class TestTeamAccessService:
         return Mock()
 
     @pytest.fixture
-    def service(self, employee_gateway, timesheet_gateway, permission_repo):
-        return TeamAccessService(employee_gateway, timesheet_gateway, permission_repo)
+    def service(self, employee_gateway, project_assignment_gateway, permission_repo):
+        return TeamAccessService(
+            employee_gateway, project_assignment_gateway, permission_repo
+        )
 
     def test_leader_sees_and_validates_own_odoo_team(self, service, permission_repo):
         permission_repo.list_by_member.return_value = []
@@ -142,3 +148,58 @@ class TestTeamAccessService:
         permission_repo.list_by_member.return_value = []
 
         assert service.visible_team_members(1) == []
+
+    def test_get_led_team_by_project_groups_members_and_excludes_leader(
+        self, service, project_assignment_gateway
+    ):
+        from app.project.domain.models import Project
+        from app.users.domain.models import Employee
+
+        project_assignment_gateway.get_managed_projects.return_value = [
+            Project(id=1, name="P1", manager_user_id=100),
+            Project(id=2, name="P2", manager_user_id=100),
+        ]
+        project_assignment_gateway.get_project_assignments.return_value = [
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            {"employee_id": [2, "Beto"], "project_id": [1, "P1"]},
+            {"employee_id": [10, "Lider"], "project_id": [2, "P2"]},  # el propio líder
+            {"employee_id": [4, "Dino"], "project_id": [2, "P2"]},
+        ]
+        service.employee_gateway.get_by_ids.return_value = [
+            Employee(id=1, email="ana@x.com", full_name="Ana"),
+            Employee(id=2, email="beto@x.com", full_name="Beto"),
+            Employee(id=4, email="dino@x.com", full_name="Dino"),
+        ]
+
+        result = service.get_led_team_by_project(10)
+
+        assert {t.project.id for t in result} == {1, 2}
+        by_project = {t.project.id: t for t in result}
+        assert {m.employee_odoo_id for m in by_project[1].members} == {1, 2}
+        assert {m.employee_odoo_id for m in by_project[2].members} == {4}
+
+    def test_get_led_team_by_project_no_managed_projects_returns_empty(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.get_managed_projects.return_value = []
+
+        assert service.get_led_team_by_project(10) == []
+
+    def test_get_led_team_by_project_leader_without_odoo_user(self, service):
+        assert service.get_led_team_by_project(99) == []
+
+    def test_get_led_team_by_project_project_without_assignments_has_empty_members(
+        self, service, project_assignment_gateway
+    ):
+        from app.project.domain.models import Project
+
+        project_assignment_gateway.get_managed_projects.return_value = [
+            Project(id=1, name="P1", manager_user_id=100),
+        ]
+        project_assignment_gateway.get_project_assignments.return_value = []
+
+        result = service.get_led_team_by_project(10)
+
+        assert len(result) == 1
+        assert result[0].project.id == 1
+        assert result[0].members == []

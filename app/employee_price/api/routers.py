@@ -23,13 +23,13 @@ from app.employee_price.application.use_cases.list_team_employee_prices import (
 from app.employee_price.application.use_cases.get_employee_price_history import (
     GetEmployeePriceHistoryUseCase,
 )
-from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.project.domain.gateway import ProjectAssignmentGateway
+from app.project.infra.external.odoo_project_assignment_gateway import (
+    OdooProjectAssignmentGateway,
+)
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
-)
-from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
-    OdooTimesheetLineGateway,
 )
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.shared.security.roles import user_has_role, Roles
@@ -37,33 +37,36 @@ from app.shared.security.roles import user_has_role, Roles
 router = APIRouter(prefix="/employees-price", tags=["employees-price"])
 
 
-def get_timesheet_gateway(
+def get_project_assignment_gateway(
     odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
-) -> TimesheetLineGateway:
-    """Dependencia para obtener el gateway de timesheet"""
+) -> ProjectAssignmentGateway:
+    """Dependencia para obtener el gateway de asignaciones a proyecto"""
     try:
-        return OdooTimesheetLineGateway(odoo_connection)
+        return OdooProjectAssignmentGateway(odoo_connection)
     except Exception:
         raise HTTPException(
-            status_code=500, detail="Error al conectar con el gateway de timesheet"
+            status_code=500,
+            detail="Error al conectar con el gateway de asignaciones a proyecto",
         )
 
 
 @router.get("/", response_model=list[TeamEmployeePriceItem])
 async def list_team_employee_prices(
     db: Session = Depends(get_db),
-    timesheet_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    project_assignment_gateway: ProjectAssignmentGateway = Depends(
+        get_project_assignment_gateway
+    ),
     current_user: JWTPayload = Depends(get_current_user),
 ):
     """
     Lista los precios por hora de los miembros del equipo del usuario autenticado.
 
-    Obtiene todos los miembros del equipo usando la jerarquía de Odoo y retorna
-    únicamente sus registros abiertos (date_to = NULL).
+    Obtiene todos los miembros del equipo (empleados asignados a los proyectos
+    que gerencia) y retorna únicamente sus registros abiertos (date_to = NULL).
 
     Args:
         db: Sesión de base de datos
-        timesheet_gateway: Gateway para obtener información del equipo desde Odoo
+        project_assignment_gateway: Gateway para obtener el equipo desde Odoo
         current_user: Usuario autenticado
 
     Returns:
@@ -85,7 +88,7 @@ async def list_team_employee_prices(
     # Crear y ejecutar caso de uso
     use_case = ListTeamEmployeePricesUseCase(
         employee_price_repository=employee_price_repository,
-        timesheet_line_gateway=timesheet_gateway,
+        project_assignment_gateway=project_assignment_gateway,
         employee_gateway=employee_gateway,
     )
 

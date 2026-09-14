@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 
 from app.dashboard.domain.models import DashboardSummary, KPI, EmployeeWithoutPrice
 from app.dashboard.domain.repositories import DashboardDataService
+from app.project.domain.gateway import ProjectAssignmentGateway
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
@@ -20,12 +21,14 @@ class GetDashboardSummaryUseCase:
         task_gateway: TaskGateway,
         timesheet_line_gateway: TimesheetLineGateway,
         employee_price_repository: EmployeePriceRepository,
+        project_assignment_gateway: ProjectAssignmentGateway,
     ):
         self.dashboard_service = dashboard_service
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
         self.timesheet_line_gateway = timesheet_line_gateway
         self.employee_price_repository = employee_price_repository
+        self.project_assignment_gateway = project_assignment_gateway
 
     def execute(
         self, user_id: int, employee_id: int, date_from: date, date_to: date
@@ -42,7 +45,9 @@ class GetDashboardSummaryUseCase:
             DashboardSummary con todos los KPIs y totales calculados
         """
 
-        team_users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
+        team_users = self.project_assignment_gateway.get_team_users(
+            user_id, employee_id, date_from, date_to
+        )
 
         ids = [user["id"] for user in team_users]
 

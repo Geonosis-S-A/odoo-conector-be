@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 
 from app.employee_price.domain.repositories import EmployeePriceRepository
-from app.timesheet_line.domain.repositories import TimesheetLineGateway
+from app.project.domain.gateway import ProjectAssignmentGateway
 from app.users.domain.repositories import EmployeeGateway
 
 
@@ -13,11 +13,11 @@ class ListTeamEmployeePricesUseCase:
     def __init__(
         self,
         employee_price_repository: EmployeePriceRepository,
-        timesheet_line_gateway: TimesheetLineGateway,
+        project_assignment_gateway: ProjectAssignmentGateway,
         employee_gateway: EmployeeGateway,
     ):
         self.employee_price_repository = employee_price_repository
-        self.timesheet_line_gateway = timesheet_line_gateway
+        self.project_assignment_gateway = project_assignment_gateway
         self.employee_gateway = employee_gateway
     def execute(
         self, user_id: int
@@ -40,7 +40,9 @@ class ListTeamEmployeePricesUseCase:
         employee_id = self.employee_gateway.get_by_id(user_id)
         if employee_id is None:
             raise ValueError("El usuario no tiene un empleado asociado")
-        team_users = self.timesheet_line_gateway.get_team_users(user_id, employee_id.id)
+        team_users = self.project_assignment_gateway.get_team_users(
+            user_id, employee_id.id
+        )
 
         if not team_users:
             return []

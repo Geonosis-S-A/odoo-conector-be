@@ -1,6 +1,9 @@
 from fastapi import Depends
 from sqlmodel import Session
 
+from app.project.infra.external.odoo_project_assignment_gateway import (
+    OdooProjectAssignmentGateway,
+)
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import (
     OdooConnection,
@@ -8,9 +11,6 @@ from app.shared.infra.external.odoo.odoo_client import (
 )
 from app.team.application.team_access import TeamAccessService
 from app.team.infra.db.repositories import SQLModelTeamPermissionRepository
-from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
-    OdooTimesheetLineGateway,
-)
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 
 
@@ -26,6 +26,6 @@ def get_team_access_service(
 ) -> TeamAccessService:
     return TeamAccessService(
         employee_gateway=OdooEmployeeGateway(odoo_connection),
-        timesheet_line_gateway=OdooTimesheetLineGateway(odoo_connection),
+        project_assignment_gateway=OdooProjectAssignmentGateway(odoo_connection),
         permission_repo=SQLModelTeamPermissionRepository(db),
     )

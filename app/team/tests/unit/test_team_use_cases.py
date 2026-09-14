@@ -2,7 +2,10 @@ from unittest.mock import Mock
 
 import pytest
 
+from app.project.domain.models import Project
+from app.team.application.team_access import LedProjectTeam, TeamMemberInfo
 from app.team.application.use_cases.get_team import GetTeamUseCase
+from app.team.application.use_cases.get_team_by_project import GetTeamByProjectUseCase
 from app.team.application.use_cases.set_member_permission import (
     SetMemberPermissionUseCase,
 )
@@ -40,6 +43,27 @@ class TestGetTeamUseCase:
         repo = Mock()
 
         assert GetTeamUseCase(access, repo).execute(10) == []
+
+
+class TestGetTeamByProjectUseCase:
+    def test_delegates_to_team_access(self):
+        access = Mock()
+        expected = [
+            LedProjectTeam(
+                project=Project(id=1, name="P1", manager_user_id=100),
+                members=[
+                    TeamMemberInfo(
+                        employee_odoo_id=2, name="Ana", email="ana@x.com", level=None
+                    )
+                ],
+            )
+        ]
+        access.get_led_team_by_project.return_value = expected
+
+        result = GetTeamByProjectUseCase(access).execute(10)
+
+        assert result == expected
+        access.get_led_team_by_project.assert_called_once_with(10)
 
 
 class TestSetMemberPermissionUseCase:

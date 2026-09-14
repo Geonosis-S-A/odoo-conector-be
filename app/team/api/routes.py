@@ -10,13 +10,20 @@ from app.team.api.dependencies import (
 )
 from app.team.api.schemas import (
     MyTeamAccessView,
+    ProjectBasicView,
     SetPermissionRequest,
     TeamMemberBasicView,
     TeamMemberView,
+    TeamProjectView,
     TeamView,
 )
-from app.team.application.team_access import TeamAccessService, TeamMemberInfo
+from app.team.application.team_access import (
+    LedProjectTeam,
+    TeamAccessService,
+    TeamMemberInfo,
+)
 from app.team.application.use_cases.get_team import GetTeamUseCase
+from app.team.application.use_cases.get_team_by_project import GetTeamByProjectUseCase
 from app.team.application.use_cases.set_member_permission import (
     SetMemberPermissionUseCase,
 )
@@ -39,6 +46,18 @@ def _team_to_view(leader_id: int, members: List[TeamMemberInfo]) -> TeamView:
     return TeamView(
         leader_employee_odoo_id=leader_id,
         members=[_member_to_view(m) for m in members],
+    )
+
+
+def _project_team_to_view(team: LedProjectTeam) -> TeamProjectView:
+    return TeamProjectView(
+        project=ProjectBasicView(id=team.project.id, name=team.project.name),
+        members=[
+            TeamMemberBasicView(
+                employee_odoo_id=m.employee_odoo_id, name=m.name, email=m.email
+            )
+            for m in team.members
+        ],
     )
 
 
@@ -128,6 +147,16 @@ def get_my_team(
     return _team_to_view(leader_id, members)
 
 
+@router.get("/mine/projects", response_model=List[TeamProjectView])
+def get_my_team_by_project(
+    access: TeamAccessService = Depends(get_team_access_service),
+    current_user: dict = Depends(get_current_user),
+):
+    leader_id: int = current_user["user_id"]
+    teams = GetTeamByProjectUseCase(access).execute(leader_id)
+    return [_project_team_to_view(t) for t in teams]
+
+
 @router.put("/mine/members/{member_employee_odoo_id}", response_model=TeamMemberView)
 def set_my_member_permission(
     member_employee_odoo_id: int,
@@ -157,6 +186,17 @@ def get_team_as_admin(
         access, repo, leader_employee_odoo_id, not_found_status=404
     )
     return _team_to_view(leader_employee_odoo_id, members)
+
+
+@router.get("/{leader_employee_odoo_id}/projects", response_model=List[TeamProjectView])
+def get_team_by_project_as_admin(
+    leader_employee_odoo_id: int,
+    access: TeamAccessService = Depends(get_team_access_service),
+    current_user: dict = Depends(get_current_user),
+):
+    _require_admin(current_user)
+    teams = GetTeamByProjectUseCase(access).execute(leader_employee_odoo_id)
+    return [_project_team_to_view(t) for t in teams]
 
 
 @router.put(

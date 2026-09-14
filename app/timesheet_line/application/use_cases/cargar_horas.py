@@ -1,10 +1,12 @@
 # Es un ejemplo, podría tener otro nombre etc
 
 from typing import List
+from app.project.domain.gateway import ProjectAssignmentGateway
 from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.application.excepctions.exceptions import (
+    EmployeeNotAssignedToProjectError,
     InvalidHoursError,
     TimesheetCreationError,
     TimesheetNotFoundError,
@@ -12,8 +14,13 @@ from app.timesheet_line.application.excepctions.exceptions import (
 
 
 class CargarHorasUseCase:
-    def __init__(self, timesheet_line_gateway: TimesheetLineGateway):
+    def __init__(
+        self,
+        timesheet_line_gateway: TimesheetLineGateway,
+        project_assignment_gateway: ProjectAssignmentGateway,
+    ):
         self.timesheet_line_gateway = timesheet_line_gateway
+        self.project_assignment_gateway = project_assignment_gateway
 
     def execute(
         self, requests: list[CargarHorasRequest]
@@ -29,6 +36,8 @@ class CargarHorasUseCase:
 
         Raises:
             InvalidHoursError: Cuando las horas son negativas
+            EmployeeNotAssignedToProjectError: Cuando el empleado no tiene una
+                asignación vigente al proyecto en la fecha de la línea
             TimesheetCreationError: Para errores de creación
             TimesheetNotFoundError: Cuando no se pueden obtener las líneas creadas
         """
@@ -36,6 +45,13 @@ class CargarHorasUseCase:
         for req in requests:
             if req.hours < 0:
                 raise InvalidHoursError(req.hours)
+
+            if not self.project_assignment_gateway.is_employee_assigned(
+                req.employee_id, req.project_id, at_date=req.date
+            ):
+                raise EmployeeNotAssignedToProjectError(
+                    req.employee_id, req.project_id
+                )
 
             timesheet_line = TimesheetLine.from_request(
                 id=None,

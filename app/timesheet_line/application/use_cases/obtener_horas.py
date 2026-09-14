@@ -65,16 +65,13 @@ class ListTimesheetLinesUseCase:
         user_id = None
         ids = None
         if id is not None and team and employee_id is None:
-            if self.team_access is not None:
-                # Equipo = jerarquía de Odoo en vivo + permisos locales.
-                ids = sorted(self.team_access.visible_employee_ids(id))
-            else:
-                # Fallback legacy: jerarquía de Odoo directa.
-                user_id = self.employee_gateway.get_user_id_by_employee_id(id)
-                if user_id is None:
-                    raise EmployeeNotHasUserError(id)
-                users = self.timesheet_line_gateway.get_team_users(user_id, id)
-                ids = [user["id"] for user in users]
+            if self.team_access is None:
+                raise EmployeeNotHasUserError(id)
+            # Equipo = proyectos gerenciados en Odoo (vigentes en el período
+            # consultado) + permisos locales.
+            ids = sorted(
+                self.team_access.visible_employee_ids(id, date_from, date_to)
+            )
 
 
         # Validación de rango de fechas
@@ -98,7 +95,9 @@ class ListTimesheetLinesUseCase:
             and self.team_access is not None
             and id is not None
         ):
-            validatable = self.team_access.validatable_employee_ids(id)
+            validatable = self.team_access.validatable_employee_ids(
+                id, date_from, date_to
+            )
             for line in timesheets:
                 line.can_validate = (
                     line.employee_id in validatable and not line.validated

@@ -9,6 +9,10 @@ from app.email.api.dependencies import get_common_email_service
 from app.email.api.schemas import ApprovedMailRequest, ReviewMailRequest
 from app.email.infra.email_service import CommonResendEmailService
 from app.email.domain.email_types import TimesheetEmailType
+from app.project.domain.gateway import ProjectAssignmentGateway
+from app.project.infra.external.odoo_project_assignment_gateway import (
+    OdooProjectAssignmentGateway,
+)
 from app.shared.infra.db.session import get_db
 from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import Roles, user_has_role
@@ -55,6 +59,7 @@ from app.task.infra.external.odoo_task_gateway import OdooTaskGateway
 from app.users.domain.repositories import EmployeeGateway
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.timesheet_line.application.excepctions.exceptions import (
+    EmployeeNotAssignedToProjectError,
     InvalidHoursError,
     TimesheetNotFoundError,
     TimesheetCreationError,
@@ -114,10 +119,25 @@ def get_notification_repository(
     return SQLModelTimesheetLineNotificationRepository(db)
 
 
+def get_project_assignment_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> ProjectAssignmentGateway:
+    try:
+        return OdooProjectAssignmentGateway(odoo_connection)
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Error al conectar con el gateway de asignaciones a proyecto",
+        )
+
+
 @router.post("/", response_model=list[DetailedTimesheetLineResponse])
 async def create_timesheet_line(
     request: list[CargarHorasRequest],
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    project_assignment_gateway: ProjectAssignmentGateway = Depends(
+        get_project_assignment_gateway
+    ),
     current_user: dict = Depends(get_current_user),
 ):
     """
@@ -131,11 +151,13 @@ async def create_timesheet_line(
         list[DetailedTimesheetLineResponse]: Lista de líneas de timesheet creadas con detalles
     """
     try:
-        use_case = CargarHorasUseCase(gateway)
+        use_case = CargarHorasUseCase(gateway, project_assignment_gateway)
         lines = use_case.execute(request)
         return lines
     except InvalidHoursError as e:
         raise HTTPException(status_code=400, detail=e.message)
+    except EmployeeNotAssignedToProjectError as e:
+        raise HTTPException(status_code=403, detail=e.message)
     except xmlrpc.client.Fault as fault_error:
         # Error específico de Odoo (validaciones, restricciones, etc.)
         raise HTTPException(

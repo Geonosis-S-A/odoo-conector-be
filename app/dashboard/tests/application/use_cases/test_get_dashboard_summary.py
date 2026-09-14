@@ -38,6 +38,11 @@ class TestGetDashboardSummaryUseCase:
         return Mock()
 
     @pytest.fixture
+    def mock_project_assignment_gateway(self):
+        """Mock del gateway de asignaciones a proyecto."""
+        return Mock()
+
+    @pytest.fixture
     def mock_employee_price_repository(self):
         """Mock del repositorio de precios de empleados."""
         return Mock()
@@ -50,6 +55,7 @@ class TestGetDashboardSummaryUseCase:
         mock_task_gateway,
         mock_timesheet_gateway,
         mock_employee_price_repository,
+        mock_project_assignment_gateway,
     ):
         """Instancia del caso de uso con mocks."""
         return GetDashboardSummaryUseCase(
@@ -58,6 +64,7 @@ class TestGetDashboardSummaryUseCase:
             mock_task_gateway,
             mock_timesheet_gateway,
             mock_employee_price_repository,
+            mock_project_assignment_gateway,
         )
 
     @pytest.fixture
@@ -109,6 +116,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -122,7 +130,7 @@ class TestGetDashboardSummaryUseCase:
         date_to = date(2024, 1, 31)
 
         # Configurar mocks
-        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
+        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock de precios de empleados (vacío para este test)
@@ -183,8 +191,8 @@ class TestGetDashboardSummaryUseCase:
         assert result.hierarchical_summary is None  # Mockeado como None
 
         # Verificar llamadas a los mocks
-        mock_timesheet_gateway.get_team_users.assert_called_once_with(
-            user_id, employee_id
+        mock_project_assignment_gateway.get_team_users.assert_called_once_with(
+            user_id, employee_id, date_from, date_to
         )
         mock_dashboard_gateway.get_timesheet_summary.assert_called_once_with(
             [1, 2],  # IDs de usuarios del equipo
@@ -233,6 +241,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
     ):
@@ -243,7 +252,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_timesheet_gateway.get_team_users.return_value = []
+        mock_project_assignment_gateway.get_team_users.return_value = []
         mock_dashboard_gateway.get_timesheet_summary.return_value = []
 
         # Mock de precios de empleados (vacío)
@@ -296,6 +305,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
     ):
@@ -307,7 +317,7 @@ class TestGetDashboardSummaryUseCase:
         date_to = date(2024, 1, 31)
 
         single_user_team = [{"id": 1, "name": "Employee 1"}]
-        mock_timesheet_gateway.get_team_users.return_value = single_user_team
+        mock_project_assignment_gateway.get_team_users.return_value = single_user_team
 
         # Mock de datos de timesheet para un solo empleado
         single_user_timesheet_data = [
@@ -391,6 +401,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -403,7 +414,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
+        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock de precios de empleados (vacío)
@@ -458,6 +469,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -470,7 +482,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
+        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock básico de todo lo demás
@@ -515,6 +527,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -527,7 +540,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
+        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock mínimo necesario
@@ -553,7 +566,7 @@ class TestGetDashboardSummaryUseCase:
         use_case.execute(user_id, employee_id, date_from, date_to)
 
         # Assert - Verificar orden de llamadas críticas
-        assert mock_timesheet_gateway.get_team_users.called
+        assert mock_project_assignment_gateway.get_team_users.called
         assert mock_dashboard_gateway.get_timesheet_summary.called
         assert mock_dashboard_gateway.calculate_hours_kpi.called
         assert mock_dashboard_gateway.calculate_entries_kpi.called

@@ -126,6 +126,17 @@ class EmployeeNotHasUserError(TimesheetDomainError):
         super().__init__(message)
 
 
+class EmployeeNotAssignedToProjectError(TimesheetDomainError):
+    """Error cuando un empleado carga horas a un proyecto sin asignación vigente."""
+
+    def __init__(self, employee_id: int, project_id: int):
+        message = (
+            f"El empleado {employee_id} no tiene una asignación vigente al "
+            f"proyecto {project_id}"
+        )
+        super().__init__(message)
+
+
 class TimesheetIdMismatchError(TimesheetDomainError):
     """Error cuando el ID en la URL no coincide con el ID en el body."""
 

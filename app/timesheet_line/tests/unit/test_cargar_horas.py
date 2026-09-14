@@ -2,10 +2,12 @@ from datetime import date
 import pytest
 from unittest.mock import Mock
 
+from app.project.domain.gateway import ProjectAssignmentGateway
 from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.application.excepctions.exceptions import (
+    EmployeeNotAssignedToProjectError,
     InvalidHoursError,
     TimesheetCreationError,
 )
@@ -17,8 +19,14 @@ class TestCargarHorasUseCase:
         return Mock(spec=TimesheetLineGateway)
 
     @pytest.fixture
-    def use_case(self, mock_gateway):
-        return CargarHorasUseCase(mock_gateway)
+    def mock_project_assignment_gateway(self):
+        gw = Mock(spec=ProjectAssignmentGateway)
+        gw.is_employee_assigned.return_value = True
+        return gw
+
+    @pytest.fixture
+    def use_case(self, mock_gateway, mock_project_assignment_gateway):
+        return CargarHorasUseCase(mock_gateway, mock_project_assignment_gateway)
 
     def test_execute_creates_timesheet_line_without_task(self, use_case, mock_gateway):
         # Arrange
@@ -105,6 +113,30 @@ class TestCargarHorasUseCase:
 
         assert "Las horas no pueden ser negativas" in str(exc_info.value.message)
         assert "-1.0" in str(exc_info.value.message)
+
+    def test_execute_raises_error_when_employee_not_assigned_to_project(
+        self, use_case, mock_project_assignment_gateway
+    ):
+        # Arrange
+        requests = [
+            CargarHorasRequest(
+                name="Test Task",
+                employee_id=1,
+                project_id=99,
+                hours=8.0,
+                date=date(2024, 1, 1),
+            )
+        ]
+        mock_project_assignment_gateway.is_employee_assigned.return_value = False
+
+        # Act & Assert
+        with pytest.raises(EmployeeNotAssignedToProjectError) as exc_info:
+            use_case.execute(requests)
+
+        mock_project_assignment_gateway.is_employee_assigned.assert_called_once_with(
+            1, 99, at_date=date(2024, 1, 1)
+        )
+        assert "no tiene una asignación vigente" in str(exc_info.value.message)
 
     def test_execute_raises_timesheet_creation_error_when_create_fails(
         self, use_case, mock_gateway

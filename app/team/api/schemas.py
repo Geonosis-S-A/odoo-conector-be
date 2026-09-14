@@ -39,3 +39,13 @@ class MyTeamAccessView(BaseModel):
 class SetPermissionRequest(BaseModel):
     # "none" elimina el permiso (la persona vuelve a ver sólo sus horas)
     level: Literal["view", "validate", "none"]
+
+
+class ProjectBasicView(BaseModel):
+    id: int
+    name: str
+
+
+class TeamProjectView(BaseModel):
+    project: ProjectBasicView
+    members: List[TeamMemberBasicView] = []
