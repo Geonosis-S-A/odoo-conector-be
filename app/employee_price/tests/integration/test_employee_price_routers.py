@@ -11,6 +11,7 @@ from app.shared.security.role_enums.dev import Roles
 from app.employee_price.infra.db.models import EmployeePriceModel
 from app.users.infra.db.models import UserModel
 from app.shared.infra.db.session import get_db
+from app.shared.infra.external.odoo.odoo_client import get_odoo_connection_dependency
 
 # Crear una aplicación de FastAPI para pruebas
 app = FastAPI()
@@ -32,8 +33,14 @@ def client_admin(local_db_session):
     def override_get_db():
         yield local_db_session
 
+    async def override_get_odoo_connection_dependency():
+        return Mock()
+
     app.dependency_overrides[get_current_user] = mock_admin_user
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_odoo_connection_dependency] = (
+        override_get_odoo_connection_dependency
+    )
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
@@ -545,7 +552,7 @@ def test_get_employee_price_history_with_open_and_closed_records(
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
 @patch(
-    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+    "app.project.infra.external.odoo_project_assignment_gateway.OdooProjectAssignmentGateway.get_team_users"
 )
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_success(
@@ -594,7 +601,7 @@ def test_list_team_employee_prices_success(
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
 @patch(
-    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+    "app.project.infra.external.odoo_project_assignment_gateway.OdooProjectAssignmentGateway.get_team_users"
 )
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_empty_team(
@@ -645,7 +652,7 @@ def test_list_team_employee_prices_user_without_employee(
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
 @patch(
-    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+    "app.project.infra.external.odoo_project_assignment_gateway.OdooProjectAssignmentGateway.get_team_users"
 )
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_with_members_without_prices(
@@ -686,7 +693,7 @@ def test_list_team_employee_prices_with_members_without_prices(
 @pytest.mark.integration
 @patch("app.employee_price.api.routers.get_odoo_connection")
 @patch(
-    "app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway.OdooTimesheetLineGateway.get_team_users"
+    "app.project.infra.external.odoo_project_assignment_gateway.OdooProjectAssignmentGateway.get_team_users"
 )
 @patch("app.users.infra.external.odoo_gateway.OdooEmployeeGateway.get_by_id")
 def test_list_team_employee_prices_response_structure(
