@@ -18,6 +18,7 @@ from app.shared.security.dependencies import get_current_user
 from app.shared.security.roles import Roles, user_has_role
 from app.team.api.dependencies import get_team_access_service
 from app.team.application.team_access import TeamAccessService
+from app.project.api.schemas import ProjectResponse
 from app.timesheet_line.api.schemas import (
     CargarHorasRequest,
     DetailedTimesheetLineResponse,
@@ -32,6 +33,9 @@ from app.timesheet_line.application.use_cases.delete_timesheet import (
 from app.timesheet_line.application.use_cases.edit_timesheet import EditTimesheetUseCase
 from app.timesheet_line.application.use_cases.obtener_horas import (
     ListTimesheetLinesUseCase,
+)
+from app.timesheet_line.application.use_cases.obtener_proyectos_equipo import (
+    GetTeamProjectsUseCase,
 )
 from app.timesheet_line.application.use_cases.validar_timesheet import (
     ValidateTimesheetUseCase,
@@ -273,6 +277,29 @@ async def list_timesheet_lines(
     except TimesheetDomainError as e:
         # Captura cualquier otra excepción del dominio
         raise HTTPException(status_code=400, detail=e.message)
+
+
+@router.get("/team-projects", response_model=List[ProjectResponse])
+async def list_team_projects(
+    date_from: date | None = Query(
+        None, description="Fecha de inicio del rango (YYYY-MM-DD)"
+    ),
+    date_to: date | None = Query(
+        None, description="Fecha de fin del rango (YYYY-MM-DD)"
+    ),
+    gateway: OdooTimesheetLineGateway = Depends(get_timesheet_gateway),
+    current_user: dict = Depends(get_current_user),
+    team_access: TeamAccessService = Depends(get_team_access_service),
+):
+    """
+    Proyectos con horas de empleados que el usuario logueado puede validar
+    (mismo criterio que `POST /timesheet/validate`), para el filtro de
+    proyecto en la pantalla de validación de horas.
+    """
+    current_employee_id: int = current_user["user_id"]
+    use_case = GetTeamProjectsUseCase(team_access, gateway)
+    projects = use_case.execute(current_employee_id, date_from, date_to)
+    return [ProjectResponse(id=p.id, name=p.name) for p in projects]
 
 
 @router.delete("/", response_model=Dict[str, str])
