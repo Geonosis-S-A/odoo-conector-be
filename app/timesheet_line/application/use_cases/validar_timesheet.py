@@ -32,7 +32,6 @@ class ValidateTimesheetUseCase:
         self,
         timesheet_ids: list[int],
         approver_mail: str,
-        is_admin: bool = True,
         validator_employee_id: Optional[int] = None,
     ) -> bool:
         # Verificar que las líneas existen
@@ -40,10 +39,11 @@ class ValidateTimesheetUseCase:
         if not existing_timesheets or len(existing_timesheets) != len(timesheet_ids):
             raise TimesheetNotFoundError(timesheet_ids)
 
-        # Si no es admin, cada línea debe pertenecer a un empleado que el
-        # validador pueda aprobar (equipo Odoo del líder en vivo + permisos
-        # 'validate'). Nunca incluye al propio validador ni a sus líderes.
-        if not is_admin and validator_employee_id is not None and self.team_access:
+        # Cada línea debe pertenecer a un empleado que el validador pueda
+        # aprobar (equipo Odoo en vivo -jerarquía o proyectos gerenciados-
+        # + permisos 'validate' delegados). Nunca incluye al propio
+        # validador ni a sus líderes. El rol approver no exime este chequeo.
+        if validator_employee_id is not None and self.team_access:
             allowed_employee_ids = self.team_access.validatable_employee_ids(
                 validator_employee_id
             )

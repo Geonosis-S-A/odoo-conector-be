@@ -50,7 +50,6 @@ class ListTimesheetLinesUseCase:
         validated: bool | None,
         team: bool | None,
         id: int | None,
-        is_admin: bool = False,
     ) -> List[DetailedTimesheetLine]:
         # Validación de employee_id
         if employee_id is not None and employee_id <= 0:
@@ -84,12 +83,11 @@ class ListTimesheetLinesUseCase:
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
         )
 
-        # Marcar por línea si el usuario puede validarla (para el botón del front).
-        if timesheets and is_admin:
-            # El admin puede validar cualquier línea no validada, con o sin team.
-            for line in timesheets:
-                line.can_validate = not line.validated
-        elif (
+        # Marcar por línea si el usuario puede validarla (para el botón del
+        # front): siempre en base al equipo real en Odoo (jerarquía o
+        # proyectos gerenciados) ∪ permisos delegados. El rol approver no
+        # habilita validar fuera de ese alcance.
+        if (
             team
             and timesheets
             and self.team_access is not None

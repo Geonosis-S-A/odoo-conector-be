@@ -381,7 +381,7 @@ class TestValidateTimesheetUseCase:
 
         with pytest.raises(TimesheetValidateError, match="fuera de tu equipo"):
             await use_case.execute(
-                [1], "approver@test.com", is_admin=False, validator_employee_id=5
+                [1], "approver@test.com", validator_employee_id=5
             )
         mock_gateway.validate.assert_not_called()
         team_access.validatable_employee_ids.assert_called_once_with(5)
@@ -407,7 +407,7 @@ class TestValidateTimesheetUseCase:
         mock_gateway.validate.return_value = True
 
         result = await use_case.execute(
-            [1], "approver@test.com", is_admin=False, validator_employee_id=5
+            [1], "approver@test.com", validator_employee_id=5
         )
 
         assert result is True

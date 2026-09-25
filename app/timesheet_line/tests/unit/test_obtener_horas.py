@@ -1245,7 +1245,9 @@ class TestListTimesheetLinesCanValidateFlag:
         assert by_id[2].can_validate is False
         assert by_id[3].can_validate is False
 
-    def test_admin_can_validate_every_pending_line_even_without_team(self):
+    def test_can_validate_never_set_without_team_flag_regardless_of_role(self):
+        """Sin `team=True` no se marca `can_validate` en ninguna línea: el rol
+        approver ya no habilita validar fuera del equipo real en Odoo."""
         lines = [
             self._line(1, employee_id=20, validated=False),
             self._line(2, employee_id=99, validated=True),
@@ -1253,13 +1255,12 @@ class TestListTimesheetLinesCanValidateFlag:
         team_access = Mock()
 
         result = self._use_case(lines, team_access).execute(
-            20, None, None, None, None, False, 5, is_admin=True
+            20, None, None, None, None, False, 5
         )
 
         by_id = {l.id: l for l in result}
-        assert by_id[1].can_validate is True
+        assert by_id[1].can_validate is False
         assert by_id[2].can_validate is False
-        # admin no depende de validatable_employee_ids
         team_access.validatable_employee_ids.assert_not_called()
 
     def test_non_team_request_leaves_can_validate_false(self):

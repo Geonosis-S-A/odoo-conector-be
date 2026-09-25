@@ -225,24 +225,23 @@ async def list_timesheet_lines(
     Returns:
         List[DetailedTimesheetLineResponse]: Lista de líneas de timesheet
     """
-    roles: list[int] = current_user["roles"]
-    is_admin = user_has_role(roles, Roles.approver)
     current_employee_id: int = current_user["user_id"]
 
-    # Determinar si el usuario tiene acceso de equipo (admin o miembro con view en equipo local)
-    if not is_admin:
-        can_view_team = False
-        if team:
-            can_view_team = team_access.can_view_team(current_employee_id)
+    # Ver más allá de las propias horas siempre requiere que el equipo real
+    # en Odoo (jerarquía o proyectos gerenciados) respalde el acceso — el
+    # rol approver no habilita ver a toda la empresa sin ese respaldo.
+    can_view_team = False
+    if team:
+        can_view_team = team_access.can_view_team(current_employee_id)
 
-        requires_elevated = (
-            employee_id is not None and current_employee_id != employee_id
-        ) or (employee_id is None)
+    requires_elevated = (
+        employee_id is not None and current_employee_id != employee_id
+    ) or (employee_id is None)
 
-        if requires_elevated and not can_view_team:
-            raise HTTPException(
-                status_code=403, detail="No tienes permisos para ver esta información"
-            )
+    if requires_elevated and not can_view_team:
+        raise HTTPException(
+            status_code=403, detail="No tienes permisos para ver esta información"
+        )
 
     try:
         id = current_employee_id
@@ -261,7 +260,6 @@ async def list_timesheet_lines(
             validated,
             team,
             id,
-            is_admin=is_admin,
         )
         return timesheets
     except InvalidEmployeeIdError as e:
@@ -369,14 +367,12 @@ async def validate_timesheet_lines(
 ):
     """
     Valida múltiples líneas de timesheet (marca validated=True).
-    Permitido para: admins (Roles.approver), líderes de Odoo y miembros con
-    permiso 'validate' en el equipo de su líder.
+    Permitido para: líderes de Odoo (jerarquía o proyectos gerenciados) y
+    miembros con permiso 'validate' en el equipo de su líder.
     """
-    roles: list[int] = current_user["roles"]
-    is_admin = user_has_role(roles, Roles.approver)
     validator_employee_id: int = current_user["user_id"]
 
-    if not is_admin and not team_access.can_validate_team(validator_employee_id):
+    if not team_access.can_validate_team(validator_employee_id):
         raise HTTPException(
             status_code=403,
             detail="No tienes permisos para validar las líneas de timesheet",
@@ -389,7 +385,6 @@ async def validate_timesheet_lines(
         success = await use_case.execute(
             request.timesheetline_ids,
             request.approver_mail,
-            is_admin=is_admin,
             validator_employee_id=validator_employee_id,
         )
         return {"success": success}
