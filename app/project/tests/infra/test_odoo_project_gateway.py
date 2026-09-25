@@ -12,8 +12,8 @@ class TestOdooProjectGateway:
         self.gateway = OdooProjectGateway(self.odoo_client)
         yield
 
-    def test_all_returns_list_of_active_projects_with_analytic_accounts(self):
-        """Test que verifica que all() retorna solo proyectos activos con cuenta analítica activa."""
+    def test_all_returns_list_of_active_projects_with_manager(self):
+        """Test que verifica que all() retorna solo proyectos activos con gerente asignado."""
         # Act
         projects = self.gateway.all()
 
@@ -51,8 +51,8 @@ class TestOdooProjectGateway:
         assert isinstance(projects, list), "El resultado debe ser una lista"
         # No verificamos que esté vacía porque puede haber proyectos válidos en el sistema
 
-    def test_all_returns_projects_with_valid_analytic_accounts(self):
-        """Test que verifica que todos los proyectos retornados tienen cuentas analíticas válidas."""
+    def test_all_returns_projects_with_manager_assigned(self):
+        """Test que verifica que todos los proyectos retornados tienen gerente asignado."""
         # Act
         projects = self.gateway.all()
 
@@ -65,7 +65,7 @@ class TestOdooProjectGateway:
             # Todos los proyectos retornados deben estar listos para crear timesheets
             # (esto se verifica implícitamente por la lógica del gateway)
             print(
-                f"\nTodos los {len(projects)} proyectos tienen cuentas analíticas activas"
+                f"\nTodos los {len(projects)} proyectos tienen gerente asignado"
             )
 
             # Verificar que no hay IDs duplicados (aunque el gateway no debería retornar duplicados)

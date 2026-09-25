@@ -15,6 +15,12 @@ class OdooProjectGateway(ProjectGateway):
         Utiliza el enum ProjectStages para obtener las etapas activas según el ambiente:
         - En DEV: To Do (ID: 1) e In Progress (ID: 2)
         - En STAGING: IDs configurados para ese ambiente
+
+        Cruza empresas sin problema (un proyecto de otra compañía es válido
+        para cargar horas). Lo que se descarta son proyectos sin
+        ``user_id`` (gerente de proyecto): en la práctica son registros
+        huérfanos/incompletos en Odoo (sin cliente real, sin cuenta
+        analítica configurada), no proyectos donde alguien pueda trabajar.
         """
         domain = [
             ("active", "=", True),  # Solo proyectos activos
@@ -23,6 +29,7 @@ class OdooProjectGateway(ProjectGateway):
                 "not in",
                 ProjectStages.inactive_stages(),
             ),  # Solo proyectos en etapas activas
+            ("user_id", "!=", False),  # Solo proyectos con gerente asignado
         ]
 
         projects = self.odoo_client["models"].execute_kw(
@@ -41,12 +48,6 @@ class OdooProjectGateway(ProjectGateway):
         if not projects:
             return []
 
-        # TEMPORAL: Se omite la validación de cuenta analítica para evitar crash
-        valid_projects = projects
-
-        # Transformar a modelo de dominio
-        transformed_projects = []
-        for project in valid_projects:
-            transformed_projects.append(Project(id=project["id"], name=project["name"]))
-
-        return transformed_projects
+        return [
+            Project(id=project["id"], name=project["name"]) for project in projects
+        ]
