@@ -50,13 +50,30 @@ class TestTeamAccessService:
         return gw
 
     @pytest.fixture
+    def timesheet_line_gateway(self):
+        gw = Mock()
+        # Sin equipo por jerarquía por defecto; los tests que la necesiten
+        # sobreescriben `side_effect`/`return_value`.
+        gw.get_team_users.return_value = []
+        return gw
+
+    @pytest.fixture
     def permission_repo(self):
         return Mock()
 
     @pytest.fixture
-    def service(self, employee_gateway, project_assignment_gateway, permission_repo):
+    def service(
+        self,
+        employee_gateway,
+        project_assignment_gateway,
+        timesheet_line_gateway,
+        permission_repo,
+    ):
         return TeamAccessService(
-            employee_gateway, project_assignment_gateway, permission_repo
+            employee_gateway,
+            project_assignment_gateway,
+            timesheet_line_gateway,
+            permission_repo,
         )
 
     def test_leader_sees_and_validates_own_odoo_team(self, service, permission_repo):
@@ -203,3 +220,39 @@ class TestTeamAccessService:
         assert len(result) == 1
         assert result[0].project.id == 1
         assert result[0].members == []
+
+    # ------------------------------------------------------------------
+    # Unión jerarquía (Odoo timesheet_manager_id/child_of) ∪ proyectos
+    # ------------------------------------------------------------------
+    def test_get_led_team_includes_hierarchy_only_members(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Líder sin proyectos gerenciados, pero con equipo por jerarquía en Odoo
+        project_assignment_gateway.get_team_users.side_effect = (
+            lambda user_id, emp_id, date_from=None, date_to=None: []
+        )
+        timesheet_line_gateway.get_team_users.side_effect = (
+            lambda user_id, emp_id: [{"id": 5, "name": "Eva", "work_email": "eva@x.com"}]
+            if emp_id == 10
+            else []
+        )
+        permission_repo.list_by_member.return_value = []
+
+        assert service.get_led_team_member_ids(10) == {5}
+        assert service.is_leader(10) is True
+        assert service.validatable_employee_ids(10) == {5}
+
+    def test_get_led_team_dedupes_member_in_both_hierarchy_and_project(
+        self, service, timesheet_line_gateway, permission_repo
+    ):
+        # Cira (3) ya está en el equipo por proyecto del líder 10; también
+        # aparece por jerarquía: no debe duplicarse.
+        timesheet_line_gateway.get_team_users.side_effect = (
+            lambda user_id, emp_id: [{"id": 3, "name": "Cira", "work_email": "cira@x.com"}]
+            if emp_id == 10
+            else []
+        )
+        permission_repo.list_by_member.return_value = []
+
+        team = service.get_led_team(10)
+        assert sorted(u["id"] for u in team) == [1, 2, 3]

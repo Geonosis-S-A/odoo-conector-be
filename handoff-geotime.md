@@ -62,5 +62,26 @@ Miembro con permiso `validate` aprobó desde el front una hora pendiente de otro
   - Reset de password: `UPDATE usermodel SET hashed_password = crypt('<pass>', gen_salt('bf',12)), updated_at = now() WHERE email = '<email>';`
 - Nota infra: los 500 intermitentes que se vieron hace unos días en `/users/employees`, `/teams/mine`, `/projects/`, `/employees-price/` fueron por un cambio de dirección de staging (ya resuelto), no por el bug de concurrencia.
 
+## Feature en curso: GEO-954 — Equipos por proyecto (branch `feature/geo-954-project-assigment`)
+
+**Importante:** GEO-953 (arriba) **nunca se mergeó a `main`** — quedó solo en la cadena de commits que esta rama continúa. O sea, "equipo por jerarquía de departamentos" nunca llegó a producción. GEO-954 lo reemplaza por completo antes de que GEO-953 llegue a mergearse, así que el front no tiene que integrar dos sistemas en secuencia: todo lo de equipos que se construya ahora ya es sobre el criterio nuevo (proyectos).
+
+**Problema de negocio:** un líder deja de ser "quien figura como jefe en la jerarquía de Odoo" y pasa a ser "quien gerencia un proyecto" (`project.project.user_id`) con gente asignada vía `project.assignment`. `GET /employees-price/` también se migró a este criterio (bug latente de GEO-953 documentado ahí arriba, punto 4 de "Pendientes" — **ya resuelto** en `53a5459`).
+
+### Piezas clave (backend)
+- `TeamAccessService` (`app/team/application/team_access.py`) ahora resuelve `get_led_team` contra `ProjectAssignmentGateway.get_team_users`, no contra jerarquía.
+- Endpoints nuevos: `GET /teams/mine/projects` (cualquier autenticado) y `GET /teams/{leader_id}/projects` (rol `approver`) — equipo agrupado por proyecto, `TeamProjectView`. No aceptan `date_from`/`date_to` (siempre hoy). `members[]` no trae `level`.
+- `POST /timesheet/` valida asignación vigente al `project_id`: `EmployeeNotAssignedToProjectError` → **403**, exclusivo de ese caso en ese endpoint (confirmado revisando todos los excepts del router).
+- `POST /timesheet/validate` ya autorizaba por gerencia de proyecto antes de esta rama (`can_validate_team`, GEO-953) — un líder no-admin puede validar horas de su equipo sin rol `timesheet_admin`. No requirió cambios para GEO-954.
+
+### Estado del front (repo `odoo-fe/odoo-conector-fe`, branch `feature/geo-954-projects-team`)
+Ya tiene bastante hecho (sin commitear al momento de escribir esto): `src/features/teams/{teamsTypes.ts,teamsService.ts,TeamProjectsPage.tsx}`, ruta `/my-team` wireada en `AppRoutes.tsx`, manejo del 403 nuevo en `useTimesheetServices.ts` y `DashboardUser.tsx`.
+
+### Pendientes / fixes a hacer
+1. **`teamsTypes.ts` (front) tipa `name`/`email` de `TeamProjectMember` como `string` obligatorio** — el backend los declara `Optional[str] = None` (pueden venir `null`). Ajustar el tipo a `string | null` y que `TeamProjectsPage.tsx` (`getInitials`, render del email) tolere `null`.
+2. **`GET /users/employees` no tiene ningún control de autorización más allá de estar autenticado** (confirmado en `app/users/api/routers.py:63-66` y en el use case: sin chequeo de rol ni de pertenencia a equipo). Cualquier usuario logueado puede bajarse el directorio completo (id, nombre, email) de todos los empleados. No es una regresión de esta rama — ya era así — pero la pantalla nueva de validación (accesible ahora a líderes no-admin) lo expone a más gente. Severidad baja (solo nombre/email, requiere auth), pero viola mínimo privilegio. Pendiente: decidir si se restringe a rol/equipo o se deja así a propósito.
+3. **Revisar `app/timesheet_line/tests` por el mismo patrón de mocks desactualizados** que encontré en `employee_price` (tests que patcheaban `OdooTimesheetLineGateway.get_team_users` en vez del gateway nuevo). Lo identifiqué como sospecha pero no llegué a confirmarlo ahí — quedó pendiente de la sesión anterior.
+4. **Checklist para armar usuarios de prueba en Odoo staging** (causó dos falsos negativos ya, incluido uno el 2026-09-24 con la propia Diana): antes de probar "soy líder/gerente de proyecto", confirmar que la ficha `hr.employee` de ese usuario tiene el campo **"Usuario relacionado"** completo y apuntando exactamente al mismo login que se puso como "Gerente de proyecto". Ser "Usuario interno" no alcanza — son campos distintos. Sin esto, `get_user_id_by_employee_id` devuelve `None` y tanto `/projects/` como `/teams/*` resuelven vacío aunque todo lo demás esté bien configurado.
+
 ## Metodología de trabajo preferida
 Antes de implementar, entrevistar exhaustivamente y explorar el codebase primero en vez de asumir.

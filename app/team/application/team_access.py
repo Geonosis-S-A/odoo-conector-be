@@ -8,6 +8,7 @@ from app.project.domain.gateway import ProjectAssignmentGateway
 from app.project.domain.models import Project
 from app.team.domain.models import PermissionLevel
 from app.team.domain.repositories import TeamPermissionRepository
+from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
 
 logger = logging.getLogger(__name__)
@@ -37,25 +38,29 @@ _CacheKey = Tuple[int, Optional[date], Optional[date]]
 
 
 class TeamAccessService:
-    """Resuelve equipos a partir de los proyectos gerenciados en Odoo y los cruza
-    con los permisos locales.
+    """Resuelve equipos a partir de Odoo y los cruza con los permisos locales.
 
-    El equipo de un líder es SIEMPRE lo que Odoo devuelve en el momento
-    (empleados con ``project.assignment`` vigente en los proyectos donde el
-    líder es ``project.project.user_id``, ver ``get_led_team``). Los permisos
-    locales sólo agregan capacidad de vista/validación a miembros puntuales de
-    ese equipo y dejan de aplicar si Odoo ya no ubica a la persona bajo ese
-    líder.
+    El equipo de un líder es SIEMPRE lo que Odoo devuelve en el momento (ver
+    ``get_led_team``): la unión de la jerarquía (``timesheet_manager_id``/
+    ``child_of`` sobre ``parent_id``) y los proyectos que gerencia
+    (``project.assignment`` vigente en proyectos donde es
+    ``project.project.user_id``). Se mantiene la jerarquía activa junto con
+    proyectos porque la asignación por proyecto todavía tiene poca cobertura
+    en Odoo. Los permisos locales sólo agregan capacidad de vista/validación
+    a miembros puntuales de ese equipo y dejan de aplicar si Odoo ya no ubica
+    a la persona bajo ese líder.
     """
 
     def __init__(
         self,
         employee_gateway: EmployeeGateway,
         project_assignment_gateway: ProjectAssignmentGateway,
+        timesheet_line_gateway: TimesheetLineGateway,
         permission_repo: TeamPermissionRepository,
     ) -> None:
         self.employee_gateway = employee_gateway
         self.project_assignment_gateway = project_assignment_gateway
+        self.timesheet_line_gateway = timesheet_line_gateway
         self.permission_repo = permission_repo
         self._team_cache: Dict[_CacheKey, List[Dict[str, Any]]] = {}
 
@@ -68,11 +73,13 @@ class TeamAccessService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[Dict[str, Any]]:
-        """Empleados asignados a proyectos gerenciados por ``leader_employee_id``.
+        """Empleados que ``leader_employee_id`` lidera en Odoo: jerarquía ∪ proyectos.
 
-        Lista vacía si la persona no gerencia proyectos o no tiene usuario Odoo.
-        La vigencia de las asignaciones se evalúa contra ``[date_from, date_to]``
-        (por defecto, la fecha actual si no se pasa ninguno).
+        Lista vacía si la persona no lidera a nadie por ninguno de los dos
+        criterios, o no tiene usuario Odoo. La vigencia de las asignaciones
+        por proyecto se evalúa contra ``[date_from, date_to]`` (por defecto,
+        la fecha actual si no se pasa ninguno); la jerarquía no tiene noción
+        de vigencia por fecha.
         """
         cache_key: _CacheKey = (leader_employee_id, date_from, date_to)
         if cache_key in self._team_cache:
@@ -88,18 +95,27 @@ class TeamAccessService:
                 _logged_no_user.add(leader_employee_id)
                 logger.info(
                     "El empleado %s no tiene res.users en Odoo: no se resuelve "
-                    "equipo por proyecto (su acceso, si tiene, viene de un "
-                    "permiso otorgado).",
+                    "equipo (su acceso, si tiene, viene de un permiso otorgado).",
                     leader_employee_id,
                 )
             team: List[Dict[str, Any]] = []
         else:
-            team = (
+            project_team = (
                 self.project_assignment_gateway.get_team_users(
                     user_id, leader_employee_id, date_from, date_to
                 )
                 or []
             )
+            hierarchy_team = (
+                self.timesheet_line_gateway.get_team_users(
+                    user_id, leader_employee_id
+                )
+                or []
+            )
+            by_id: Dict[int, Dict[str, Any]] = {}
+            for u in project_team + hierarchy_team:
+                by_id[u["id"]] = u
+            team = list(by_id.values())
         self._team_cache[cache_key] = team
         return team
 

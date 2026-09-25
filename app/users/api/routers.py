@@ -5,10 +5,11 @@ from app.auth.infra.auth_service import JWTPayload
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
+from app.team.api.dependencies import get_team_access_service
+from app.team.application.team_access import TeamAccessService
 from app.users.application.use_cases.sync_single_user_changes import (
     SyncSingleUserChangesUseCase,
 )
-from app.users.application.use_cases.get_all_employees import GetAllEmployeesUseCase
 from app.users.infra.db.repositories import SQLModelUserRepository
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.users.api.schemas import (
@@ -63,30 +64,24 @@ async def sync_user_changes(
 @router.get("/employees", response_model=EmployeesListResponse)
 async def get_all_employees(
     current_user: JWTPayload = Depends(get_current_user),
+    team_access: TeamAccessService = Depends(get_team_access_service),
 ):
     """
-    Obtiene todos los empleados registrados en Odoo.
-    Retorna una lista completa de empleados con ID, email y nombre completo.
+    Obtiene los empleados visibles para el usuario autenticado: su equipo
+    (jerarquía Odoo ∪ proyectos que gerencia) más los equipos ajenos donde
+    tenga un permiso de vista/validación delegado.
     """
 
-    # Inicializar dependencias
-    odoo_client = get_odoo_connection()
-    employee_gateway = OdooEmployeeGateway(odoo_client)
+    members = team_access.visible_team_members(current_user["user_id"])
 
-    # Crear y ejecutar caso de uso
-    use_case = GetAllEmployeesUseCase(employee_gateway=employee_gateway)
-
-    # Ejecutar obtención de empleados
-    employees = use_case.execute()
-
-    # Convertir Employee del dominio a EmployeeResponse del schema
+    # Convertir TeamMemberInfo a EmployeeResponse del schema
     employees_response = [
         EmployeeResponse(
-            id=employee.id,
-            email=employee.email,
-            full_name=employee.full_name,
+            id=member.employee_odoo_id,
+            email=member.email or "",
+            full_name=member.name or "",
         )
-        for employee in employees
+        for member in members
     ]
 
     return EmployeesListResponse(

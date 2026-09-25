@@ -11,6 +11,9 @@ from app.shared.infra.external.odoo.odoo_client import (
 )
 from app.team.application.team_access import TeamAccessService
 from app.team.infra.db.repositories import SQLModelTeamPermissionRepository
+from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
+    OdooTimesheetLineGateway,
+)
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 
 
@@ -27,5 +30,6 @@ def get_team_access_service(
     return TeamAccessService(
         employee_gateway=OdooEmployeeGateway(odoo_connection),
         project_assignment_gateway=OdooProjectAssignmentGateway(odoo_connection),
+        timesheet_line_gateway=OdooTimesheetLineGateway(odoo_connection),
         permission_repo=SQLModelTeamPermissionRepository(db),
     )
