@@ -1263,6 +1263,53 @@ class TestListTimesheetLinesCanValidateFlag:
         assert by_id[2].can_validate is False
         team_access.validatable_employee_ids.assert_not_called()
 
+    def test_team_plus_project_scopes_to_project_assignment_not_hierarchy(self):
+        """project_id + team=True: solo quienes el líder asignó a ESE
+        proyecto (project.assignment), sin importar la jerarquía."""
+        lines = [
+            self._line(1, employee_id=30, validated=False),  # asignado al proyecto
+            self._line(2, employee_id=40, validated=False),  # validable por jerarquía, no asignado
+        ]
+        team_access = Mock()
+        team_access.manages_project.return_value = True
+        team_access.project_assigned_employee_ids.return_value = {30}
+
+        result = self._use_case(lines, team_access).execute(
+            None, None, None, 139, None, True, 5
+        )
+
+        by_id = {l.id: l for l in result}
+        assert by_id[1].can_validate is True
+        assert by_id[2].can_validate is False
+        team_access.manages_project.assert_called_once_with(5, 139)
+        team_access.project_assigned_employee_ids.assert_called_once_with(
+            139, None, None
+        )
+        team_access.validatable_employee_ids.assert_not_called()
+        team_access.visible_employee_ids.assert_not_called()
+
+    def test_team_plus_project_raises_when_project_not_managed(self):
+        from app.timesheet_line.application.excepctions.exceptions import (
+            ProjectNotManagedError,
+        )
+
+        team_access = Mock()
+        team_access.manages_project.return_value = False
+        gw = Mock(spec=TimesheetLineGateway)
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        use_case = ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
+        )
+
+        import pytest
+
+        with pytest.raises(ProjectNotManagedError):
+            use_case.execute(None, None, None, 139, None, True, 5)
+
+        gw.all.assert_not_called()
+
     def test_non_team_request_leaves_can_validate_false(self):
         lines = [self._line(1, employee_id=5, validated=False)]
         team_access = Mock()

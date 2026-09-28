@@ -20,6 +20,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     InvalidEmployeeIdError,
     EmployeeNotExistsError,
     EmployeeNotHasUserError,
+    ProjectNotManagedError,
 )
 from app.team.application.team_access import TeamAccessService
 
@@ -63,14 +64,25 @@ class ListTimesheetLinesUseCase:
 
         user_id = None
         ids = None
+        project_scoped_ids: set[int] | None = None
         if id is not None and team and employee_id is None:
             if self.team_access is None:
                 raise EmployeeNotHasUserError(id)
-            # Equipo = proyectos gerenciados en Odoo (vigentes en el período
-            # consultado) + permisos locales.
-            ids = sorted(
-                self.team_access.visible_employee_ids(id, date_from, date_to)
-            )
+            if project_id is not None:
+                # Validación "por proyecto": sólo quienes el líder asignó a
+                # ESE proyecto puntual (project.assignment), no jerarquía.
+                if not self.team_access.manages_project(id, project_id):
+                    raise ProjectNotManagedError(project_id)
+                project_scoped_ids = self.team_access.project_assigned_employee_ids(
+                    project_id, date_from, date_to
+                )
+                ids = sorted(project_scoped_ids)
+            else:
+                # Vista plana de equipo = jerarquía ∪ proyectos gerenciados
+                # + permisos locales.
+                ids = sorted(
+                    self.team_access.visible_employee_ids(id, date_from, date_to)
+                )
 
 
         # Validación de rango de fechas
@@ -84,18 +96,21 @@ class ListTimesheetLinesUseCase:
         )
 
         # Marcar por línea si el usuario puede validarla (para el botón del
-        # front): siempre en base al equipo real en Odoo (jerarquía o
-        # proyectos gerenciados) ∪ permisos delegados. El rol approver no
-        # habilita validar fuera de ese alcance.
+        # front). El rol approver no habilita validar fuera de ese alcance.
         if (
             team
             and timesheets
             and self.team_access is not None
             and id is not None
         ):
-            validatable = self.team_access.validatable_employee_ids(
-                id, date_from, date_to
-            )
+            if project_scoped_ids is not None:
+                # Por proyecto: quien el líder asignó a ese proyecto puntual.
+                validatable = project_scoped_ids
+            else:
+                # Vista plana: jerarquía ∪ proyectos gerenciados + permisos.
+                validatable = self.team_access.validatable_employee_ids(
+                    id, date_from, date_to
+                )
             for line in timesheets:
                 line.can_validate = (
                     line.employee_id in validatable and not line.validated

@@ -122,6 +122,39 @@ class TeamAccessService:
     def get_led_team_member_ids(self, leader_employee_id: int) -> Set[int]:
         return {u["id"] for u in self.get_led_team(leader_employee_id)}
 
+    # ------------------------------------------------------------------
+    # Equipo acotado a UN proyecto puntual (solo project.assignment, sin
+    # jerarquía): para la validación "por proyecto", distinta de la vista
+    # plana de equipo.
+    # ------------------------------------------------------------------
+    def manages_project(self, leader_employee_id: int, project_id: int) -> bool:
+        """True si ``leader_employee_id`` gerencia ``project_id`` en Odoo."""
+        user_id = self.employee_gateway.get_user_id_by_employee_id(
+            leader_employee_id
+        )
+        if user_id is None:
+            return False
+        managed = self.project_assignment_gateway.get_managed_projects(user_id)
+        return any(p.id == project_id for p in managed)
+
+    def project_assigned_employee_ids(
+        self,
+        project_id: int,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None,
+    ) -> Set[int]:
+        """Empleados con ``project.assignment`` vigente en ``project_id``.
+
+        A diferencia de ``get_led_team``, esto NO mira jerarquía: es
+        exclusivamente quién fue asignado a ESE proyecto puntual.
+        """
+        assignments = self.project_assignment_gateway.get_project_assignments(
+            [project_id], date_from, date_to
+        )
+        return {
+            a["employee_id"][0] for a in assignments if a.get("employee_id")
+        }
+
     def is_leader(self, employee_id: int) -> bool:
         return bool(self.get_led_team_member_ids(employee_id))
 

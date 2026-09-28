@@ -126,6 +126,15 @@ class EmployeeNotHasUserError(TimesheetDomainError):
         super().__init__(message)
 
 
+class ProjectNotManagedError(TimesheetDomainError):
+    """Error cuando se filtra por equipo dentro de un proyecto que el
+    solicitante no gerencia en Odoo."""
+
+    def __init__(self, project_id: int):
+        message = f"No gerenciás el proyecto {project_id}"
+        super().__init__(message)
+
+
 class EmployeeNotAssignedToProjectError(TimesheetDomainError):
     """Error cuando un empleado carga horas a un proyecto sin asignación vigente."""
 

@@ -72,6 +72,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     InvalidDateRangeError,
     InvalidEmployeeIdError,
     EmployeeNotExistsError,
+    ProjectNotManagedError,
     TimesheetIdMismatchError,
     TimesheetEditError,
     TimesheetDeleteError,
@@ -272,6 +273,8 @@ async def list_timesheet_lines(
         raise HTTPException(status_code=404, detail=e.message)
     except InvalidDateRangeError as e:
         raise HTTPException(status_code=400, detail=e.message)
+    except ProjectNotManagedError as e:
+        raise HTTPException(status_code=403, detail=e.message)
     except TimesheetListError as e:
         raise HTTPException(status_code=422, detail=e.message)
     except TimesheetDomainError as e:

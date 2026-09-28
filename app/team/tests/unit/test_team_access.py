@@ -256,3 +256,43 @@ class TestTeamAccessService:
 
         team = service.get_led_team(10)
         assert sorted(u["id"] for u in team) == [1, 2, 3]
+
+    # ------------------------------------------------------------------
+    # Equipo acotado a un proyecto puntual (solo project.assignment)
+    # ------------------------------------------------------------------
+    def test_manages_project_true_when_project_in_managed_list(
+        self, service, project_assignment_gateway
+    ):
+        from app.project.domain.models import Project
+
+        project_assignment_gateway.get_managed_projects.return_value = [
+            Project(id=139, name="Mesa evolutiva", manager_user_id=100),
+        ]
+
+        assert service.manages_project(10, 139) is True
+        project_assignment_gateway.get_managed_projects.assert_called_once_with(100)
+
+    def test_manages_project_false_when_not_in_managed_list(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.get_managed_projects.return_value = []
+
+        assert service.manages_project(10, 139) is False
+
+    def test_manages_project_false_when_leader_has_no_odoo_user(self, service):
+        assert service.manages_project(99, 139) is False
+
+    def test_project_assigned_employee_ids_reads_project_assignment(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.get_project_assignments.return_value = [
+            {"employee_id": [30, "Marta"], "project_id": [139, "Mesa evolutiva"]},
+            {"employee_id": [31, "Nico"], "project_id": [139, "Mesa evolutiva"]},
+        ]
+
+        ids = service.project_assigned_employee_ids(139)
+
+        assert ids == {30, 31}
+        project_assignment_gateway.get_project_assignments.assert_called_once_with(
+            [139], None, None
+        )
