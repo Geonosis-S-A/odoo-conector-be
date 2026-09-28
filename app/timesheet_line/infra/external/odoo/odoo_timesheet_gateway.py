@@ -497,6 +497,32 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 f"Error al obtener cantidad de usuarios del equipo: {str(e)}"
             )
 
+    def get_pending_lines_minimal(
+        self, employee_ids: list[int], project_ids: list[int]
+    ) -> list[Dict[str, Any]]:
+        """``employee_id``/``project_id`` de cada línea pendiente de esos
+        empleados en esos proyectos. Una sola consulta agregada (sin
+        loop por proyecto) para contar pendientes por proyecto."""
+        if not employee_ids or not project_ids:
+            return []
+
+        domain = [
+            ("is_timesheet", "=", True),
+            ("validated", "=", False),
+            ("employee_id", "in", employee_ids),
+            ("project_id", "in", project_ids),
+        ]
+
+        return self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "search_read",
+            [domain],
+            {"fields": ["employee_id", "project_id"]},
+        )
+
     def get_by_task_or_project(
         self,
         task_id: Optional[int] = None,

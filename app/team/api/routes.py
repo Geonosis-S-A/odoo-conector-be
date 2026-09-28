@@ -58,6 +58,7 @@ def _project_team_to_view(team: LedProjectTeam) -> TeamProjectView:
             )
             for m in team.members
         ],
+        pending_count=team.pending_count,
     )
 
 

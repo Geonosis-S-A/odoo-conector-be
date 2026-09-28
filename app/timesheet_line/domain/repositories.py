@@ -55,6 +55,15 @@ class TimesheetLineGateway(ABC):
     ) -> list[Dict[str, Any]]: ...
 
     @abstractmethod
+    def get_pending_lines_minimal(
+        self, employee_ids: list[int], project_ids: list[int]
+    ) -> list[Dict[str, Any]]:
+        """``employee_id``/``project_id`` de cada línea pendiente (``validated=False``)
+        de esos empleados en esos proyectos. Sólo los dos campos, para contar
+        pendientes por proyecto sin traer la línea completa."""
+        ...
+
+    @abstractmethod
     def get_by_task_or_project(
         self,
         task_id: Optional[int] = None,

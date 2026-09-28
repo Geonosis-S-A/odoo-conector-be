@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from datetime import date
 
 from app.timesheet_line.api.schemas import TimesheetLineNotificationResponse
@@ -129,14 +129,22 @@ class ListTimesheetLinesUseCase:
                     if full_name:
                         line.task = replace(line.task, name=full_name)
 
-        employees = self.employee_gateway.all()
-        employees_dict = {employee.id: employee for employee in employees}
-
         # Una sola query batch para todas las notificaciones (reemplaza el loop N+1)
         notifications = self.notification_repository.get_by_timesheet_ids(
             [t.id for t in timesheets]
         )
         notifications_map = {n.timesheet_line_id: n for n in notifications}
+
+        # Sólo resolvemos los empleados de las notificaciones encontradas
+        # (antes se traía la empresa entera con employee_gateway.all(),
+        # paginado, aunque no hubiera ninguna notificación que mostrar).
+        employees_dict: Dict[int, Any] = {}
+        if notifications:
+            approver_ids = {n.approver_id for n in notifications}
+            employees_dict = {
+                employee.id: employee
+                for employee in self.employee_gateway.get_by_ids(list(approver_ids))
+            }
 
         for timesheet in timesheets:
             notification = notifications_map.get(timesheet.id)

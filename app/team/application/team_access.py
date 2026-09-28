@@ -26,6 +26,7 @@ class TeamMemberInfo:
 class LedProjectTeam:
     project: Project
     members: List[TeamMemberInfo]
+    pending_count: int = 0
 
 
 _VIEW_LEVELS = {PermissionLevel.view, PermissionLevel.validate}
@@ -301,6 +302,10 @@ class TeamAccessService:
             }
 
         members_by_project: Dict[int, List[TeamMemberInfo]] = defaultdict(list)
+        # Pares (employee_id, project_id) realmente asignados, para no
+        # contar pendientes de alguien que no está asignado a ESE proyecto
+        # (p.ej. validable por jerarquía en otro contexto).
+        assigned_pairs: Set[Tuple[int, int]] = set()
         for a in assignments:
             employee = a.get("employee_id")
             project = a.get("project_id")
@@ -310,6 +315,7 @@ class TeamAccessService:
             project_id = project[0]
             if employee_id == leader_employee_id:
                 continue
+            assigned_pairs.add((employee_id, project_id))
             emp = employees_by_id.get(employee_id)
             members_by_project[project_id].append(
                 TeamMemberInfo(
@@ -320,7 +326,25 @@ class TeamAccessService:
                 )
             )
 
+        pending_count_by_project: Dict[int, int] = defaultdict(int)
+        if assigned_pairs:
+            pending_lines = self.timesheet_line_gateway.get_pending_lines_minimal(
+                list(employee_ids), [p.id for p in projects]
+            )
+            for line in pending_lines:
+                employee = line.get("employee_id")
+                project = line.get("project_id")
+                if not employee or not project:
+                    continue
+                pair = (employee[0], project[0])
+                if pair in assigned_pairs:
+                    pending_count_by_project[pair[1]] += 1
+
         return [
-            LedProjectTeam(project=p, members=members_by_project.get(p.id, []))
+            LedProjectTeam(
+                project=p,
+                members=members_by_project.get(p.id, []),
+                pending_count=pending_count_by_project.get(p.id, 0),
+            )
             for p in projects
         ]

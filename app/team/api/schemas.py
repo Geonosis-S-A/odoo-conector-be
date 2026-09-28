@@ -49,3 +49,4 @@ class ProjectBasicView(BaseModel):
 class TeamProjectView(BaseModel):
     project: ProjectBasicView
     members: List[TeamMemberBasicView] = []
+    pending_count: int = 0

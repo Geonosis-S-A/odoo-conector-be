@@ -52,9 +52,10 @@ class TestTeamAccessService:
     @pytest.fixture
     def timesheet_line_gateway(self):
         gw = Mock()
-        # Sin equipo por jerarquía por defecto; los tests que la necesiten
-        # sobreescriben `side_effect`/`return_value`.
+        # Sin equipo por jerarquía ni pendientes por defecto; los tests que
+        # los necesiten sobreescriben `side_effect`/`return_value`.
         gw.get_team_users.return_value = []
+        gw.get_pending_lines_minimal.return_value = []
         return gw
 
     @pytest.fixture
@@ -220,6 +221,45 @@ class TestTeamAccessService:
         assert len(result) == 1
         assert result[0].project.id == 1
         assert result[0].members == []
+
+    def test_get_led_team_by_project_counts_pending_lines_per_project(
+        self, service, project_assignment_gateway, timesheet_line_gateway
+    ):
+        from app.project.domain.models import Project
+        from app.users.domain.models import Employee
+
+        project_assignment_gateway.get_managed_projects.return_value = [
+            Project(id=1, name="P1", manager_user_id=100),
+            Project(id=2, name="P2", manager_user_id=100),
+        ]
+        project_assignment_gateway.get_project_assignments.return_value = [
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            {"employee_id": [2, "Beto"], "project_id": [2, "P2"]},
+        ]
+        service.employee_gateway.get_by_ids.return_value = [
+            Employee(id=1, email="ana@x.com", full_name="Ana"),
+            Employee(id=2, email="beto@x.com", full_name="Beto"),
+        ]
+        timesheet_line_gateway.get_pending_lines_minimal.return_value = [
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            # Beto no está asignado a P1: no debe sumar a P1 aunque tenga
+            # horas pendientes cargadas ahí (p.ej. validable por jerarquía).
+            {"employee_id": [2, "Beto"], "project_id": [1, "P1"]},
+        ]
+
+        result = service.get_led_team_by_project(10)
+
+        by_project = {t.project.id: t for t in result}
+        assert by_project[1].pending_count == 3
+        assert by_project[2].pending_count == 0
+        timesheet_line_gateway.get_pending_lines_minimal.assert_called_once()
+        called_employee_ids, called_project_ids = (
+            timesheet_line_gateway.get_pending_lines_minimal.call_args[0]
+        )
+        assert set(called_employee_ids) == {1, 2}
+        assert set(called_project_ids) == {1, 2}
 
     # ------------------------------------------------------------------
     # Unión jerarquía (Odoo timesheet_manager_id/child_of) ∪ proyectos
