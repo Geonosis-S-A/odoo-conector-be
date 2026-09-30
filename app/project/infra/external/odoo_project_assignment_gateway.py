@@ -10,8 +10,11 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
     """Equipos y proyectos derivados de `project.assignment` (Odoo).
 
     `project.project.user_id` es el gerente del proyecto (líder). La vigencia de
-    una asignación se evalúa por solapamiento entre [date_start, date_end] (con
-    date_end vacío = sin fin) y el rango [date_from, date_to] consultado.
+    una asignación se evalúa sólo contra `date_start` (¿ya arrancó, relativo al
+    rango [date_from, date_to] consultado?). `date_end` NO se usa como corte: es
+    una fecha *estimada* que en la práctica se extiende sin que nadie la
+    actualice en Odoo a tiempo, y tratarla como corte duro sacaba gente del
+    equipo (y le bloqueaba cargar horas) apenas se cumplía la estimación.
     """
 
     def __init__(self, odoo_client):
@@ -30,13 +33,9 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
 
     @staticmethod
     def _validity_domain(date_from: date, date_to: date) -> list:
-        return [
-            "&",
-            ("date_start", "<=", date_to.isoformat()),
-            "|",
-            ("date_end", "=", False),
-            ("date_end", ">=", date_from.isoformat()),
-        ]
+        # Sólo exige que la asignación ya haya arrancado. `date_end` es una
+        # fecha estimada, no un corte real de vigencia (ver docstring).
+        return [("date_start", "<=", date_to.isoformat())]
 
     @staticmethod
     def _resolve_range(

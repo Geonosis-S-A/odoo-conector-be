@@ -7,7 +7,6 @@ from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.application.excepctions.exceptions import (
-    EmployeeNotAssignedToProjectError,
     InvalidHoursError,
     TimesheetCreationError,
 )
@@ -114,9 +113,10 @@ class TestCargarHorasUseCase:
         assert "Las horas no pueden ser negativas" in str(exc_info.value.message)
         assert "-1.0" in str(exc_info.value.message)
 
-    def test_execute_raises_error_when_employee_not_assigned_to_project(
-        self, use_case, mock_project_assignment_gateway
+    def test_execute_does_not_require_project_assignment(
+        self, use_case, mock_gateway, mock_project_assignment_gateway
     ):
+        """project.assignment no está normalizado en Odoo: no debe bloquear la carga."""
         # Arrange
         requests = [
             CargarHorasRequest(
@@ -128,15 +128,15 @@ class TestCargarHorasUseCase:
             )
         ]
         mock_project_assignment_gateway.is_employee_assigned.return_value = False
+        mock_gateway.create.return_value = [123]
+        mock_gateway.get_by_ids.return_value = [Mock()]
 
-        # Act & Assert
-        with pytest.raises(EmployeeNotAssignedToProjectError) as exc_info:
-            use_case.execute(requests)
+        # Act
+        result = use_case.execute(requests)
 
-        mock_project_assignment_gateway.is_employee_assigned.assert_called_once_with(
-            1, 99, at_date=date(2024, 1, 1)
-        )
-        assert "no tiene una asignación vigente" in str(exc_info.value.message)
+        # Assert
+        mock_project_assignment_gateway.is_employee_assigned.assert_not_called()
+        assert len(result) == 1
 
     def test_execute_raises_timesheet_creation_error_when_create_fails(
         self, use_case, mock_gateway

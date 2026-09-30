@@ -76,8 +76,9 @@ class TestOdooProjectAssignmentGateway:
             domain = args[0]
             assert ("project_id", "in", [1]) in domain
             assert ("date_start", "<=", "2024-01-31") in domain
-            assert ("date_end", "=", False) in domain
-            assert ("date_end", ">=", "2024-01-01") in domain
+            # date_end ya no se usa como corte: es una fecha estimada que se
+            # extiende en la práctica sin que Odoo quede actualizado a tiempo.
+            assert not any(cond[0] == "date_end" for cond in domain if isinstance(cond, tuple))
             return [{"employee_id": [10, "Ana"], "project_id": [1, "P1"]}]
 
         gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))

@@ -6,7 +6,6 @@ from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.application.excepctions.exceptions import (
-    EmployeeNotAssignedToProjectError,
     InvalidHoursError,
     TimesheetCreationError,
     TimesheetNotFoundError,
@@ -28,6 +27,11 @@ class CargarHorasUseCase:
         """
         Ejecuta la creación de líneas de timesheet.
 
+        No exige asignación vigente (`project.assignment`) al proyecto: esa
+        tabla todavía no está normalizada en Odoo para la mayoría de los
+        empleados, así que bloquear por eso impedía cargar horas a proyectos
+        reales. Ver [[project-project-assignment-normalization-pending]].
+
         Args:
             requests: Lista de peticiones para crear líneas de timesheet
 
@@ -36,8 +40,6 @@ class CargarHorasUseCase:
 
         Raises:
             InvalidHoursError: Cuando las horas son negativas
-            EmployeeNotAssignedToProjectError: Cuando el empleado no tiene una
-                asignación vigente al proyecto en la fecha de la línea
             TimesheetCreationError: Para errores de creación
             TimesheetNotFoundError: Cuando no se pueden obtener las líneas creadas
         """
@@ -45,13 +47,6 @@ class CargarHorasUseCase:
         for req in requests:
             if req.hours < 0:
                 raise InvalidHoursError(req.hours)
-
-            if not self.project_assignment_gateway.is_employee_assigned(
-                req.employee_id, req.project_id, at_date=req.date
-            ):
-                raise EmployeeNotAssignedToProjectError(
-                    req.employee_id, req.project_id
-                )
 
             timesheet_line = TimesheetLine.from_request(
                 id=None,
