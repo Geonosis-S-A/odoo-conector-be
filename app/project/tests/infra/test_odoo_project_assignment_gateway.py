@@ -100,6 +100,42 @@ class TestOdooProjectAssignmentGateway:
 
         assert {u["id"] for u in team} == {10, 20}
 
+    def test_get_team_users_default_includes_finished_projects(self):
+        """Los reportes cuentan todos los proyectos gerenciados, también los
+        finalizados: el dominio sólo filtra por gerente."""
+        searched = []
+
+        def side_effect(db, uid, pwd, model, method, args, kwargs):
+            if model == "project.project" and method == "search":
+                searched.append(args[0])
+                return []
+            raise AssertionError("no debería llamarse a nada más")
+
+        gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
+        gateway.get_team_users(user_id=100, employee_id=1)
+
+        assert searched == [[("user_id", "=", 100)]]
+
+    def test_get_team_users_only_active_excludes_finished_projects(self):
+        searched = []
+
+        def side_effect(db, uid, pwd, model, method, args, kwargs):
+            if model == "project.project" and method == "search":
+                searched.append(args[0])
+                return []
+            raise AssertionError("no debería llamarse a nada más")
+
+        gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
+        gateway.get_team_users(user_id=100, employee_id=1, only_active=True)
+
+        assert searched == [
+            [
+                ("user_id", "=", 100),
+                ("active", "=", True),
+                ("stage_id", "not in", ProjectStages.inactive_stages()),
+            ]
+        ]
+
     def test_get_project_assignments_filters_by_validity_range(self):
         def side_effect(db, uid, pwd, model, method, args, kwargs):
             assert model == "project.assignment"

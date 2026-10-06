@@ -43,7 +43,7 @@ class TestTeamAccessService:
             ],
         }
         gw.get_team_users.side_effect = (
-            lambda user_id, emp_id, date_from=None, date_to=None: teams.get(
+            lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: teams.get(
                 emp_id, []
             )
         )
@@ -261,6 +261,16 @@ class TestTeamAccessService:
         assert set(called_employee_ids) == {1, 2}
         assert set(called_project_ids) == {1, 2}
 
+    def test_get_led_team_asks_for_active_projects_only(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+
+        service.get_led_team(10)
+
+        _, kwargs = project_assignment_gateway.get_team_users.call_args
+        assert kwargs.get("only_active") is True
+
     # ------------------------------------------------------------------
     # Unión jerarquía (Odoo timesheet_manager_id/child_of) ∪ proyectos
     # ------------------------------------------------------------------
@@ -269,7 +279,7 @@ class TestTeamAccessService:
     ):
         # Líder sin proyectos gerenciados, pero con equipo por jerarquía en Odoo
         project_assignment_gateway.get_team_users.side_effect = (
-            lambda user_id, emp_id, date_from=None, date_to=None: []
+            lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: []
         )
         timesheet_line_gateway.get_team_users.side_effect = (
             lambda user_id, emp_id: [{"id": 5, "name": "Eva", "work_email": "eva@x.com"}]

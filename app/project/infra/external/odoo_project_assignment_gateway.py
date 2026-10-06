@@ -54,10 +54,15 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
             ("stage_id", "not in", ProjectStages.inactive_stages()),
         ]
 
-    def _managed_project_ids(self, user_id: int) -> List[int]:
-        return self._execute_kw(
-            "project.project", "search", [self._managed_projects_domain(user_id)]
+    def _managed_project_ids(self, user_id: int, only_active: bool = False) -> List[int]:
+        # Por defecto sin filtrar por etapa (comportamiento histórico, lo que
+        # usan los reportes); con only_active, sólo proyectos vigentes.
+        domain = (
+            self._managed_projects_domain(user_id)
+            if only_active
+            else [("user_id", "=", user_id)]
         )
+        return self._execute_kw("project.project", "search", [domain])
 
     def get_managed_projects(self, user_id: int) -> list[Project]:
         rows = self._execute_kw(
@@ -121,8 +126,9 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
         employee_id: int,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
+        only_active: bool = False,
     ) -> list[Dict[str, Any]]:
-        project_ids = self._managed_project_ids(user_id)
+        project_ids = self._managed_project_ids(user_id, only_active)
         if not project_ids:
             return []
 

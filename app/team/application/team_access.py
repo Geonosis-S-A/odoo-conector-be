@@ -103,7 +103,11 @@ class TeamAccessService:
         else:
             project_team = (
                 self.project_assignment_gateway.get_team_users(
-                    user_id, leader_employee_id, date_from, date_to
+                    user_id,
+                    leader_employee_id,
+                    date_from,
+                    date_to,
+                    only_active=True,
                 )
                 or []
             )

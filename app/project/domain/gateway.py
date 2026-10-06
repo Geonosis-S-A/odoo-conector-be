@@ -28,8 +28,14 @@ class ProjectAssignmentGateway(ABC):
         employee_id: int,
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
+        only_active: bool = False,
     ) -> list[Dict[str, Any]]:
         """Empleados asignados a proyectos gerenciados por `user_id`, excluyendo `employee_id`.
+
+        Por defecto considera todos los proyectos que gerencia (incluidos los
+        finalizados): es lo que necesitan los reportes. Con `only_active=True`
+        sólo cuentan los proyectos vigentes (To Do / In Progress), que es lo
+        que se usa para validar y cargar horas.
 
         Mismo shape que el `get_team_users` legado: `{"id","name","work_email"}`.
         """
