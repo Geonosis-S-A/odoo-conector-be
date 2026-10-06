@@ -144,10 +144,14 @@ async def create_timesheet_line(
     project_assignment_gateway: ProjectAssignmentGateway = Depends(
         get_project_assignment_gateway
     ),
+    employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     current_user: dict = Depends(get_current_user),
 ):
     """
     Crea nuevas líneas de timesheet.
+
+    Exige que el empleado esté asignado al proyecto (``project.assignment``
+    vigente en la fecha) o lo gerencie; si no, 403.
 
     Args:
         request: Lista de datos de las líneas de timesheet a crear
@@ -157,7 +161,9 @@ async def create_timesheet_line(
         list[DetailedTimesheetLineResponse]: Lista de líneas de timesheet creadas con detalles
     """
     try:
-        use_case = CargarHorasUseCase(gateway, project_assignment_gateway)
+        use_case = CargarHorasUseCase(
+            gateway, project_assignment_gateway, employee_gateway
+        )
         lines = use_case.execute(request)
         return lines
     except InvalidHoursError as e:
