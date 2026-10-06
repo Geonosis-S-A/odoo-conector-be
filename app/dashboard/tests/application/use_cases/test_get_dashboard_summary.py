@@ -130,7 +130,7 @@ class TestGetDashboardSummaryUseCase:
         date_to = date(2024, 1, 31)
 
         # Configurar mocks
-        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
+        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock de precios de empleados (vacío para este test)
@@ -191,8 +191,10 @@ class TestGetDashboardSummaryUseCase:
         assert result.hierarchical_summary is None  # Mockeado como None
 
         # Verificar llamadas a los mocks
-        mock_project_assignment_gateway.get_team_users.assert_called_once_with(
-            user_id, employee_id, date_from, date_to
+        # Equipo = jerarquía de Odoo (sin fechas); las horas de los proyectos
+        # gerenciados las suma la consulta de líneas vía `user_id`.
+        mock_timesheet_gateway.get_team_users.assert_called_once_with(
+            user_id, employee_id
         )
         mock_dashboard_gateway.get_timesheet_summary.assert_called_once_with(
             [1, 2],  # IDs de usuarios del equipo
@@ -252,7 +254,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_project_assignment_gateway.get_team_users.return_value = []
+        mock_timesheet_gateway.get_team_users.return_value = []
         mock_dashboard_gateway.get_timesheet_summary.return_value = []
 
         # Mock de precios de empleados (vacío)
@@ -317,7 +319,7 @@ class TestGetDashboardSummaryUseCase:
         date_to = date(2024, 1, 31)
 
         single_user_team = [{"id": 1, "name": "Employee 1"}]
-        mock_project_assignment_gateway.get_team_users.return_value = single_user_team
+        mock_timesheet_gateway.get_team_users.return_value = single_user_team
 
         # Mock de datos de timesheet para un solo empleado
         single_user_timesheet_data = [
@@ -414,7 +416,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
+        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock de precios de empleados (vacío)
@@ -482,7 +484,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
+        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock básico de todo lo demás
@@ -540,7 +542,7 @@ class TestGetDashboardSummaryUseCase:
         date_from = date(2024, 1, 1)
         date_to = date(2024, 1, 31)
 
-        mock_project_assignment_gateway.get_team_users.return_value = mock_team_users
+        mock_timesheet_gateway.get_team_users.return_value = mock_team_users
         mock_dashboard_gateway.get_timesheet_summary.return_value = mock_timesheet_data
 
         # Mock mínimo necesario
@@ -566,7 +568,7 @@ class TestGetDashboardSummaryUseCase:
         use_case.execute(user_id, employee_id, date_from, date_to)
 
         # Assert - Verificar orden de llamadas críticas
-        assert mock_project_assignment_gateway.get_team_users.called
+        assert mock_timesheet_gateway.get_team_users.called
         assert mock_dashboard_gateway.get_timesheet_summary.called
         assert mock_dashboard_gateway.calculate_hours_kpi.called
         assert mock_dashboard_gateway.calculate_entries_kpi.called

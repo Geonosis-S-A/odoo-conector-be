@@ -45,9 +45,13 @@ class GetDashboardSummaryUseCase:
             DashboardSummary con todos los KPIs y totales calculados
         """
 
-        team_users = self.project_assignment_gateway.get_team_users(
-            user_id, employee_id, date_from, date_to
-        )
+        # Equipo = SÓLO la jerarquía de Odoo: de esas personas cuentan todas
+        # sus horas. Las horas de los proyectos que gerencia (de quien sea,
+        # incluso gente fuera de su jerarquía) se suman aparte en la consulta
+        # de líneas (`requester_user_id`). Así, alguien asignado a un
+        # proyecto suyo pero de otra jerarquía NO trae sus horas en proyectos
+        # ajenos al dashboard.
+        team_users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
 
         ids = [user["id"] for user in team_users]
 
