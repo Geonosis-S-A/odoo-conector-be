@@ -64,7 +64,7 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
             "project.project",
             "search_read",
             [self._managed_projects_domain(user_id)],
-            {"fields": ["id", "name"]},
+            {"fields": ["id", "name"], "context": {"lang": "es_AR"}},
         )
         return [
             Project(id=r["id"], name=r["name"], manager_user_id=user_id) for r in rows

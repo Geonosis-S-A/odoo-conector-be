@@ -33,6 +33,7 @@ class TestOdooProjectAssignmentGateway:
                     ("stage_id", "not in", ProjectStages.inactive_stages()),
                 ]
             ]
+            assert kwargs["context"] == {"lang": "es_AR"}
             return [{"id": 1, "name": "Proyecto A"}]
 
         gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
