@@ -56,6 +56,8 @@ class DetailedTimesheetLine:
     notification: Optional[TimesheetLineNotificationResponse] = None
     # True si el usuario que consulta puede validar ESTA línea (vista de equipo).
     can_validate: bool = False
+    # True si el usuario que consulta puede borrar ESTA línea (vista de equipo).
+    can_delete: bool = False
 
 
 @dataclass

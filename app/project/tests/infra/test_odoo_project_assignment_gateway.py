@@ -41,6 +41,29 @@ class TestOdooProjectAssignmentGateway:
 
         assert projects == [Project(id=1, name="Proyecto A", manager_user_id=100)]
 
+    def test_get_project_manager_user_ids_includes_archived_and_unmanaged(self):
+        def side_effect(db, uid, pwd, model, method, args, kwargs):
+            assert model == "project.project"
+            assert method == "search_read"
+            assert args == [[("id", "in", [1, 2])]]
+            assert kwargs["context"] == {"active_test": False}
+            return [
+                {"id": 1, "user_id": [100, "Iván"]},
+                {"id": 2, "user_id": False},
+            ]
+
+        gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
+
+        assert gateway.get_project_manager_user_ids([1, 2]) == {1: 100, 2: None}
+
+    def test_get_project_manager_user_ids_empty_does_not_call_odoo(self):
+        def side_effect(*args):
+            raise AssertionError("no debería llamarse a Odoo")
+
+        gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
+
+        assert gateway.get_project_manager_user_ids([]) == {}
+
     def test_get_team_users_no_managed_projects_returns_empty(self):
         def side_effect(db, uid, pwd, model, method, args, kwargs):
             if model == "project.project" and method == "search":

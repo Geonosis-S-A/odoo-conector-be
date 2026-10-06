@@ -39,6 +39,16 @@ class ProjectAssignmentGateway(ABC):
         """Proyectos donde `project.project.user_id == user_id` (Project Manager)."""
 
     @abstractmethod
+    def get_project_manager_user_ids(
+        self, project_ids: list[int]
+    ) -> Dict[int, Optional[int]]:
+        """`project.project.user_id` (gerente) de cada proyecto, o None si no tiene.
+
+        No filtra por activo/etapa: sirve para decidir quién puede actuar sobre
+        horas ya cargadas, incluso en proyectos finalizados.
+        """
+
+    @abstractmethod
     def get_project_assignments(
         self,
         project_ids: list[int],

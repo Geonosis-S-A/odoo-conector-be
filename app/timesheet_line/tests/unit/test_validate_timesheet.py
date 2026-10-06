@@ -364,9 +364,9 @@ class TestValidateTimesheetUseCase:
         self, mock_gateway, mock_email_service, mock_employee_gateway,
         mock_notification_repository,
     ):
-        """Un no-admin no puede validar horas de empleados fuera de su alcance."""
+        """Un no-admin no puede validar líneas de proyectos que no gerencia."""
         team_access = Mock()
-        team_access.validatable_employee_ids.return_value = {2, 3}
+        team_access.lines_authority.return_value = {(7, 1): False}
         use_case = ValidateTimesheetUseCase(
             mock_gateway, mock_email_service, mock_employee_gateway,
             mock_notification_repository, team_access,
@@ -379,20 +379,20 @@ class TestValidateTimesheetUseCase:
             )
         ]
 
-        with pytest.raises(TimesheetValidateError, match="fuera de tu equipo"):
+        with pytest.raises(TimesheetValidateError, match="no gerenciás su proyecto"):
             await use_case.execute(
                 [1], "approver@test.com", validator_employee_id=5
             )
         mock_gateway.validate.assert_not_called()
-        team_access.validatable_employee_ids.assert_called_once_with(5)
+        team_access.lines_authority.assert_called_once_with(5, [(7, 1)])
 
     async def test_non_admin_validates_within_validatable_team(
         self, mock_gateway, mock_email_service, mock_employee_gateway,
         mock_notification_repository,
     ):
-        """Un no-admin sí puede validar horas de empleados dentro de su alcance."""
+        """Un no-admin sí puede validar líneas de proyectos que gerencia."""
         team_access = Mock()
-        team_access.validatable_employee_ids.return_value = {2, 3, 7}
+        team_access.lines_authority.return_value = {(7, 1): True}
         use_case = ValidateTimesheetUseCase(
             mock_gateway, mock_email_service, mock_employee_gateway,
             mock_notification_repository, team_access,

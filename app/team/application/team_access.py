@@ -216,6 +216,91 @@ class TeamAccessService:
         ids.discard(employee_id)
         return ids
 
+    # ------------------------------------------------------------------
+    # Autoridad POR LÍNEA: validar/borrar según el gerente del proyecto
+    # ------------------------------------------------------------------
+    def _authorities(self, actor_employee_id: int) -> List[Tuple[int, int]]:
+        """Pares ``(employee_id, user_id)`` con cuya autoridad actúa el actor:
+        él mismo y los líderes que le delegaron ``validate`` (mientras Odoo
+        siga ubicándolo en el equipo de ese líder)."""
+        authorities: List[Tuple[int, int]] = []
+        own_user = self.employee_gateway.get_user_id_by_employee_id(
+            actor_employee_id
+        )
+        if own_user is not None:
+            authorities.append((actor_employee_id, own_user))
+
+        for perm in self.permission_repo.list_by_member(actor_employee_id):
+            if perm.level not in _VALIDATE_LEVELS:
+                continue
+            leader_id = perm.leader_employee_odoo_id
+            if actor_employee_id not in {u["id"] for u in self.get_led_team(leader_id)}:
+                continue
+            leader_user = self.employee_gateway.get_user_id_by_employee_id(leader_id)
+            if leader_user is not None:
+                authorities.append((leader_id, leader_user))
+        return authorities
+
+    def lines_authority(
+        self, actor_employee_id: int, lines: List[Tuple[int, int]]
+    ) -> Dict[Tuple[int, int], bool]:
+        """Para cada ``(employee_id, project_id)`` de una línea, si el actor
+        puede validarla/borrarla.
+
+        Regla: sólo el gerente del proyecto (``project.project.user_id``).
+        Si el proyecto no tiene gerente, el jefe por jerarquía del empleado.
+        Nunca sobre las propias horas ni (vía permiso delegado) sobre las del
+        líder que delegó. Una sola lectura de gerentes por llamada.
+        """
+        pairs = set(lines)
+        if not pairs:
+            return {}
+        authorities = self._authorities(actor_employee_id)
+        if not authorities:
+            return {pair: False for pair in pairs}
+
+        managers = self.project_assignment_gateway.get_project_manager_user_ids(
+            sorted({project_id for _, project_id in pairs})
+        )
+        hierarchy_cache: Dict[int, Set[int]] = {}
+
+        def _hierarchy(leader_id: int, leader_user: int) -> Set[int]:
+            if leader_id not in hierarchy_cache:
+                hierarchy_cache[leader_id] = {
+                    u["id"]
+                    for u in (
+                        self.timesheet_line_gateway.get_team_users(
+                            leader_user, leader_id
+                        )
+                        or []
+                    )
+                }
+            return hierarchy_cache[leader_id]
+
+        result: Dict[Tuple[int, int], bool] = {}
+        for employee_id, project_id in pairs:
+            allowed = False
+            if employee_id != actor_employee_id:
+                manager = managers.get(project_id)
+                for leader_id, leader_user in authorities:
+                    if employee_id == leader_id:
+                        continue
+                    if manager is not None:
+                        if manager == leader_user:
+                            allowed = True
+                            break
+                    elif employee_id in _hierarchy(leader_id, leader_user):
+                        allowed = True
+                        break
+            result[(employee_id, project_id)] = allowed
+        return result
+
+    def can_act_on_line(
+        self, actor_employee_id: int, line_employee_id: int, line_project_id: int
+    ) -> bool:
+        pair = (line_employee_id, line_project_id)
+        return self.lines_authority(actor_employee_id, [pair]).get(pair, False)
+
     def can_view_team(self, employee_id: int) -> bool:
         return bool(self.visible_employee_ids(employee_id))
 

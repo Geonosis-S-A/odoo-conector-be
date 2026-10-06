@@ -76,6 +76,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetIdMismatchError,
     TimesheetEditError,
     TimesheetDeleteError,
+    TimesheetDeleteForbiddenError,
     OdooValidationError,
     OdooConnectionError,
     TimesheetValidateError,
@@ -310,9 +311,13 @@ async def delete_timesheet_line(
     request: DeleteTimesheetRequest,
     gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
     current_user: dict = Depends(get_current_user),
+    team_access: TeamAccessService = Depends(get_team_access_service),
 ):
     """
     Elimina múltiples líneas de timesheet.
+
+    Permitido sobre las propias horas no validadas, o sobre las que el
+    usuario puede validar (es gerente del proyecto de la línea).
 
     Args:
         request: Objeto con lista de IDs de las líneas de timesheet a eliminar
@@ -322,11 +327,15 @@ async def delete_timesheet_line(
         Dict[str, str]: Mensaje de éxito
     """
     try:
-        use_case = DeleteTimesheetUseCase(gateway)
-        success = use_case.execute(request.ids)
+        use_case = DeleteTimesheetUseCase(gateway, team_access)
+        success = use_case.execute(
+            request.ids, requester_employee_id=current_user["user_id"]
+        )
         return {"message": "Líneas de timesheet eliminadas correctamente"}
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetDeleteForbiddenError as e:
+        raise HTTPException(status_code=403, detail=e.message)
     except TimesheetDeleteError as e:
         raise HTTPException(status_code=422, detail=e.message)
     except TimesheetDomainError as e:

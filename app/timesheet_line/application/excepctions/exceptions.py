@@ -176,6 +176,17 @@ class TimesheetDeleteError(TimesheetDomainError):
         super().__init__(message)
 
 
+class TimesheetDeleteForbiddenError(TimesheetDomainError):
+    """El solicitante no puede borrar alguna de las líneas pedidas."""
+
+    def __init__(self, timesheet_ids: list[int]):
+        message = (
+            "No tienes permiso para eliminar las líneas de timesheet con IDs "
+            f"{timesheet_ids}"
+        )
+        super().__init__(message)
+
+
 class TimesheetValidateError(TimesheetDomainError):
     """Error al validar una línea de timesheet."""
 

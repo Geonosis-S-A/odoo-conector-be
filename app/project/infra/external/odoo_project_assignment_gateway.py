@@ -70,6 +70,23 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
             Project(id=r["id"], name=r["name"], manager_user_id=user_id) for r in rows
         ]
 
+    def get_project_manager_user_ids(
+        self, project_ids: list[int]
+    ) -> Dict[int, Optional[int]]:
+        if not project_ids:
+            return {}
+        rows = self._execute_kw(
+            "project.project",
+            "search_read",
+            [[("id", "in", project_ids)]],
+            # active_test False: un proyecto archivado/finalizado conserva
+            # gerente y sus horas pendientes siguen siendo aprobables.
+            {"fields": ["id", "user_id"], "context": {"active_test": False}},
+        )
+        return {
+            r["id"]: (r["user_id"][0] if r.get("user_id") else None) for r in rows
+        }
+
     def get_project_assignments(
         self,
         project_ids: list[int],

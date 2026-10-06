@@ -39,20 +39,24 @@ class ValidateTimesheetUseCase:
         if not existing_timesheets or len(existing_timesheets) != len(timesheet_ids):
             raise TimesheetNotFoundError(timesheet_ids)
 
-        # Cada línea debe pertenecer a un empleado que el validador pueda
-        # aprobar (equipo Odoo en vivo -jerarquía o proyectos gerenciados-
-        # + permisos 'validate' delegados). Nunca incluye al propio
-        # validador ni a sus líderes. El rol approver no exime este chequeo.
+        # Cada línea se valida según el gerente de SU proyecto (o el jefe por
+        # jerarquía si el proyecto no tiene gerente), incluyendo permisos
+        # 'validate' delegados. Nunca las propias horas. El rol approver no
+        # exime este chequeo.
         if validator_employee_id is not None and self.team_access:
-            allowed_employee_ids = self.team_access.validatable_employee_ids(
-                validator_employee_id
+            authority = self.team_access.lines_authority(
+                validator_employee_id,
+                [(t.employee_id, t.project.id) for t in existing_timesheets],
             )
-            timesheet_employee_ids = {t.employee_id for t in existing_timesheets}
-            outside = timesheet_employee_ids - allowed_employee_ids
+            outside = sorted(
+                t.id
+                for t in existing_timesheets
+                if not authority.get((t.employee_id, t.project.id), False)
+            )
             if outside:
                 raise TimesheetValidateError(
                     timesheet_ids,
-                    f"No tienes permiso para validar horas de empleados fuera de tu equipo: {outside}",
+                    f"No tienes permiso para validar estas líneas (no gerenciás su proyecto): {outside}",
                 )
 
         # Verificar que el approver existe antes de validar

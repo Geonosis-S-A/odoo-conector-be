@@ -1205,12 +1205,14 @@ class TestListTimesheetLinesUseCase:
 class TestListTimesheetLinesCanValidateFlag:
     """`can_validate` por línea en la vista de equipo (`team=True`)."""
 
-    def _line(self, line_id: int, employee_id: int, validated: bool):
+    def _line(
+        self, line_id: int, employee_id: int, validated: bool, project_id: int = 1
+    ):
         return DetailedTimesheetLine(
             id=line_id,
             name=f"ts-{line_id}",
             employee_id=employee_id,
-            project=Project(id=1, name="P"),
+            project=Project(id=project_id, name="P"),
             task=None,
             hours=8.0,
             date=date(2026, 9, 8),
@@ -1229,15 +1231,19 @@ class TestListTimesheetLinesCanValidateFlag:
             gw, emp_gw, notif, task_gateway=None, team_access=team_access
         )
 
-    def test_member_can_validate_only_lines_in_scope_and_pending(self):
+    def test_authority_is_per_line_not_per_employee(self):
+        """Mismo empleado en dos proyectos: sólo se habilita el que gerencia."""
         lines = [
-            self._line(1, employee_id=20, validated=False),  # en alcance, pendiente
-            self._line(2, employee_id=20, validated=True),   # en alcance, ya validada
-            self._line(3, employee_id=99, validated=False),  # fuera de alcance
+            self._line(1, employee_id=20, validated=False, project_id=1),  # mío
+            self._line(2, employee_id=20, validated=True, project_id=1),   # mío, ya validada
+            self._line(3, employee_id=20, validated=False, project_id=2),  # de otro líder
         ]
         team_access = Mock()
-        team_access.visible_employee_ids.return_value = {20, 99}
-        team_access.validatable_employee_ids.return_value = {20}
+        team_access.visible_employee_ids.return_value = {20}
+        team_access.lines_authority.return_value = {
+            (20, 1): True,
+            (20, 2): False,
+        }
 
         result = self._use_case(lines, team_access).execute(
             None, None, None, None, None, True, 5
@@ -1245,8 +1251,12 @@ class TestListTimesheetLinesCanValidateFlag:
 
         by_id = {l.id: l for l in result}
         assert by_id[1].can_validate is True
-        assert by_id[2].can_validate is False
+        assert by_id[1].can_delete is True
+        assert by_id[2].can_validate is False  # ya validada
+        assert by_id[2].can_delete is True     # borrar no depende de validated
         assert by_id[3].can_validate is False
+        assert by_id[3].can_delete is False
+        team_access.lines_authority.assert_called_once()
 
     def test_can_validate_never_set_without_team_flag_regardless_of_role(self):
         """Sin `team=True` no se marca `can_validate` en ninguna línea: el rol
@@ -1264,32 +1274,44 @@ class TestListTimesheetLinesCanValidateFlag:
         by_id = {l.id: l for l in result}
         assert by_id[1].can_validate is False
         assert by_id[2].can_validate is False
-        team_access.validatable_employee_ids.assert_not_called()
+        team_access.lines_authority.assert_not_called()
 
-    def test_team_plus_project_scopes_to_project_assignment_not_hierarchy(self):
-        """project_id + team=True: solo quienes el líder asignó a ESE
-        proyecto (project.assignment), sin importar la jerarquía."""
+    def test_team_plus_project_includes_assigned_and_hierarchy(self):
+        """project_id + team=True: el gerente ve a los asignados al proyecto
+        y también a su gente por jerarquía que cargó horas ahí sin estar
+        asignada; los botones salen de la autoridad por línea."""
         lines = [
-            self._line(1, employee_id=30, validated=False),  # asignado al proyecto
-            self._line(2, employee_id=40, validated=False),  # validable por jerarquía, no asignado
+            self._line(1, employee_id=30, validated=False, project_id=139),  # asignado
+            self._line(2, employee_id=40, validated=False, project_id=139),  # jerarquía, no asignado
         ]
         team_access = Mock()
         team_access.manages_project.return_value = True
         team_access.project_assigned_employee_ids.return_value = {30}
-
-        result = self._use_case(lines, team_access).execute(
-            None, None, None, 139, None, True, 5
+        team_access.visible_employee_ids.return_value = {40}
+        team_access.lines_authority.return_value = {
+            (30, 139): True,
+            (40, 139): True,
+        }
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = lines
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        emp_gw.all.return_value = []
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        notif.get_by_timesheet_ids.return_value = []
+        use_case = ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
         )
 
-        by_id = {l.id: l for l in result}
-        assert by_id[1].can_validate is True
-        assert by_id[2].can_validate is False
+        result = use_case.execute(None, None, None, 139, None, True, 5)
+
+        assert all(l.can_validate for l in result)
         team_access.manages_project.assert_called_once_with(5, 139)
         team_access.project_assigned_employee_ids.assert_called_once_with(
             139, None, None
         )
-        team_access.validatable_employee_ids.assert_not_called()
-        team_access.visible_employee_ids.assert_not_called()
+        team_access.visible_employee_ids.assert_called_once_with(5, None, None)
+        assert gw.all.call_args.args[-1] == [30, 40]
 
     def test_team_plus_project_raises_when_project_not_managed(self):
         from app.timesheet_line.application.excepctions.exceptions import (
@@ -1321,4 +1343,5 @@ class TestListTimesheetLinesCanValidateFlag:
         )
 
         assert result[0].can_validate is False
-        team_access.validatable_employee_ids.assert_not_called()
+        assert result[0].can_delete is False
+        team_access.lines_authority.assert_not_called()

@@ -73,9 +73,11 @@ class ListTimesheetLinesUseCase:
                 # ESE proyecto puntual (project.assignment), no jerarquía.
                 if not self.team_access.manages_project(id, project_id):
                     raise ProjectNotManagedError(project_id)
+                # Asignados ∪ equipo visible: el gerente también ve a su gente
+                # por jerarquía que cargó horas acá sin estar asignada.
                 project_scoped_ids = self.team_access.project_assigned_employee_ids(
                     project_id, date_from, date_to
-                )
+                ) | self.team_access.visible_employee_ids(id, date_from, date_to)
                 ids = sorted(project_scoped_ids)
             else:
                 # Vista plana de equipo = jerarquía ∪ proyectos gerenciados
@@ -95,26 +97,24 @@ class ListTimesheetLinesUseCase:
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
         )
 
-        # Marcar por línea si el usuario puede validarla (para el botón del
-        # front). El rol approver no habilita validar fuera de ese alcance.
+        # Marcar por línea si el usuario puede validarla/borrarla (para los
+        # botones del front). Se decide por el gerente del proyecto de cada
+        # línea, no por la relación con el empleado: ver a alguien (jerarquía)
+        # no implica poder aprobar sus horas en proyectos de otro líder. El
+        # rol approver no habilita actuar fuera de ese alcance.
         if (
             team
             and timesheets
             and self.team_access is not None
             and id is not None
         ):
-            if project_scoped_ids is not None:
-                # Por proyecto: quien el líder asignó a ese proyecto puntual.
-                validatable = project_scoped_ids
-            else:
-                # Vista plana: jerarquía ∪ proyectos gerenciados + permisos.
-                validatable = self.team_access.validatable_employee_ids(
-                    id, date_from, date_to
-                )
+            authority = self.team_access.lines_authority(
+                id, [(line.employee_id, line.project.id) for line in timesheets]
+            )
             for line in timesheets:
-                line.can_validate = (
-                    line.employee_id in validatable and not line.validated
-                )
+                allowed = authority.get((line.employee_id, line.project.id), False)
+                line.can_validate = allowed and not line.validated
+                line.can_delete = allowed
 
         if self.task_gateway and timesheets:
             task_ids = [t.task.id for t in timesheets if t.task is not None]

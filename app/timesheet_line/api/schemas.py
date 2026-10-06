@@ -34,6 +34,8 @@ class DetailedTimesheetLineResponse(BaseModel):
     notification: Optional[TimesheetLineNotificationResponse] = None
     # Vista de equipo: True si el usuario logueado puede validar esta línea.
     can_validate: bool = False
+    # Vista de equipo: True si el usuario logueado puede borrar esta línea.
+    can_delete: bool = False
 
 
 class EditTimesheetRequest(BaseModel):

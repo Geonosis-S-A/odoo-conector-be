@@ -336,3 +336,95 @@ class TestTeamAccessService:
         project_assignment_gateway.get_project_assignments.assert_called_once_with(
             [139], None, None
         )
+
+    # ------------------------------------------------------------------
+    # Autoridad por línea: gerente del proyecto de cada línea
+    # ------------------------------------------------------------------
+    def test_lines_authority_manager_of_project_can_act(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        # proyecto 1 lo gerencia el user 100 (líder 10); proyecto 2 el user 200
+        project_assignment_gateway.get_project_manager_user_ids.return_value = {
+            1: 100,
+            2: 200,
+        }
+
+        result = service.lines_authority(10, [(1, 1), (1, 2), (3, 1)])
+
+        assert result == {(1, 1): True, (1, 2): False, (3, 1): True}
+        # una sola lectura de gerentes para todas las líneas
+        project_assignment_gateway.get_project_manager_user_ids.assert_called_once_with(
+            [1, 2]
+        )
+
+    def test_lines_authority_never_on_own_lines(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_manager_user_ids.return_value = {1: 100}
+
+        assert service.can_act_on_line(10, 10, 1) is False
+
+    def test_lines_authority_hierarchy_only_when_project_has_no_manager(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_manager_user_ids.return_value = {
+            1: None,
+            2: 200,
+        }
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 1}]
+
+        result = service.lines_authority(10, [(1, 1), (3, 1), (1, 2)])
+
+        # sin gerente: valida el jefe por jerarquía, sólo de su gente
+        assert result[(1, 1)] is True
+        assert result[(3, 1)] is False
+        # con gerente ajeno: la jerarquía NO alcanza
+        assert result[(1, 2)] is False
+
+    def test_lines_authority_hierarchy_does_not_override_other_manager(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_manager_user_ids.return_value = {5: 200}
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 1}]
+
+        # 1 está bajo la jerarquía del 10, pero el proyecto lo gerencia el user 200
+        assert service.can_act_on_line(10, 1, 5) is False
+
+    def test_lines_authority_delegated_validate_acts_with_leader_projects(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = [
+            _perm(10, 2, PermissionLevel.validate)
+        ]
+        project_assignment_gateway.get_project_manager_user_ids.return_value = {
+            1: 100,
+            2: 200,
+        }
+
+        result = service.lines_authority(2, [(1, 1), (1, 2), (10, 1)])
+
+        assert result[(1, 1)] is True   # proyecto del líder que delegó
+        assert result[(1, 2)] is False  # proyecto de otro líder
+        assert result[(10, 1)] is False  # nunca las horas del propio líder
+
+    def test_lines_authority_view_permission_does_not_grant_action(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = [_perm(10, 2, PermissionLevel.view)]
+        project_assignment_gateway.get_project_manager_user_ids.return_value = {1: 100}
+
+        assert service.can_act_on_line(2, 1, 1) is False
+
+    def test_lines_authority_actor_without_authority_reads_nothing(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+
+        result = service.lines_authority(99, [(1, 1)])
+
+        assert result == {(1, 1): False}
+        project_assignment_gateway.get_project_manager_user_ids.assert_not_called()
