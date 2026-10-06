@@ -31,6 +31,9 @@ from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
 )
+from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
+    OdooTimesheetLineGateway,
+)
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.shared.security.roles import user_has_role, Roles
 
@@ -62,7 +65,8 @@ async def list_team_employee_prices(
     Lista los precios por hora de los miembros del equipo del usuario autenticado.
 
     Obtiene todos los miembros del equipo (empleados asignados a los proyectos
-    que gerencia) y retorna únicamente sus registros abiertos (date_to = NULL).
+    que gerencia ∪ su jerarquía de Odoo) y retorna únicamente sus registros
+    abiertos (date_to = NULL).
 
     Args:
         db: Sesión de base de datos
@@ -84,12 +88,14 @@ async def list_team_employee_prices(
 
     # Inicializar repositorio
     employee_price_repository = SQLModelEmployeePriceRepository(db)
-    employee_gateway = OdooEmployeeGateway(get_odoo_connection())
+    odoo_connection = get_odoo_connection()
+    employee_gateway = OdooEmployeeGateway(odoo_connection)
     # Crear y ejecutar caso de uso
     use_case = ListTeamEmployeePricesUseCase(
         employee_price_repository=employee_price_repository,
         project_assignment_gateway=project_assignment_gateway,
         employee_gateway=employee_gateway,
+        timesheet_line_gateway=OdooTimesheetLineGateway(odoo_connection),
     )
 
     try:

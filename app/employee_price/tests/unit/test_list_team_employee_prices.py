@@ -695,3 +695,63 @@ class TestListTeamEmployeePricesUseCase:
         # Assert
         assert isinstance(result, list)
 
+    def test_execute_unions_assigned_and_hierarchy_without_duplicates(
+        self,
+        mock_employee_price_repository,
+        mock_timesheet_gateway,
+        mock_employee_gateway,
+        sample_current_employee,
+    ):
+        """El equipo es asignados a proyectos gerenciados ∪ jerarquía de Odoo."""
+        hierarchy_gateway = Mock(spec=TimesheetLineGateway)
+        use_case = ListTeamEmployeePricesUseCase(
+            mock_employee_price_repository,
+            mock_timesheet_gateway,  # asignaciones
+            mock_employee_gateway,
+            timesheet_line_gateway=hierarchy_gateway,  # jerarquía
+        )
+        mock_employee_gateway.get_by_id.return_value = sample_current_employee
+        mock_timesheet_gateway.get_team_users.return_value = [
+            {"id": 10, "name": "Asignado", "work_email": "a@test.com"},
+            {"id": 20, "name": "Ambos", "work_email": "ambos@test.com"},
+        ]
+        hierarchy_gateway.get_team_users.return_value = [
+            {"id": 20, "name": "Ambos (jerarquía)", "work_email": "x@test.com"},
+            {"id": 30, "name": "Solo jerarquía", "work_email": "j@test.com"},
+        ]
+        mock_employee_price_repository.get_open_record_by_user_id.return_value = None
+
+        result = use_case.execute(1)
+
+        assert [r["employee_id"] for r in result] == [10, 20, 30]
+        # ante un duplicado se conserva el dato de la asignación
+        assert next(r for r in result if r["employee_id"] == 20)["name"] == "Ambos"
+        hierarchy_gateway.get_team_users.assert_called_once_with(
+            1, sample_current_employee.id
+        )
+
+    def test_execute_returns_hierarchy_members_when_no_assignments(
+        self,
+        mock_employee_price_repository,
+        mock_timesheet_gateway,
+        mock_employee_gateway,
+        sample_current_employee,
+    ):
+        hierarchy_gateway = Mock(spec=TimesheetLineGateway)
+        use_case = ListTeamEmployeePricesUseCase(
+            mock_employee_price_repository,
+            mock_timesheet_gateway,
+            mock_employee_gateway,
+            timesheet_line_gateway=hierarchy_gateway,
+        )
+        mock_employee_gateway.get_by_id.return_value = sample_current_employee
+        mock_timesheet_gateway.get_team_users.return_value = []
+        hierarchy_gateway.get_team_users.return_value = [
+            {"id": 30, "name": "Solo jerarquía", "work_email": "j@test.com"},
+        ]
+        mock_employee_price_repository.get_open_record_by_user_id.return_value = None
+
+        result = use_case.execute(1)
+
+        assert [r["employee_id"] for r in result] == [30]
+
