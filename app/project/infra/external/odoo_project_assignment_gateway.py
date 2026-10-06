@@ -44,16 +44,26 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
         today = date.today()
         return (date_from or today, date_to or today)
 
+    @staticmethod
+    def _managed_projects_domain(user_id: int) -> list:
+        # Sólo proyectos vigentes (To Do / In Progress): los "Done"/cancelados
+        # ya finalizaron y no deben aportar equipo ni impactar la carga de horas.
+        return [
+            ("user_id", "=", user_id),
+            ("active", "=", True),
+            ("stage_id", "not in", ProjectStages.inactive_stages()),
+        ]
+
     def _managed_project_ids(self, user_id: int) -> List[int]:
         return self._execute_kw(
-            "project.project", "search", [[("user_id", "=", user_id)]]
+            "project.project", "search", [self._managed_projects_domain(user_id)]
         )
 
     def get_managed_projects(self, user_id: int) -> list[Project]:
         rows = self._execute_kw(
             "project.project",
             "search_read",
-            [[("user_id", "=", user_id)]],
+            [self._managed_projects_domain(user_id)],
             {"fields": ["id", "name"]},
         )
         return [

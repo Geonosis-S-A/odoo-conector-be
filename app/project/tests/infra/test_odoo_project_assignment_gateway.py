@@ -7,6 +7,7 @@ from app.project.domain.models import Project
 from app.project.infra.external.odoo_project_assignment_gateway import (
     OdooProjectAssignmentGateway,
 )
+from app.shared.security.project_stages import ProjectStages
 
 
 def _odoo_client(execute_kw_side_effect):
@@ -25,7 +26,13 @@ class TestOdooProjectAssignmentGateway:
         def side_effect(db, uid, pwd, model, method, args, kwargs):
             assert model == "project.project"
             assert method == "search_read"
-            assert args == [[("user_id", "=", 100)]]
+            assert args == [
+                [
+                    ("user_id", "=", 100),
+                    ("active", "=", True),
+                    ("stage_id", "not in", ProjectStages.inactive_stages()),
+                ]
+            ]
             return [{"id": 1, "name": "Proyecto A"}]
 
         gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
