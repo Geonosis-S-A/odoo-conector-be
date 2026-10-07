@@ -26,7 +26,9 @@ class TeamMemberInfo:
 class LedProjectTeam:
     project: Project
     members: List[TeamMemberInfo]
+    # Pendientes del mes actual (día 1 a hoy) y de fechas anteriores al día 1.
     pending_count: int = 0
+    pending_previous_count: int = 0
 
 
 _VIEW_LEVELS = {PermissionLevel.view, PermissionLevel.validate}
@@ -415,7 +417,9 @@ class TeamAccessService:
                 )
             )
 
+        month_start = date.today().replace(day=1)
         pending_count_by_project: Dict[int, int] = defaultdict(int)
+        pending_previous_by_project: Dict[int, int] = defaultdict(int)
         if assigned_pairs:
             pending_lines = self.timesheet_line_gateway.get_pending_lines_minimal(
                 list(employee_ids), [p.id for p in projects]
@@ -426,7 +430,12 @@ class TeamAccessService:
                 if not employee or not project:
                     continue
                 pair = (employee[0], project[0])
-                if pair in assigned_pairs:
+                if pair not in assigned_pairs:
+                    continue
+                line_date = line.get("date")
+                if line_date and date.fromisoformat(str(line_date)[:10]) < month_start:
+                    pending_previous_by_project[pair[1]] += 1
+                else:
                     pending_count_by_project[pair[1]] += 1
 
         return [
@@ -434,6 +443,7 @@ class TeamAccessService:
                 project=p,
                 members=members_by_project.get(p.id, []),
                 pending_count=pending_count_by_project.get(p.id, 0),
+                pending_previous_count=pending_previous_by_project.get(p.id, 0),
             )
             for p in projects
         ]

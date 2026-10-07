@@ -500,8 +500,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
     def get_pending_lines_minimal(
         self, employee_ids: list[int], project_ids: list[int]
     ) -> list[Dict[str, Any]]:
-        """``employee_id``/``project_id`` de cada línea pendiente de esos
-        empleados en esos proyectos. Una sola consulta agregada (sin
+        """``employee_id``/``project_id``/``date`` de cada línea pendiente de
+        esos empleados en esos proyectos. Una sola consulta agregada (sin
         loop por proyecto) para contar pendientes por proyecto."""
         if not employee_ids or not project_ids:
             return []
@@ -520,7 +520,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             "account.analytic.line",
             "search_read",
             [domain],
-            {"fields": ["employee_id", "project_id"]},
+            {"fields": ["employee_id", "project_id", "date"]},
         )
 
     def get_by_task_or_project(

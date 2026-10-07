@@ -240,20 +240,27 @@ class TestTeamAccessService:
             Employee(id=1, email="ana@x.com", full_name="Ana"),
             Employee(id=2, email="beto@x.com", full_name="Beto"),
         ]
+        from datetime import date, timedelta
+
+        today = date.today()
+        prev_month = (today.replace(day=1) - timedelta(days=1)).isoformat()
+        first = today.replace(day=1).isoformat()
         timesheet_line_gateway.get_pending_lines_minimal.return_value = [
-            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
-            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
-            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": first},
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": today.isoformat()},
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": prev_month},
             # Beto no está asignado a P1: no debe sumar a P1 aunque tenga
             # horas pendientes cargadas ahí (p.ej. validable por jerarquía).
-            {"employee_id": [2, "Beto"], "project_id": [1, "P1"]},
+            {"employee_id": [2, "Beto"], "project_id": [1, "P1"], "date": first},
         ]
 
         result = service.get_led_team_by_project(10)
 
         by_project = {t.project.id: t for t in result}
-        assert by_project[1].pending_count == 3
+        assert by_project[1].pending_count == 2
+        assert by_project[1].pending_previous_count == 1
         assert by_project[2].pending_count == 0
+        assert by_project[2].pending_previous_count == 0
         timesheet_line_gateway.get_pending_lines_minimal.assert_called_once()
         called_employee_ids, called_project_ids = (
             timesheet_line_gateway.get_pending_lines_minimal.call_args[0]
