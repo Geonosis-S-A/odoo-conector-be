@@ -51,3 +51,5 @@ class TeamProjectView(BaseModel):
     members: List[TeamMemberBasicView] = []
     pending_count: int = 0
     pending_previous_count: int = 0
+    # Quiénes pueden aprobar las horas del proyecto (PM y gerente).
+    approver_names: List[str] = []

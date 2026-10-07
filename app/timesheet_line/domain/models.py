@@ -1,6 +1,6 @@
 # Acá van las entidades propias, desacopladas del ORM SQLModel
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date as date_t, datetime
 from typing import Optional
 
@@ -58,6 +58,8 @@ class DetailedTimesheetLine:
     can_validate: bool = False
     # True si el usuario que consulta puede borrar ESTA línea (vista de equipo).
     can_delete: bool = False
+    # Quiénes pueden aprobar esta línea (PM y gerente del proyecto); vista de equipo.
+    approver_names: list[str] = field(default_factory=list)
 
 
 @dataclass

@@ -59,8 +59,15 @@ class ValidateTimesheetUseCase:
                     f"No tienes permiso para validar estas líneas (no gerenciás su proyecto): {outside}",
                 )
 
+        # PM y gerente pueden aprobar las mismas horas: si otro ya validó
+        # alguna línea (p.ej. lista vieja abierta), se omite sin error, sin
+        # pisar `x_validated_by` y sin reenviar el mail de aprobación.
+        timesheet_ids = [t.id for t in existing_timesheets if not t.validated]
+        if not timesheet_ids:
+            return True
+
         # Verificar que el approver existe antes de validar
-        approver = self.employee_gateway.get_by_email(approver_mail)
+        approver =self.employee_gateway.get_by_email(approver_mail)
         if approver is None:
             raise ApproverNotFoundError(approver_mail)
 

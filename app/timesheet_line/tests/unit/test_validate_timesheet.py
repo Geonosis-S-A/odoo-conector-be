@@ -62,6 +62,46 @@ class TestValidateTimesheetUseCase:
             mock_notification_repository,
         )
 
+    @staticmethod
+    def _line(line_id: int, validated: bool) -> DetailedTimesheetLine:
+        return DetailedTimesheetLine(
+            id=line_id,
+            name="Test Timesheet",
+            employee_id=1,
+            project=Project(id=1, name="Test Project"),
+            task=None,
+            hours=8.0,
+            date=date(2024, 3, 20),
+            validated=validated,
+        )
+
+    async def test_already_validated_lines_are_skipped_without_error(
+        self, use_case, mock_gateway, mock_email_service
+    ):
+        """Si otro aprobador (PM o gerente) ya validó todo, no se vuelve a
+        validar, no se pisa x_validated_by ni se reenvía el mail."""
+        mock_gateway.get_by_ids.return_value = [self._line(1, True), self._line(2, True)]
+
+        result = await use_case.execute([1, 2], "approver@test.com")
+
+        assert result is True
+        mock_gateway.validate.assert_not_called()
+        mock_email_service.send_approved_mail.assert_not_called()
+
+    async def test_only_pending_lines_are_validated_when_some_already_validated(
+        self, use_case, mock_gateway
+    ):
+        mock_gateway.get_by_ids.side_effect = [
+            [self._line(1, True), self._line(2, False)],
+            [self._line(2, True)],
+        ]
+        mock_gateway.validate.return_value = True
+
+        result = await use_case.execute([1, 2], "approver@test.com")
+
+        assert result is True
+        mock_gateway.validate.assert_called_once_with([2], 999)
+
     async def test_validate_single_timesheet_success(
         self, use_case, mock_gateway, mock_email_service, mock_employee_gateway
     ):

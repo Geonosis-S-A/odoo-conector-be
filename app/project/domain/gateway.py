@@ -37,6 +37,10 @@ class ProjectAssignmentGateway(ABC):
         sólo cuentan los proyectos vigentes (To Do / In Progress), que es lo
         que se usa para validar y cargar horas.
 
+        Con `only_active=True` los proyectos son los que `user_id` lidera como
+        gerente o PM (`get_led_projects`) y el equipo suma, además de los
+        asignados, a quienes cargaron horas en ellos.
+
         Mismo shape que el `get_team_users` legado: `{"id","name","work_email"}`.
         """
 
@@ -53,6 +57,29 @@ class ProjectAssignmentGateway(ABC):
         No filtra por activo/etapa: sirve para decidir quién puede actuar sobre
         horas ya cargadas, incluso en proyectos finalizados.
         """
+
+    @abstractmethod
+    def get_led_projects(self, user_id: int) -> list[Project]:
+        """Proyectos vigentes (no Done/cancelados) donde `user_id` es gerente
+        (`user_id`) o Project Manager (`x_project_manager_id`)."""
+
+    @abstractmethod
+    def get_project_approvers(
+        self, project_ids: list[int]
+    ) -> Dict[int, list[tuple[int, str]]]:
+        """`(user_id, nombre)` de quienes pueden aprobar las horas de cada
+        proyecto: el Project Manager (`x_project_manager_id`) y el gerente
+        (`user_id`), sin repetir. Lista vacía si no tiene ninguno.
+
+        No filtra por activo/etapa: las horas ya cargadas en un proyecto
+        archivado/finalizado siguen siendo aprobables.
+        """
+
+    @abstractmethod
+    def is_project_manager_only(self, user_id: int) -> bool:
+        """True si `user_id` es Project Manager de algún proyecto vigente y no es
+        gerente (`user_id`) de ninguno: su equipo se acota a esos proyectos, sin
+        la jerarquía RRHH."""
 
     @abstractmethod
     def get_project_assignments(

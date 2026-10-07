@@ -36,6 +36,8 @@ class DetailedTimesheetLineResponse(BaseModel):
     can_validate: bool = False
     # Vista de equipo: True si el usuario logueado puede borrar esta línea.
     can_delete: bool = False
+    # Vista de equipo: quiénes pueden aprobar la línea (PM y gerente del proyecto).
+    approver_names: List[str] = []
 
 
 class EditTimesheetRequest(BaseModel):

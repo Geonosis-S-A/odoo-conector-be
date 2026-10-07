@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -29,6 +29,7 @@ class LedProjectTeam:
     # Pendientes del mes actual (día 1 a hoy) y de fechas anteriores al día 1.
     pending_count: int = 0
     pending_previous_count: int = 0
+    approver_names: List[str] = field(default_factory=list)
 
 
 _VIEW_LEVELS = {PermissionLevel.view, PermissionLevel.validate}
@@ -113,11 +114,17 @@ class TeamAccessService:
                 )
                 or []
             )
+            # Un PM "puro" (PM de proyectos y gerente de ninguno) ve sólo a
+            # quienes cargan en sus proyectos, no a su equipo por jerarquía.
             hierarchy_team = (
-                self.timesheet_line_gateway.get_team_users(
-                    user_id, leader_employee_id
+                []
+                if self.project_assignment_gateway.is_project_manager_only(user_id)
+                else (
+                    self.timesheet_line_gateway.get_team_users(
+                        user_id, leader_employee_id
+                    )
+                    or []
                 )
-                or []
             )
             by_id: Dict[int, Dict[str, Any]] = {}
             for u in project_team + hierarchy_team:
@@ -135,13 +142,14 @@ class TeamAccessService:
     # plana de equipo.
     # ------------------------------------------------------------------
     def manages_project(self, leader_employee_id: int, project_id: int) -> bool:
-        """True si ``leader_employee_id`` gerencia ``project_id`` en Odoo."""
+        """True si ``leader_employee_id`` es gerente o Project Manager de
+        ``project_id`` en Odoo."""
         user_id = self.employee_gateway.get_user_id_by_employee_id(
             leader_employee_id
         )
         if user_id is None:
             return False
-        managed = self.project_assignment_gateway.get_managed_projects(user_id)
+        managed = self.project_assignment_gateway.get_led_projects(user_id)
         return any(p.id == project_id for p in managed)
 
     def project_assigned_employee_ids(
@@ -253,10 +261,11 @@ class TeamAccessService:
         """Para cada ``(employee_id, project_id)`` de una línea, si el actor
         puede validarla/borrarla.
 
-        Regla: sólo el gerente del proyecto (``project.project.user_id``).
-        Si el proyecto no tiene gerente, el jefe por jerarquía del empleado.
+        Regla: el Project Manager (``x_project_manager_id``) o el gerente
+        (``project.project.user_id``) del proyecto: cualquiera de los dos.
+        Si el proyecto no tiene ninguno, el jefe por jerarquía del empleado.
         Nunca sobre las propias horas ni (vía permiso delegado) sobre las del
-        líder que delegó. Una sola lectura de gerentes por llamada.
+        líder que delegó. Una sola lectura de aprobadores por llamada.
         """
         pairs = set(lines)
         if not pairs:
@@ -265,7 +274,7 @@ class TeamAccessService:
         if not authorities:
             return {pair: False for pair in pairs}
 
-        managers = self.project_assignment_gateway.get_project_manager_user_ids(
+        approvers = self.project_assignment_gateway.get_project_approvers(
             sorted({project_id for _, project_id in pairs})
         )
         hierarchy_cache: Dict[int, Set[int]] = {}
@@ -287,12 +296,12 @@ class TeamAccessService:
         for employee_id, project_id in pairs:
             allowed = False
             if employee_id != actor_employee_id:
-                manager = managers.get(project_id)
+                approver_users = {u for u, _ in approvers.get(project_id, [])}
                 for leader_id, leader_user in authorities:
                     if employee_id == leader_id:
                         continue
-                    if manager is not None:
-                        if manager == leader_user:
+                    if approver_users:
+                        if leader_user in approver_users:
                             allowed = True
                             break
                     elif employee_id in _hierarchy(leader_id, leader_user):
@@ -300,6 +309,17 @@ class TeamAccessService:
                         break
             result[(employee_id, project_id)] = allowed
         return result
+
+    def project_approver_names(self, project_ids: List[int]) -> Dict[int, List[str]]:
+        """Nombres de quienes pueden aprobar las horas de cada proyecto (PM y
+        gerente), para mostrar quién debe aprobarlas."""
+        approvers = self.project_assignment_gateway.get_project_approvers(
+            sorted(set(project_ids))
+        )
+        return {
+            project_id: [name for _, name in users]
+            for project_id, users in approvers.items()
+        }
 
     def can_act_on_line(
         self, actor_employee_id: int, line_employee_id: int, line_project_id: int
@@ -373,7 +393,7 @@ class TeamAccessService:
         if user_id is None:
             return []
 
-        projects = self.project_assignment_gateway.get_managed_projects(user_id)
+        projects = self.project_assignment_gateway.get_led_projects(user_id)
         if not projects:
             return []
 
@@ -438,9 +458,11 @@ class TeamAccessService:
                 else:
                     pending_count_by_project[pair[1]] += 1
 
+        approver_names = self.project_approver_names([p.id for p in projects])
         return [
             LedProjectTeam(
                 project=p,
+                approver_names=approver_names.get(p.id, []),
                 members=members_by_project.get(p.id, []),
                 pending_count=pending_count_by_project.get(p.id, 0),
                 pending_previous_count=pending_previous_by_project.get(p.id, 0),

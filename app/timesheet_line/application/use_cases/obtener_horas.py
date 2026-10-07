@@ -111,10 +111,14 @@ class ListTimesheetLinesUseCase:
             authority = self.team_access.lines_authority(
                 id, [(line.employee_id, line.project.id) for line in timesheets]
             )
+            approver_names = self.team_access.project_approver_names(
+                [line.project.id for line in timesheets]
+            )
             for line in timesheets:
                 allowed = authority.get((line.employee_id, line.project.id), False)
                 line.can_validate = allowed and not line.validated
                 line.can_delete = allowed
+                line.approver_names = approver_names.get(line.project.id, [])
 
         if self.task_gateway and timesheets:
             task_ids = [t.task.id for t in timesheets if t.task is not None]

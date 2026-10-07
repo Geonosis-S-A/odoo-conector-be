@@ -42,6 +42,8 @@ class TestTeamAccessService:
                 {"id": 4, "name": "Dino", "work_email": "dino@x.com"},
             ],
         }
+        gw.is_project_manager_only.return_value = False
+        gw.get_project_approvers.return_value = {}
         gw.get_team_users.side_effect = (
             lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: teams.get(
                 emp_id, []
@@ -173,7 +175,7 @@ class TestTeamAccessService:
         from app.project.domain.models import Project
         from app.users.domain.models import Employee
 
-        project_assignment_gateway.get_managed_projects.return_value = [
+        project_assignment_gateway.get_led_projects.return_value = [
             Project(id=1, name="P1", manager_user_id=100),
             Project(id=2, name="P2", manager_user_id=100),
         ]
@@ -199,7 +201,7 @@ class TestTeamAccessService:
     def test_get_led_team_by_project_no_managed_projects_returns_empty(
         self, service, project_assignment_gateway
     ):
-        project_assignment_gateway.get_managed_projects.return_value = []
+        project_assignment_gateway.get_led_projects.return_value = []
 
         assert service.get_led_team_by_project(10) == []
 
@@ -211,7 +213,7 @@ class TestTeamAccessService:
     ):
         from app.project.domain.models import Project
 
-        project_assignment_gateway.get_managed_projects.return_value = [
+        project_assignment_gateway.get_led_projects.return_value = [
             Project(id=1, name="P1", manager_user_id=100),
         ]
         project_assignment_gateway.get_project_assignments.return_value = []
@@ -228,7 +230,7 @@ class TestTeamAccessService:
         from app.project.domain.models import Project
         from app.users.domain.models import Employee
 
-        project_assignment_gateway.get_managed_projects.return_value = [
+        project_assignment_gateway.get_led_projects.return_value = [
             Project(id=1, name="P1", manager_user_id=100),
             Project(id=2, name="P2", manager_user_id=100),
         ]
@@ -322,17 +324,17 @@ class TestTeamAccessService:
     ):
         from app.project.domain.models import Project
 
-        project_assignment_gateway.get_managed_projects.return_value = [
+        project_assignment_gateway.get_led_projects.return_value = [
             Project(id=139, name="Mesa evolutiva", manager_user_id=100),
         ]
 
         assert service.manages_project(10, 139) is True
-        project_assignment_gateway.get_managed_projects.assert_called_once_with(100)
+        project_assignment_gateway.get_led_projects.assert_called_once_with(100)
 
     def test_manages_project_false_when_not_in_managed_list(
         self, service, project_assignment_gateway
     ):
-        project_assignment_gateway.get_managed_projects.return_value = []
+        project_assignment_gateway.get_led_projects.return_value = []
 
         assert service.manages_project(10, 139) is False
 
@@ -361,17 +363,17 @@ class TestTeamAccessService:
         self, service, project_assignment_gateway, permission_repo
     ):
         permission_repo.list_by_member.return_value = []
-        # proyecto 1 lo gerencia el user 100 (líder 10); proyecto 2 el user 200
-        project_assignment_gateway.get_project_manager_user_ids.return_value = {
-            1: 100,
-            2: 200,
+        # proyecto 1 lo aprueba el user 100 (líder 10); proyecto 2 el user 200
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Iván")],
+            2: [(200, "Marta")],
         }
 
         result = service.lines_authority(10, [(1, 1), (1, 2), (3, 1)])
 
         assert result == {(1, 1): True, (1, 2): False, (3, 1): True}
         # una sola lectura de gerentes para todas las líneas
-        project_assignment_gateway.get_project_manager_user_ids.assert_called_once_with(
+        project_assignment_gateway.get_project_approvers.assert_called_once_with(
             [1, 2]
         )
 
@@ -379,7 +381,7 @@ class TestTeamAccessService:
         self, service, project_assignment_gateway, permission_repo
     ):
         permission_repo.list_by_member.return_value = []
-        project_assignment_gateway.get_project_manager_user_ids.return_value = {1: 100}
+        project_assignment_gateway.get_project_approvers.return_value = {1: [(100, "Iván")]}
 
         assert service.can_act_on_line(10, 10, 1) is False
 
@@ -387,9 +389,9 @@ class TestTeamAccessService:
         self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
     ):
         permission_repo.list_by_member.return_value = []
-        project_assignment_gateway.get_project_manager_user_ids.return_value = {
-            1: None,
-            2: 200,
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [],
+            2: [(200, "Marta")],
         }
         timesheet_line_gateway.get_team_users.return_value = [{"id": 1}]
 
@@ -405,11 +407,47 @@ class TestTeamAccessService:
         self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
     ):
         permission_repo.list_by_member.return_value = []
-        project_assignment_gateway.get_project_manager_user_ids.return_value = {5: 200}
+        project_assignment_gateway.get_project_approvers.return_value = {5: [(200, "Marta")]}
         timesheet_line_gateway.get_team_users.return_value = [{"id": 1}]
 
         # 1 está bajo la jerarquía del 10, pero el proyecto lo gerencia el user 200
         assert service.can_act_on_line(10, 1, 5) is False
+
+    def test_lines_authority_pm_and_manager_can_both_act(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        # proyecto 1: PM = user 200 (líder 20), gerente = user 100 (líder 10)
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(200, "Marta"), (100, "Iván")],
+        }
+
+        assert service.can_act_on_line(10, 1, 1) is True
+        assert service.can_act_on_line(20, 3, 1) is True
+
+    def test_pm_only_does_not_get_hierarchy_team(
+        self, service, project_assignment_gateway, timesheet_line_gateway
+    ):
+        project_assignment_gateway.is_project_manager_only.return_value = True
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        team_ids = {u["id"] for u in service.get_led_team(10)}
+
+        assert 99 not in team_ids
+        assert team_ids == {1, 2, 3}
+        timesheet_line_gateway.get_team_users.assert_not_called()
+
+    def test_project_approver_names(self, service, project_assignment_gateway):
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(200, "Marta"), (100, "Iván")],
+            2: [],
+        }
+
+        assert service.project_approver_names([2, 1, 1]) == {
+            1: ["Marta", "Iván"],
+            2: [],
+        }
+        project_assignment_gateway.get_project_approvers.assert_called_once_with([1, 2])
 
     def test_lines_authority_delegated_validate_acts_with_leader_projects(
         self, service, project_assignment_gateway, permission_repo
@@ -417,9 +455,9 @@ class TestTeamAccessService:
         permission_repo.list_by_member.return_value = [
             _perm(10, 2, PermissionLevel.validate)
         ]
-        project_assignment_gateway.get_project_manager_user_ids.return_value = {
-            1: 100,
-            2: 200,
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Iván")],
+            2: [(200, "Marta")],
         }
 
         result = service.lines_authority(2, [(1, 1), (1, 2), (10, 1)])
@@ -432,7 +470,7 @@ class TestTeamAccessService:
         self, service, project_assignment_gateway, permission_repo
     ):
         permission_repo.list_by_member.return_value = [_perm(10, 2, PermissionLevel.view)]
-        project_assignment_gateway.get_project_manager_user_ids.return_value = {1: 100}
+        project_assignment_gateway.get_project_approvers.return_value = {1: [(100, "Iván")]}
 
         assert service.can_act_on_line(2, 1, 1) is False
 
@@ -444,4 +482,4 @@ class TestTeamAccessService:
         result = service.lines_authority(99, [(1, 1)])
 
         assert result == {(1, 1): False}
-        project_assignment_gateway.get_project_manager_user_ids.assert_not_called()
+        project_assignment_gateway.get_project_approvers.assert_not_called()

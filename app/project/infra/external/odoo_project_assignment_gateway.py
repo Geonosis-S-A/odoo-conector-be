@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from app.project.domain.gateway import ProjectAssignmentGateway
 from app.project.domain.models import Project
@@ -54,15 +54,94 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
             ("stage_id", "not in", ProjectStages.inactive_stages()),
         ]
 
+    @staticmethod
+    def _led_projects_domain(user_id: int) -> list:
+        # Vigentes donde es gerente o Project Manager.
+        return [
+            ("active", "=", True),
+            ("stage_id", "not in", ProjectStages.inactive_stages()),
+            "|",
+            ("user_id", "=", user_id),
+            ("x_project_manager_id", "=", user_id),
+        ]
+
     def _managed_project_ids(self, user_id: int, only_active: bool = False) -> List[int]:
-        # Por defecto sin filtrar por etapa (comportamiento histórico, lo que
-        # usan los reportes); con only_active, sólo proyectos vigentes.
+        # Por defecto sin filtrar por etapa y sólo por gerente (comportamiento
+        # histórico, lo que usan los reportes); con only_active, los proyectos
+        # vigentes donde es gerente o PM.
         domain = (
-            self._managed_projects_domain(user_id)
+            self._led_projects_domain(user_id)
             if only_active
             else [("user_id", "=", user_id)]
         )
         return self._execute_kw("project.project", "search", [domain])
+
+    def get_led_projects(self, user_id: int) -> list[Project]:
+        rows = self._execute_kw(
+            "project.project",
+            "search_read",
+            [self._led_projects_domain(user_id)],
+            {"fields": ["id", "name"], "context": {"lang": "es_AR"}},
+        )
+        return [
+            Project(id=r["id"], name=r["name"], manager_user_id=user_id) for r in rows
+        ]
+
+    def get_project_approvers(
+        self, project_ids: list[int]
+    ) -> Dict[int, list[tuple[int, str]]]:
+        if not project_ids:
+            return {}
+        rows = self._execute_kw(
+            "project.project",
+            "search_read",
+            [[("id", "in", project_ids)]],
+            # active_test False: un proyecto archivado/finalizado conserva
+            # aprobadores y sus horas pendientes siguen siendo aprobables.
+            {
+                "fields": ["id", "user_id", "x_project_manager_id"],
+                "context": {"active_test": False},
+            },
+        )
+        result: Dict[int, list[tuple[int, str]]] = {}
+        for r in rows:
+            approvers: list[tuple[int, str]] = []
+            for field in ("x_project_manager_id", "user_id"):
+                value = r.get(field)
+                if value and all(value[0] != a[0] for a in approvers):
+                    approvers.append((value[0], value[1]))
+            result[r["id"]] = approvers
+        return result
+
+    def is_project_manager_only(self, user_id: int) -> bool:
+        vigentes = [
+            ("active", "=", True),
+            ("stage_id", "not in", ProjectStages.inactive_stages()),
+        ]
+        is_pm = self._execute_kw(
+            "project.project",
+            "search_count",
+            [vigentes + [("x_project_manager_id", "=", user_id)]],
+        )
+        if not is_pm:
+            return False
+        is_manager = self._execute_kw(
+            "project.project", "search_count", [vigentes + [("user_id", "=", user_id)]]
+        )
+        return not is_manager
+
+    def _employee_ids_with_lines(self, project_ids: List[int]) -> Set[int]:
+        groups = self._execute_kw(
+            "account.analytic.line",
+            "read_group",
+            [
+                [("is_timesheet", "=", True), ("project_id", "in", project_ids)],
+                ["employee_id"],
+                ["employee_id"],
+            ],
+            {"lazy": False},
+        )
+        return {g["employee_id"][0] for g in groups if g.get("employee_id")}
 
     def get_managed_projects(self, user_id: int) -> list[Project]:
         rows = self._execute_kw(
@@ -136,6 +215,10 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
         employee_ids = {
             a["employee_id"][0] for a in assignments if a.get("employee_id")
         }
+        if only_active:
+            # Además de los asignados, quienes cargaron horas en el proyecto
+            # sin tener (o ya sin) asignación vigente.
+            employee_ids |= self._employee_ids_with_lines(project_ids)
         employee_ids.discard(employee_id)
         if not employee_ids:
             return []

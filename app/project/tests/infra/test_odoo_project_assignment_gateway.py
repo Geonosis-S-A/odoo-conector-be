@@ -130,11 +130,50 @@ class TestOdooProjectAssignmentGateway:
 
         assert searched == [
             [
-                ("user_id", "=", 100),
                 ("active", "=", True),
                 ("stage_id", "not in", ProjectStages.inactive_stages()),
+                "|",
+                ("user_id", "=", 100),
+                ("x_project_manager_id", "=", 100),
             ]
         ]
+
+    def test_get_project_approvers_lists_pm_and_manager_without_duplicates(self):
+        def side_effect(db, uid, pwd, model, method, args, kwargs):
+            assert kwargs["context"] == {"active_test": False}
+            return [
+                {"id": 1, "user_id": [100, "Iván"], "x_project_manager_id": [200, "Marta"]},
+                {"id": 2, "user_id": [100, "Iván"], "x_project_manager_id": False},
+                {"id": 3, "user_id": [100, "Iván"], "x_project_manager_id": [100, "Iván"]},
+                {"id": 4, "user_id": False, "x_project_manager_id": False},
+            ]
+
+        gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
+
+        assert gateway.get_project_approvers([1, 2, 3, 4]) == {
+            1: [(200, "Marta"), (100, "Iván")],
+            2: [(100, "Iván")],
+            3: [(100, "Iván")],
+            4: [],
+        }
+
+    def test_get_team_users_only_active_includes_employees_with_lines(self):
+        def side_effect(db, uid, pwd, model, method, args, kwargs):
+            if model == "project.project" and method == "search":
+                return [1]
+            if model == "project.assignment":
+                return [{"employee_id": [10, "Ana"], "project_id": [1, "P1"]}]
+            if model == "account.analytic.line" and method == "read_group":
+                return [{"employee_id": [30, "Cira"]}]
+            if model == "hr.employee":
+                assert set(args[0][0][2]) == {10, 30}
+                return [{"id": 10}, {"id": 30}]
+            raise AssertionError(f"llamada inesperada: {model}.{method}")
+
+        gateway = OdooProjectAssignmentGateway(_odoo_client(side_effect))
+        team = gateway.get_team_users(user_id=100, employee_id=5, only_active=True)
+
+        assert {u["id"] for u in team} == {10, 30}
 
     def test_get_project_assignments_filters_by_validity_range(self):
         def side_effect(db, uid, pwd, model, method, args, kwargs):
