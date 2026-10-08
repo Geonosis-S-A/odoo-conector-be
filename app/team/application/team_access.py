@@ -170,19 +170,8 @@ class TeamAccessService:
             a["employee_id"][0] for a in assignments if a.get("employee_id")
         }
 
-    def leads_projects(self, employee_id: int) -> bool:
-        """True si es gerente o Project Manager de algún proyecto vigente,
-        aunque todavía no tenga a nadie asignado ni cargando horas."""
-        user_id = self.employee_gateway.get_user_id_by_employee_id(employee_id)
-        if user_id is None:
-            return False
-        return bool(self.project_assignment_gateway.get_led_projects(user_id))
-
     def is_leader(self, employee_id: int) -> bool:
-        return bool(
-            self.get_led_team_member_ids(employee_id)
-            or self.leads_projects(employee_id)
-        )
+        return bool(self.get_led_team_member_ids(employee_id))
 
     # ------------------------------------------------------------------
     # Permisos locales cruzados con el equipo por proyecto
@@ -339,17 +328,10 @@ class TeamAccessService:
         return self.lines_authority(actor_employee_id, [pair]).get(pair, False)
 
     def can_view_team(self, employee_id: int) -> bool:
-        return bool(
-            self.visible_employee_ids(employee_id) or self.leads_projects(employee_id)
-        )
+        return bool(self.visible_employee_ids(employee_id))
 
     def can_validate_team(self, employee_id: int) -> bool:
-        # Un PM/gerente con proyectos pero equipo vacío igual ve la vista por
-        # horas: la autoridad real se resuelve por línea (``lines_authority``).
-        return bool(
-            self.validatable_employee_ids(employee_id)
-            or self.leads_projects(employee_id)
-        )
+        return bool(self.validatable_employee_ids(employee_id))
 
     def visible_team_members(self, employee_id: int) -> List[TeamMemberInfo]:
         """Miembros (id + nombre + email) cuyas horas puede VER ``employee_id``.
