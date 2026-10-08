@@ -23,6 +23,8 @@ class TestCargarHorasUseCase:
     def mock_project_assignment_gateway(self):
         gw = Mock(spec=ProjectAssignmentGateway)
         gw.is_employee_assigned.return_value = True
+        gw.get_project_name.return_value = "CARGA MASIVA"
+        gw.get_assignment_start_date.return_value = None
         return gw
 
     @pytest.fixture
@@ -122,6 +124,39 @@ class TestCargarHorasUseCase:
             project_id=project_id,
             hours=8.0,
             date=date(2024, 1, 1),
+        )
+
+    def test_error_message_explains_date_before_assignment_start(
+        self, use_case, mock_project_assignment_gateway
+    ):
+        from datetime import date as _date
+
+        mock_project_assignment_gateway.is_employee_assigned.return_value = False
+        mock_project_assignment_gateway.get_assignment_start_date.return_value = (
+            _date(2026, 10, 5)
+        )
+        req = CargarHorasRequest(
+            name="x", employee_id=1, project_id=153, hours=8.0, date=_date(2026, 10, 1)
+        )
+
+        with pytest.raises(EmployeeNotAssignedToProjectError) as exc:
+            use_case.execute([req])
+
+        assert exc.value.message == (
+            "No podés cargar horas al proyecto «CARGA MASIVA» con fecha "
+            "01/10/2026: tu asignación comienza el 05/10/2026."
+        )
+
+    def test_error_message_when_never_assigned(
+        self, use_case, mock_project_assignment_gateway
+    ):
+        mock_project_assignment_gateway.is_employee_assigned.return_value = False
+
+        with pytest.raises(EmployeeNotAssignedToProjectError) as exc:
+            use_case.execute([self._request()])
+
+        assert "No tenés una asignación vigente al proyecto «CARGA MASIVA»" in (
+            exc.value.message
         )
 
     def test_execute_rejects_project_without_assignment(

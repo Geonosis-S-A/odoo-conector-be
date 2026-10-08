@@ -104,3 +104,14 @@ class ProjectAssignmentGateway(ABC):
         self, employee_id: int, project_id: int, at_date: date
     ) -> bool:
         """True si `employee_id` tiene una asignación vigente a `project_id` en `at_date`."""
+
+    @abstractmethod
+    def get_assignment_start_date(
+        self, employee_id: int, project_id: int
+    ) -> Optional[date]:
+        """Fecha de inicio (`date_start`) de la asignación más temprana de
+        `employee_id` a `project_id`; None si nunca estuvo asignado."""
+
+    @abstractmethod
+    def get_project_name(self, project_id: int) -> Optional[str]:
+        """Nombre del proyecto (aunque esté archivado); None si no existe."""

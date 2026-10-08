@@ -274,3 +274,29 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
         ] + self._validity_domain(at_date, at_date)
         count = self._execute_kw("project.assignment", "search_count", [domain])
         return bool(count)
+
+    def get_assignment_start_date(
+        self, employee_id: int, project_id: int
+    ) -> Optional[date]:
+        rows = self._execute_kw(
+            "project.assignment",
+            "search_read",
+            [[("employee_id", "=", employee_id), ("project_id", "=", project_id)]],
+            {"fields": ["date_start"], "order": "date_start asc", "limit": 1},
+        )
+        if not rows or not rows[0].get("date_start"):
+            return None
+        return date.fromisoformat(str(rows[0]["date_start"])[:10])
+
+    def get_project_name(self, project_id: int) -> Optional[str]:
+        rows = self._execute_kw(
+            "project.project",
+            "search_read",
+            [[("id", "=", project_id)]],
+            {
+                "fields": ["name"],
+                "limit": 1,
+                "context": {"active_test": False, "lang": "es_AR"},
+            },
+        )
+        return rows[0]["name"] if rows else None

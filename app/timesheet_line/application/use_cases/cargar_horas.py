@@ -70,8 +70,19 @@ class CargarHorasUseCase:
                 raise InvalidHoursError(req.hours)
 
             if not self._can_load_hours(req):
+                # Sólo en el camino de error: datos para explicar el motivo.
                 raise EmployeeNotAssignedToProjectError(
-                    req.employee_id, req.project_id
+                    req.employee_id,
+                    req.project_id,
+                    project_name=self.project_assignment_gateway.get_project_name(
+                        req.project_id
+                    ),
+                    assigned_from=(
+                        self.project_assignment_gateway.get_assignment_start_date(
+                            req.employee_id, req.project_id
+                        )
+                    ),
+                    requested_date=req.date,
                 )
 
             timesheet_line = TimesheetLine.from_request(

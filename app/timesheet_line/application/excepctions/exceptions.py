@@ -1,5 +1,8 @@
 """Excepciones específicas del dominio de timesheet."""
 
+from datetime import date
+from typing import Optional
+
 
 class TimesheetDomainError(Exception):
     """Excepción base para errores del dominio de timesheet."""
@@ -138,11 +141,28 @@ class ProjectNotManagedError(TimesheetDomainError):
 class EmployeeNotAssignedToProjectError(TimesheetDomainError):
     """Error cuando un empleado carga horas a un proyecto sin asignación vigente."""
 
-    def __init__(self, employee_id: int, project_id: int):
-        message = (
-            f"El empleado {employee_id} no tiene una asignación vigente al "
-            f"proyecto {project_id}"
-        )
+    def __init__(
+        self,
+        employee_id: int,
+        project_id: int,
+        project_name: Optional[str] = None,
+        assigned_from: Optional[date] = None,
+        requested_date: Optional[date] = None,
+    ):
+        self.employee_id = employee_id
+        self.project_id = project_id
+        project = f"«{project_name}»" if project_name else f"{project_id}"
+        if assigned_from and requested_date and requested_date < assigned_from:
+            message = (
+                f"No podés cargar horas al proyecto {project} con fecha "
+                f"{requested_date:%d/%m/%Y}: tu asignación comienza el "
+                f"{assigned_from:%d/%m/%Y}."
+            )
+        else:
+            message = (
+                f"No tenés una asignación vigente al proyecto {project}. "
+                f"Consultá con el gerente del proyecto."
+            )
         super().__init__(message)
 
 
