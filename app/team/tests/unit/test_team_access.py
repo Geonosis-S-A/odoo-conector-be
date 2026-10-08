@@ -251,23 +251,26 @@ class TestTeamAccessService:
             {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": first},
             {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": today.isoformat()},
             {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": prev_month},
-            # Beto no está asignado a P1: no debe sumar a P1 aunque tenga
-            # horas pendientes cargadas ahí (p.ej. validable por jerarquía).
+            # Beto no está asignado a P1 pero cargó ahí (histórico): suma a P1.
             {"employee_id": [2, "Beto"], "project_id": [1, "P1"], "date": first},
         ]
 
         result = service.get_led_team_by_project(10)
 
         by_project = {t.project.id: t for t in result}
-        assert by_project[1].pending_count == 2
+        assert by_project[1].pending_count == 3
         assert by_project[1].pending_previous_count == 1
+        # Beto aparece en P1 marcado como no asignado; en P2 sí está asignado.
+        p1 = {m.employee_odoo_id: m for m in by_project[1].members}
+        assert p1[1].assigned is True
+        assert p1[2].assigned is False
+        assert by_project[2].members[0].assigned is True
         assert by_project[2].pending_count == 0
         assert by_project[2].pending_previous_count == 0
         timesheet_line_gateway.get_pending_lines_minimal.assert_called_once()
-        called_employee_ids, called_project_ids = (
+        (called_project_ids,) = (
             timesheet_line_gateway.get_pending_lines_minimal.call_args[0]
         )
-        assert set(called_employee_ids) == {1, 2}
         assert set(called_project_ids) == {1, 2}
 
     def test_get_led_team_asks_for_active_projects_only(

@@ -24,6 +24,7 @@ class TimesheetLineGateway(ABC):
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
         team_members_ids: Optional[list[int]] = None,
+        project_wide: bool = False,
     ) -> list[DetailedTimesheetLine]: ...
 
     @abstractmethod
@@ -56,7 +57,7 @@ class TimesheetLineGateway(ABC):
 
     @abstractmethod
     def get_pending_lines_minimal(
-        self, employee_ids: list[int], project_ids: list[int]
+        self, project_ids: list[int]
     ) -> list[Dict[str, Any]]:
         """``employee_id``/``project_id``/``date`` de cada línea pendiente
         (``validated=False``) de esos empleados en esos proyectos. Sólo esos

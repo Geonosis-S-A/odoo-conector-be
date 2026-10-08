@@ -20,6 +20,8 @@ class TeamMemberInfo:
     name: Optional[str]
     email: Optional[str]
     level: Optional[PermissionLevel]
+    # False: tiene horas en el proyecto pero sin project.assignment vigente.
+    assigned: bool = True
 
 
 @dataclass
@@ -397,66 +399,76 @@ class TeamAccessService:
         if not projects:
             return []
 
+        project_ids = [p.id for p in projects]
         assignments = self.project_assignment_gateway.get_project_assignments(
-            [p.id for p in projects], date_from, date_to
+            project_ids, date_from, date_to
+        )
+        # Pendientes por PROYECTO (no por empleado): incluye las horas de quien
+        # cargó sin estar (o antes de estar) asignado. Una sola consulta.
+        pending_lines = self.timesheet_line_gateway.get_pending_lines_minimal(
+            project_ids
         )
 
-        employee_ids = {
-            a["employee_id"][0]
-            for a in assignments
-            if a.get("employee_id") and a["employee_id"][0] != leader_employee_id
-        }
+        month_start = date.today().replace(day=1)
+        pending_count_by_project: Dict[int, int] = defaultdict(int)
+        pending_previous_by_project: Dict[int, int] = defaultdict(int)
+        # project_id -> {employee_id: nombre} de quienes tienen pendientes
+        with_pending: Dict[int, Dict[int, Optional[str]]] = defaultdict(dict)
+        for line in pending_lines:
+            employee = line.get("employee_id")
+            project = line.get("project_id")
+            if not employee or not project or employee[0] == leader_employee_id:
+                continue
+            project_id = project[0]
+            with_pending[project_id][employee[0]] = (
+                employee[1] if len(employee) > 1 else None
+            )
+            line_date = line.get("date")
+            if line_date and date.fromisoformat(str(line_date)[:10]) < month_start:
+                pending_previous_by_project[project_id] += 1
+            else:
+                pending_count_by_project[project_id] += 1
+
+        assigned_by_project: Dict[int, Set[int]] = defaultdict(set)
+        for a in assignments:
+            employee = a.get("employee_id")
+            project = a.get("project_id")
+            if employee and project and employee[0] != leader_employee_id:
+                assigned_by_project[project[0]].add(employee[0])
+
+        employee_ids = set().union(
+            *assigned_by_project.values(),
+            *(m.keys() for m in with_pending.values()),
+        )
         employees_by_id: Dict[int, Any] = {}
         if employee_ids:
             employees_by_id = {
                 e.id: e for e in self.employee_gateway.get_by_ids(list(employee_ids))
             }
 
-        members_by_project: Dict[int, List[TeamMemberInfo]] = defaultdict(list)
-        # Pares (employee_id, project_id) realmente asignados, para no
-        # contar pendientes de alguien que no está asignado a ESE proyecto
-        # (p.ej. validable por jerarquía en otro contexto).
-        assigned_pairs: Set[Tuple[int, int]] = set()
-        for a in assignments:
-            employee = a.get("employee_id")
-            project = a.get("project_id")
-            if not employee or not project:
-                continue
-            employee_id = employee[0]
-            project_id = project[0]
-            if employee_id == leader_employee_id:
-                continue
-            assigned_pairs.add((employee_id, project_id))
+        def _member(
+            employee_id: int, fallback_name: Optional[str], assigned: bool
+        ) -> TeamMemberInfo:
             emp = employees_by_id.get(employee_id)
-            members_by_project[project_id].append(
-                TeamMemberInfo(
-                    employee_odoo_id=employee_id,
-                    name=emp.full_name if emp else None,
-                    email=emp.email if emp else None,
-                    level=None,
-                )
+            return TeamMemberInfo(
+                employee_odoo_id=employee_id,
+                name=emp.full_name if emp else fallback_name,
+                email=emp.email if emp else None,
+                level=None,
+                assigned=assigned,
             )
 
-        month_start = date.today().replace(day=1)
-        pending_count_by_project: Dict[int, int] = defaultdict(int)
-        pending_previous_by_project: Dict[int, int] = defaultdict(int)
-        if assigned_pairs:
-            pending_lines = self.timesheet_line_gateway.get_pending_lines_minimal(
-                list(employee_ids), [p.id for p in projects]
-            )
-            for line in pending_lines:
-                employee = line.get("employee_id")
-                project = line.get("project_id")
-                if not employee or not project:
-                    continue
-                pair = (employee[0], project[0])
-                if pair not in assigned_pairs:
-                    continue
-                line_date = line.get("date")
-                if line_date and date.fromisoformat(str(line_date)[:10]) < month_start:
-                    pending_previous_by_project[pair[1]] += 1
-                else:
-                    pending_count_by_project[pair[1]] += 1
+        members_by_project: Dict[int, List[TeamMemberInfo]] = {}
+        for pid in project_ids:
+            assigned_ids = assigned_by_project.get(pid, set())
+            members = [_member(eid, None, True) for eid in assigned_ids]
+            # No asignados con horas pendientes (histórico previo a la asignación).
+            members += [
+                _member(eid, name, False)
+                for eid, name in with_pending.get(pid, {}).items()
+                if eid not in assigned_ids
+            ]
+            members_by_project[pid] = members
 
         approver_names = self.project_approver_names([p.id for p in projects])
         return [

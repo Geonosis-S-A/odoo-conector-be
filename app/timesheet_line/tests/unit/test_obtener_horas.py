@@ -1276,10 +1276,10 @@ class TestListTimesheetLinesCanValidateFlag:
         assert by_id[2].can_validate is False
         team_access.lines_authority.assert_not_called()
 
-    def test_team_plus_project_includes_assigned_and_hierarchy(self):
-        """project_id + team=True: el gerente ve a los asignados al proyecto
-        y también a su gente por jerarquía que cargó horas ahí sin estar
-        asignada; los botones salen de la autoridad por línea."""
+    def test_team_plus_project_is_scoped_by_project_not_by_employee(self):
+        """project_id + team=True: el alcance lo da el proyecto: el gerente ve
+        las líneas de ese proyecto de quien sea (incluso sin asignación) y no
+        se resuelve el equipo; los botones salen de la autoridad por línea."""
         lines = [
             self._line(1, employee_id=30, validated=False, project_id=139),  # asignado
             self._line(2, employee_id=40, validated=False, project_id=139),  # jerarquía, no asignado
@@ -1307,11 +1307,10 @@ class TestListTimesheetLinesCanValidateFlag:
 
         assert all(l.can_validate for l in result)
         team_access.manages_project.assert_called_once_with(5, 139)
-        team_access.project_assigned_employee_ids.assert_called_once_with(
-            139, None, None
-        )
-        team_access.visible_employee_ids.assert_called_once_with(5, None, None)
-        assert gw.all.call_args.args[-1] == [30, 40]
+        team_access.project_assigned_employee_ids.assert_not_called()
+        team_access.visible_employee_ids.assert_not_called()
+        assert gw.all.call_args.args[-1] is None
+        assert gw.all.call_args.kwargs == {"project_wide": True}
 
     def test_team_plus_project_raises_when_project_not_managed(self):
         from app.timesheet_line.application.excepctions.exceptions import (

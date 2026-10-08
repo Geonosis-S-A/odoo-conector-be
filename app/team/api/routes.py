@@ -13,6 +13,7 @@ from app.team.api.schemas import (
     ProjectBasicView,
     SetPermissionRequest,
     TeamMemberBasicView,
+    TeamProjectMemberView,
     TeamMemberView,
     TeamProjectView,
     TeamView,
@@ -53,8 +54,11 @@ def _project_team_to_view(team: LedProjectTeam) -> TeamProjectView:
     return TeamProjectView(
         project=ProjectBasicView(id=team.project.id, name=team.project.name),
         members=[
-            TeamMemberBasicView(
-                employee_odoo_id=m.employee_odoo_id, name=m.name, email=m.email
+            TeamProjectMemberView(
+                employee_odoo_id=m.employee_odoo_id,
+                name=m.name,
+                email=m.email,
+                assigned=m.assigned,
             )
             for m in team.members
         ],

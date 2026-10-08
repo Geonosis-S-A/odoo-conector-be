@@ -46,9 +46,14 @@ class ProjectBasicView(BaseModel):
     name: str
 
 
+class TeamProjectMemberView(TeamMemberBasicView):
+    # False: cargó horas en el proyecto sin tener project.assignment vigente.
+    assigned: bool = True
+
+
 class TeamProjectView(BaseModel):
     project: ProjectBasicView
-    members: List[TeamMemberBasicView] = []
+    members: List[TeamProjectMemberView] = []
     pending_count: int = 0
     pending_previous_count: int = 0
     # Quiénes pueden aprobar las horas del proyecto (PM y gerente).

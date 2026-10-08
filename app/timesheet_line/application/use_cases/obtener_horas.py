@@ -64,7 +64,7 @@ class ListTimesheetLinesUseCase:
 
         user_id = None
         ids = None
-        project_scoped_ids: set[int] | None = None
+        project_wide = False
         if id is not None and team and employee_id is None:
             if self.team_access is None:
                 raise EmployeeNotHasUserError(id)
@@ -73,12 +73,10 @@ class ListTimesheetLinesUseCase:
                 # ESE proyecto puntual (project.assignment), no jerarquía.
                 if not self.team_access.manages_project(id, project_id):
                     raise ProjectNotManagedError(project_id)
-                # Asignados ∪ equipo visible: el gerente también ve a su gente
-                # por jerarquía que cargó horas acá sin estar asignada.
-                project_scoped_ids = self.team_access.project_assigned_employee_ids(
-                    project_id, date_from, date_to
-                ) | self.team_access.visible_employee_ids(id, date_from, date_to)
-                ids = sorted(project_scoped_ids)
+                # El alcance lo da el proyecto: todas las líneas de ESE
+                # proyecto, también las de quien cargó sin (o antes de tener)
+                # asignación. No se resuelve el equipo del líder.
+                project_wide = True
             else:
                 # Vista plana de equipo = jerarquía ∪ proyectos gerenciados
                 # + permisos locales.
@@ -93,8 +91,10 @@ class ListTimesheetLinesUseCase:
 
         
 
+        extra = {"project_wide": True} if project_wide else {}
         timesheets = self.timesheet_line_gateway.all(
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
+            **extra,
         )
 
         # Marcar por línea si el usuario puede validarla/borrarla (para los

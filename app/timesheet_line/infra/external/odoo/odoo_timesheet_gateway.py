@@ -135,6 +135,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
         team_members_ids: Optional[list[int]] = None,
+        project_wide: bool = False,
     ) -> List[DetailedTimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo."""
         domain: list[tuple[str, str, Any]] = [("is_timesheet", "=", True)]
@@ -157,7 +158,11 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         proyecto_interno = [3, 1, 87, 2]
         domain.append(("project_id", "not in", proyecto_interno))
 
-        if team:
+        if team and project_wide and project_id is not None:
+            # Vista por proyecto: el alcance lo da el proyecto (el llamador ya
+            # verificó que el líder lo gerencia), sin importar quién cargó.
+            pass
+        elif team:
             # La vista de equipo siempre se acota a la lista explícita de
             # empleados resuelta por TeamAccessService. Lista vacía => sin
             # resultados (nunca "todos").
@@ -498,18 +503,17 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             )
 
     def get_pending_lines_minimal(
-        self, employee_ids: list[int], project_ids: list[int]
+        self, project_ids: list[int]
     ) -> list[Dict[str, Any]]:
-        """``employee_id``/``project_id``/``date`` de cada línea pendiente de
-        esos empleados en esos proyectos. Una sola consulta agregada (sin
-        loop por proyecto) para contar pendientes por proyecto."""
-        if not employee_ids or not project_ids:
+        """``employee_id``/``project_id``/``date`` de cada línea pendiente en
+        esos proyectos, de quien sea que la cargó. Una sola consulta (sin loop
+        por proyecto ni por empleado) para contar pendientes por proyecto."""
+        if not project_ids:
             return []
 
         domain = [
             ("is_timesheet", "=", True),
             ("validated", "=", False),
-            ("employee_id", "in", employee_ids),
             ("project_id", "in", project_ids),
         ]
 
