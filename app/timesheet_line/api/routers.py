@@ -417,12 +417,8 @@ async def validate_timesheet_lines(
     """
     validator_employee_id: int = current_user["user_id"]
 
-    if not team_access.can_validate_team(validator_employee_id):
-        raise HTTPException(
-            status_code=403,
-            detail="No tienes permisos para validar las líneas de timesheet",
-        )
-
+    # La autoridad se decide por línea (PM/gerente del proyecto de cada una) en
+    # el caso de uso; no hace falta resolver antes el equipo del validador.
     try:
         use_case = ValidateTimesheetUseCase(
             gateway, email_service, employee_gateway, notification_repository, team_access

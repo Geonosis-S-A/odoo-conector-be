@@ -36,9 +36,10 @@ class TestValidateTimesheetUseCase:
             id=999, email="approver@test.com", full_name="Test Approver"
         )
         # Mock por defecto para empleados
-        mock.get_by_id.return_value = Employee(
-            id=1, email="employee@test.com", full_name="Test Employee"
-        )
+        mock.get_by_ids.side_effect = lambda ids: [
+            Employee(id=i, email="employee@test.com", full_name="Test Employee")
+            for i in ids
+        ]
         return mock
 
     @pytest.fixture
@@ -351,6 +352,34 @@ class TestValidateTimesheetUseCase:
 
         mock_gateway.get_by_ids.assert_called_once_with([])
         mock_gateway.validate.assert_not_called()
+
+    async def test_employees_are_resolved_in_a_single_call(
+        self, use_case, mock_gateway, mock_employee_gateway
+    ):
+        """Al armar los mails se consultan los empleados una sola vez, no una
+        por línea."""
+        lines = []
+        for line_id, employee_id in [(1, 1), (2, 1), (3, 2)]:
+            lines.append(
+                DetailedTimesheetLine(
+                    id=line_id,
+                    name="T",
+                    employee_id=employee_id,
+                    project=Project(id=1, name="P"),
+                    task=None,
+                    hours=8.0,
+                    date=date(2024, 3, 20),
+                    validated=False,
+                )
+            )
+        mock_gateway.get_by_ids.return_value = lines
+        mock_gateway.validate.return_value = True
+
+        await use_case.execute([1, 2, 3], "approver@test.com")
+
+        mock_employee_gateway.get_by_ids.assert_called_once()
+        (called_ids,) = mock_employee_gateway.get_by_ids.call_args[0]
+        assert sorted(called_ids) == [1, 2]
 
     async def test_validate_multiple_timesheets_with_exception_detail(
         self, use_case, mock_gateway

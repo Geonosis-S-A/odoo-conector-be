@@ -102,8 +102,15 @@ class ValidateTimesheetUseCase:
 
         # Agrupar timesheets por empleado para enviar los emails
         employees_bucket = {}
+        # Una sola consulta para todos los empleados (antes, una por línea).
+        employees_by_id = {
+            e.id: e
+            for e in self.employee_gateway.get_by_ids(
+                list({t.employee_id for t in timesheet_lines})
+            )
+        }
         for timesheet_line in timesheet_lines:
-            employee = self.employee_gateway.get_by_id(timesheet_line.employee_id)
+            employee = employees_by_id.get(timesheet_line.employee_id)
             if employee is None:
                 continue
             if employee.email not in employees_bucket:
