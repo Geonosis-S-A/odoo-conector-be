@@ -44,6 +44,7 @@ class TestTeamAccessService:
         }
         gw.is_project_manager_only.return_value = False
         gw.get_project_approvers.return_value = {}
+        gw.get_led_projects.return_value = []
         gw.get_team_users.side_effect = (
             lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: teams.get(
                 emp_id, []
@@ -93,6 +94,19 @@ class TestTeamAccessService:
         assert service.visible_employee_ids(1) == set()
         assert service.can_view_team(1) is False
         assert service.can_validate_team(1) is False
+
+    def test_pm_with_projects_but_empty_team_can_view_and_validate(
+        self, service, permission_repo, project_assignment_gateway
+    ):
+        permission_repo.list_by_member.return_value = []
+        # 20 es PM de un proyecto, pero (en este caso) sin equipo resuelto
+        project_assignment_gateway.get_team_users.side_effect = None
+        project_assignment_gateway.get_team_users.return_value = []
+        project_assignment_gateway.get_led_projects.return_value = [Mock()]
+
+        assert service.is_leader(20) is True
+        assert service.can_view_team(20) is True
+        assert service.can_validate_team(20) is True
 
     def test_member_with_view_permission_sees_team_minus_leader_and_self(
         self, service, permission_repo

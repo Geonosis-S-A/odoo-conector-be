@@ -123,7 +123,7 @@ def get_my_team_access(
     members = access.visible_team_members(employee_id)
     return MyTeamAccessView(
         is_leader=access.is_leader(employee_id),
-        can_view_team=bool(members),
+        can_view_team=bool(members) or access.leads_projects(employee_id),
         can_validate_team=access.can_validate_team(employee_id),
         members=[
             TeamMemberBasicView(
