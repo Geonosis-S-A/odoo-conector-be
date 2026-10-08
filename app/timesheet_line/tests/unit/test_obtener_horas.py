@@ -1312,6 +1312,28 @@ class TestListTimesheetLinesCanValidateFlag:
         assert gw.all.call_args.args[-1] is None
         assert gw.all.call_args.kwargs == {"project_wide": True}
 
+    def test_team_plus_project_excludes_leaders_own_lines(self):
+        lines = [
+            self._line(1, employee_id=30, validated=False, project_id=139),
+            self._line(2, employee_id=5, validated=False, project_id=139),  # el líder
+        ]
+        team_access = Mock()
+        team_access.manages_project.return_value = True
+        team_access.lines_authority.return_value = {(30, 139): True}
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = lines
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        notif.get_by_timesheet_ids.return_value = []
+        use_case = ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
+        )
+
+        result = use_case.execute(None, None, None, 139, None, True, 5)
+
+        assert [l.employee_id for l in result] == [30]
+
     def test_team_plus_project_raises_when_project_not_managed(self):
         from app.timesheet_line.application.excepctions.exceptions import (
             ProjectNotManagedError,

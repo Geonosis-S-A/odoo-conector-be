@@ -96,6 +96,10 @@ class ListTimesheetLinesUseCase:
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
             **extra,
         )
+        if project_wide:
+            # Sin auto-aprobación: las horas del propio líder no van en su
+            # vista de validación (antes quedaban afuera al resolver el equipo).
+            timesheets = [t for t in timesheets if t.employee_id != id]
 
         # Marcar por línea si el usuario puede validarla/borrarla (para los
         # botones del front). Se decide por el gerente del proyecto de cada
