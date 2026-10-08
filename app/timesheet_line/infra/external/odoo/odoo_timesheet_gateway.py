@@ -161,7 +161,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         if team and project_wide and project_id is not None:
             # Vista por proyecto: el alcance lo da el proyecto (el llamador ya
             # verificó que el líder lo gerencia), sin importar quién cargó.
-            pass
+            # Los empleados archivados no se muestran.
+            domain.append(("employee_id.active", "=", True))
         elif team:
             # La vista de equipo siempre se acota a la lista explícita de
             # empleados resuelta por TeamAccessService. Lista vacía => sin
@@ -515,6 +516,8 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             ("is_timesheet", "=", True),
             ("validated", "=", False),
             ("project_id", "in", project_ids),
+            # Empleados archivados: no se muestran ni cuentan.
+            ("employee_id.active", "=", True),
         ]
 
         return self.odoo_client["models"].execute_kw(
