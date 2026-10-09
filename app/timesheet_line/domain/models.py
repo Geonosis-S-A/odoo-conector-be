@@ -60,6 +60,8 @@ class DetailedTimesheetLine:
     can_delete: bool = False
     # Quiénes pueden aprobar esta línea (PM y gerente del proyecto); vista de equipo.
     approver_names: list[str] = field(default_factory=list)
+    # Nombre del empleado dueño de la línea (Odoo lo devuelve junto al id).
+    employee_name: Optional[str] = None
 
 
 @dataclass

@@ -45,9 +45,12 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         # Manejar employee_id que puede ser False o [id, nombre]
         employee_id = 0
+        employee_name = None
         raw_employee_id = odoo_data.get("employee_id", False)
         if isinstance(raw_employee_id, list) and len(raw_employee_id) > 0:
             employee_id = raw_employee_id[0]
+            if len(raw_employee_id) > 1 and raw_employee_id[1]:
+                employee_name = raw_employee_id[1]
         elif isinstance(raw_employee_id, (int, str)):
             employee_id = int(raw_employee_id)
 
@@ -71,6 +74,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             id=odoo_data.get("id"),
             name=odoo_data.get("name"),
             employee_id=employee_id,
+            employee_name=employee_name,
             project=Project(
                 id=project_id,
                 name=project_name,
