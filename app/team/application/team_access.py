@@ -4,15 +4,23 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from app.core.config import settings
 from app.project.domain.gateway import ProjectAssignmentGateway
 from app.project.domain.models import Project
 from app.shared.utils.step_timer import StepTimer
+from app.shared.utils.ttl_cache import TtlCache
 from app.team.domain.models import PermissionLevel
 from app.team.domain.repositories import TeamPermissionRepository
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
 
 logger = logging.getLogger(__name__)
+
+# Cachés de proceso (el servicio se instancia por request, por eso van a nivel
+# de módulo). TTL en AUTHZ_CACHE_TTL_SECONDS; 0 las desactiva.
+_USER_ID_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # employee_id -> user_id
+_LED_PROJECTS_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # user_id -> proyectos
+_APPROVERS_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # project_id -> aprobadores
 
 
 @dataclass
@@ -144,15 +152,63 @@ class TeamAccessService:
     # jerarquía): para la validación "por proyecto", distinta de la vista
     # plana de equipo.
     # ------------------------------------------------------------------
-    def manages_project(self, leader_employee_id: int, project_id: int) -> bool:
+    # ------------------------------------------------------------------
+    # Lecturas de autoridad con caché opcional (TTL corto, en memoria).
+    # Solo para vistas de lectura: quien valida/borra llama sin ``cached`` y
+    # consulta Odoo en el momento. No se guardan fallas ni ``None``.
+    # ------------------------------------------------------------------
+    def _user_id(self, employee_id: int, cached: bool = False) -> Optional[int]:
+        if not cached:
+            return self.employee_gateway.get_user_id_by_employee_id(employee_id)
+        hit, value = _USER_ID_CACHE.get(employee_id)
+        if hit:
+            return value
+        value = self.employee_gateway.get_user_id_by_employee_id(employee_id)
+        # El gateway devuelve None también ante un error de Odoo: no se guarda.
+        if value is not None:
+            _USER_ID_CACHE.set(employee_id, value)
+        return value
+
+    def _led_projects(self, user_id: int, cached: bool = False) -> List[Project]:
+        if not cached:
+            return self.project_assignment_gateway.get_led_projects(user_id)
+        hit, value = _LED_PROJECTS_CACHE.get(user_id)
+        if hit:
+            return value
+        value = self.project_assignment_gateway.get_led_projects(user_id)
+        _LED_PROJECTS_CACHE.set(user_id, value)
+        return value
+
+    def _approvers(
+        self, project_ids: List[int], cached: bool = False
+    ) -> Dict[int, List[Tuple[int, str]]]:
+        ids = sorted(set(project_ids))
+        if not cached:
+            return self.project_assignment_gateway.get_project_approvers(ids)
+        result: Dict[int, List[Tuple[int, str]]] = {}
+        missing: List[int] = []
+        for project_id in ids:
+            hit, value = _APPROVERS_CACHE.get(project_id)
+            if hit:
+                result[project_id] = value
+            else:
+                missing.append(project_id)
+        if missing:
+            fetched = self.project_assignment_gateway.get_project_approvers(missing)
+            for project_id, approvers in fetched.items():
+                result[project_id] = approvers
+                _APPROVERS_CACHE.set(project_id, approvers)
+        return result
+
+    def manages_project(
+        self, leader_employee_id: int, project_id: int, cached: bool = False
+    ) -> bool:
         """True si ``leader_employee_id`` es gerente o Project Manager de
         ``project_id`` en Odoo."""
-        user_id = self.employee_gateway.get_user_id_by_employee_id(
-            leader_employee_id
-        )
+        user_id = self._user_id(leader_employee_id, cached)
         if user_id is None:
             return False
-        managed = self.project_assignment_gateway.get_led_projects(user_id)
+        managed = self._led_projects(user_id, cached)
         return any(p.id == project_id for p in managed)
 
     def project_assigned_employee_ids(
@@ -236,14 +292,14 @@ class TeamAccessService:
     # ------------------------------------------------------------------
     # Autoridad POR LÍNEA: validar/borrar según el gerente del proyecto
     # ------------------------------------------------------------------
-    def _authorities(self, actor_employee_id: int) -> List[Tuple[int, int]]:
+    def _authorities(
+        self, actor_employee_id: int, cached: bool = False
+    ) -> List[Tuple[int, int]]:
         """Pares ``(employee_id, user_id)`` con cuya autoridad actúa el actor:
         él mismo y los líderes que le delegaron ``validate`` (mientras Odoo
         siga ubicándolo en el equipo de ese líder)."""
         authorities: List[Tuple[int, int]] = []
-        own_user = self.employee_gateway.get_user_id_by_employee_id(
-            actor_employee_id
-        )
+        own_user = self._user_id(actor_employee_id, cached)
         if own_user is not None:
             authorities.append((actor_employee_id, own_user))
 
@@ -253,13 +309,16 @@ class TeamAccessService:
             leader_id = perm.leader_employee_odoo_id
             if actor_employee_id not in {u["id"] for u in self.get_led_team(leader_id)}:
                 continue
-            leader_user = self.employee_gateway.get_user_id_by_employee_id(leader_id)
+            leader_user = self._user_id(leader_id, cached)
             if leader_user is not None:
                 authorities.append((leader_id, leader_user))
         return authorities
 
     def lines_authority(
-        self, actor_employee_id: int, lines: List[Tuple[int, int]]
+        self,
+        actor_employee_id: int,
+        lines: List[Tuple[int, int]],
+        cached: bool = False,
     ) -> Dict[Tuple[int, int], bool]:
         """Para cada ``(employee_id, project_id)`` de una línea, si el actor
         puede validarla/borrarla.
@@ -269,16 +328,20 @@ class TeamAccessService:
         Si el proyecto no tiene ninguno, el jefe por jerarquía del empleado.
         Nunca sobre las propias horas ni (vía permiso delegado) sobre las del
         líder que delegó. Una sola lectura de aprobadores por llamada.
+
+        ``cached=True`` es solo para mostrar permisos en vistas de lectura
+        (puede estar desactualizado hasta el TTL). Para decidir si se ejecuta
+        una acción (validar, borrar) NO usar: dejar ``cached=False``.
         """
         pairs = set(lines)
         if not pairs:
             return {}
-        authorities = self._authorities(actor_employee_id)
+        authorities = self._authorities(actor_employee_id, cached)
         if not authorities:
             return {pair: False for pair in pairs}
 
-        approvers = self.project_assignment_gateway.get_project_approvers(
-            sorted({project_id for _, project_id in pairs})
+        approvers = self._approvers(
+            [project_id for _, project_id in pairs], cached
         )
         hierarchy_cache: Dict[int, Set[int]] = {}
 
@@ -313,12 +376,12 @@ class TeamAccessService:
             result[(employee_id, project_id)] = allowed
         return result
 
-    def project_approver_names(self, project_ids: List[int]) -> Dict[int, List[str]]:
+    def project_approver_names(
+        self, project_ids: List[int], cached: bool = False
+    ) -> Dict[int, List[str]]:
         """Nombres de quienes pueden aprobar las horas de cada proyecto (PM y
         gerente), para mostrar quién debe aprobarlas."""
-        approvers = self.project_assignment_gateway.get_project_approvers(
-            sorted(set(project_ids))
-        )
+        approvers = self._approvers(project_ids, cached)
         return {
             project_id: [name for _, name in users]
             for project_id, users in approvers.items()
@@ -391,17 +454,12 @@ class TeamAccessService:
         y a ``validatable_employee_ids``.
         """
         timer = StepTimer("team.projects")
-        user_id = timer.call(
-            "user_id",
-            self.employee_gateway.get_user_id_by_employee_id,
-            leader_employee_id,
-        )
+        # Vista de solo lectura: usa la caché de autoridad (TTL corto).
+        user_id = timer.call("user_id", self._user_id, leader_employee_id, True)
         if user_id is None:
             return []
 
-        projects = timer.call(
-            "led_projects", self.project_assignment_gateway.get_led_projects, user_id
-        )
+        projects = timer.call("led_projects", self._led_projects, user_id, True)
         if not projects:
             timer.log()
             return []
@@ -487,7 +545,10 @@ class TeamAccessService:
             members_by_project[pid] = members
 
         approver_names = timer.call(
-            "approver_names", self.project_approver_names, [p.id for p in projects]
+            "approver_names",
+            self.project_approver_names,
+            [p.id for p in projects],
+            True,
         )
         timer.log()
         return [

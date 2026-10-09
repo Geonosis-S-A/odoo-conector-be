@@ -76,8 +76,13 @@ class ListTimesheetLinesUseCase:
             if project_id is not None:
                 # Validación "por proyecto": sólo quienes el líder asignó a
                 # ESE proyecto puntual (project.assignment), no jerarquía.
+                # Listado de solo lectura: puede usar la caché de autoridad.
                 if not timer.call(
-                    "manages_project", self.team_access.manages_project, id, project_id
+                    "manages_project",
+                    self.team_access.manages_project,
+                    id,
+                    project_id,
+                    cached=True,
                 ):
                     raise ProjectNotManagedError(project_id)
                 # El alcance lo da el proyecto: todas las líneas de ESE
@@ -132,11 +137,13 @@ class ListTimesheetLinesUseCase:
                 self.team_access.lines_authority,
                 id,
                 [(line.employee_id, line.project.id) for line in timesheets],
+                cached=True,
             )
             approver_names = timer.call(
                 "approver_names",
                 self.team_access.project_approver_names,
                 [line.project.id for line in timesheets],
+                cached=True,
             )
             for line in timesheets:
                 allowed = authority.get((line.employee_id, line.project.id), False)

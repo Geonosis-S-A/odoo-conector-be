@@ -57,6 +57,18 @@ class TestDeleteTimesheetUseCase:
         )
         gateway.delete.assert_called_once_with([1])
 
+    def test_authority_is_checked_fresh_not_from_cache(self, gateway):
+        # Borrar decide un permiso: nunca puede usar la caché de autoridad.
+        gateway.get_by_ids.return_value = [_line(1, 7, project_id=3)]
+        team_access = Mock()
+        team_access.lines_authority.return_value = {(7, 3): True}
+
+        DeleteTimesheetUseCase(gateway, team_access).execute(
+            [1], requester_employee_id=5
+        )
+
+        team_access.lines_authority.assert_called_once_with(5, [(7, 3)])
+
     def test_owner_cannot_delete_own_validated_line(self, gateway):
         gateway.get_by_ids.return_value = [_line(1, 5, validated=True)]
         team_access = Mock()

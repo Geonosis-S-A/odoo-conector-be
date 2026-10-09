@@ -1257,6 +1257,9 @@ class TestListTimesheetLinesCanValidateFlag:
         assert by_id[3].can_validate is False
         assert by_id[3].can_delete is False
         team_access.lines_authority.assert_called_once()
+        # El listado es de solo lectura: puede usar la caché de autoridad
+        assert team_access.lines_authority.call_args.kwargs == {"cached": True}
+        assert team_access.project_approver_names.call_args.kwargs == {"cached": True}
 
     def test_can_validate_never_set_without_team_flag_regardless_of_role(self):
         """Sin `team=True` no se marca `can_validate` en ninguna línea: el rol
@@ -1306,7 +1309,7 @@ class TestListTimesheetLinesCanValidateFlag:
         result = use_case.execute(None, None, None, 139, None, True, 5)
 
         assert all(l.can_validate for l in result)
-        team_access.manages_project.assert_called_once_with(5, 139)
+        team_access.manages_project.assert_called_once_with(5, 139, cached=True)
         team_access.project_assigned_employee_ids.assert_not_called()
         team_access.visible_employee_ids.assert_not_called()
         assert gw.all.call_args.args[-1] is None
