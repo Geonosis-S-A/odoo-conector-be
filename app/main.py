@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
+from app.shared.utils.server_timing import ServerTimingMiddleware
 from app.timesheet_line.api.routers import router as timesheet_router
 from app.users.api.routers import router as users_router
 from app.project.api.routers import router as project_router
@@ -111,7 +112,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Sin esto el navegador solo recuerda el preflight 5 s y casi cada llamada
+    # paga un OPTIONS previo (~una ida y vuelta de red). Chrome limita a 2 h.
+    max_age=7200,
 )
+# Va después de CORS para quedar como capa externa y medir todo.
+app.add_middleware(ServerTimingMiddleware)
 
 
 # Manejadores de errores globales
