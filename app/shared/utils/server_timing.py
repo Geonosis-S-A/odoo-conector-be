@@ -15,6 +15,27 @@ request_started_at: ContextVar[Optional[float]] = ContextVar(
 # Un request que tarda más que esto se loguea (método, ruta y query, sin headers).
 SLOW_REQUEST_MS = 1000
 
+# Requests HTTP que la app está atendiendo ahora. Solo se toca desde el event loop.
+_inflight = 0
+
+
+def inflight_requests() -> int:
+    return _inflight
+
+
+def threadpool_usage() -> str:
+    """Hilos ocupados / total del threadpool donde corren los endpoints sync.
+
+    Si están todos ocupados, un request nuevo espera su turno antes de ejecutarse.
+    """
+    try:
+        import anyio.to_thread
+
+        limiter = anyio.to_thread.current_default_thread_limiter()
+        return f"{limiter.borrowed_tokens}/{int(limiter.total_tokens)}"
+    except Exception:
+        return "?"
+
 
 class ServerTimingMiddleware:
     """Agrega ``Server-Timing: app;dur=<ms>`` a cada respuesta HTTP.
@@ -40,6 +61,8 @@ class ServerTimingMiddleware:
             await self.app(scope, receive, send)
             return
 
+        global _inflight
+        _inflight += 1
         started = time.perf_counter()
         token = request_started_at.set(started)
         status_code = 0
@@ -55,16 +78,19 @@ class ServerTimingMiddleware:
                 if elapsed_ms >= SLOW_REQUEST_MS:
                     query = scope.get("query_string", b"").decode("latin-1")
                     logger.info(
-                        "SLOW REQUEST %s %s%s status=%s app=%.0fms",
+                        "SLOW REQUEST %s %s%s status=%s app=%.0fms inflight=%d threadpool=%s",
                         scope.get("method", "-"),
                         scope.get("path", "-"),
                         f"?{query}" if query else "",
                         status_code,
                         elapsed_ms,
+                        _inflight,
+                        threadpool_usage(),
                     )
             await send(message)
 
         try:
             await self.app(scope, receive, send_with_timing)
         finally:
+            _inflight -= 1
             request_started_at.reset(token)

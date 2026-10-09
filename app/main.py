@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,6 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
+from app.shared.utils.loop_lag import monitor_event_loop_lag
 from app.shared.utils.server_timing import ServerTimingMiddleware
 from app.timesheet_line.api.routers import router as timesheet_router
 from app.users.api.routers import router as users_router
@@ -58,10 +60,14 @@ async def lifespan(app):
     
     # Iniciar el scheduler de jobs programados
     start_scheduler()
+
+    # Avisa en el log si el event loop se bloquea (ver app/shared/utils/loop_lag.py)
+    lag_monitor = asyncio.create_task(monitor_event_loop_lag())
     
     yield  # acá arranca la app
     
     # Detener el scheduler al cerrar la aplicación
+    lag_monitor.cancel()
     stop_scheduler()
 
 
