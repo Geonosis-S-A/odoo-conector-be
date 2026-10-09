@@ -62,7 +62,7 @@ async def sync_user_changes(
 
 
 @router.get("/employees", response_model=EmployeesListResponse)
-async def get_all_employees(
+def get_all_employees(
     current_user: JWTPayload = Depends(get_current_user),
     team_access: TeamAccessService = Depends(get_team_access_service),
 ):

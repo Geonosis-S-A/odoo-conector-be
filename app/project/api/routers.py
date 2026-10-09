@@ -73,7 +73,7 @@ def get_task_gateway(
 
 
 @router.get("/", response_model=List[ProjectResponse])
-async def get_projects(
+def get_projects(
     project_assignment_gateway: ProjectAssignmentGateway = Depends(
         get_project_assignment_gateway
     ),

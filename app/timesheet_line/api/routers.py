@@ -200,7 +200,7 @@ async def create_timesheet_line(
 
 
 @router.get("/", response_model=List[DetailedTimesheetLineResponse])
-async def list_timesheet_lines(
+def list_timesheet_lines(
     gateway: OdooTimesheetLineGateway = Depends(get_timesheet_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     employee_id: int | None = Query(None, description="ID del empleado para filtrar"),
