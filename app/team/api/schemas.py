@@ -68,5 +68,6 @@ class TeamProjectView(BaseModel):
     approver_names: List[str] = []
     # Presente si el usuario ve este proyecto porque su líder le delegó la
     # aprobación (no porque lo gerencie): a quién cubre y hasta cuándo.
+    covering_leader_id: Optional[int] = None
     covering_leader_name: Optional[str] = None
     covering_until: Optional[date] = None

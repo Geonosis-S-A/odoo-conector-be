@@ -68,6 +68,7 @@ def _project_team_to_view(team: LedProjectTeam) -> TeamProjectView:
         pending_count=team.pending_count,
         pending_previous_count=team.pending_previous_count,
         approver_names=team.approver_names,
+        covering_leader_id=team.covering_leader_id,
         covering_leader_name=team.covering_leader_name,
         covering_until=team.covering_until,
     )
