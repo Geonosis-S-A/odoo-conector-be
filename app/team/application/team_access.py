@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from app.project.domain.gateway import ProjectAssignmentGateway
 from app.project.domain.models import Project
+from app.shared.utils.step_timer import StepTimer
 from app.team.domain.models import PermissionLevel
 from app.team.domain.repositories import TeamPermissionRepository
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
@@ -389,24 +390,36 @@ class TeamAccessService:
         aplicando sólo a la vista plana (``get_led_team``/``visible_team_members``)
         y a ``validatable_employee_ids``.
         """
-        user_id = self.employee_gateway.get_user_id_by_employee_id(
-            leader_employee_id
+        timer = StepTimer("team.projects")
+        user_id = timer.call(
+            "user_id",
+            self.employee_gateway.get_user_id_by_employee_id,
+            leader_employee_id,
         )
         if user_id is None:
             return []
 
-        projects = self.project_assignment_gateway.get_led_projects(user_id)
+        projects = timer.call(
+            "led_projects", self.project_assignment_gateway.get_led_projects, user_id
+        )
         if not projects:
+            timer.log()
             return []
 
         project_ids = [p.id for p in projects]
-        assignments = self.project_assignment_gateway.get_project_assignments(
-            project_ids, date_from, date_to
+        assignments = timer.call(
+            "assignments",
+            self.project_assignment_gateway.get_project_assignments,
+            project_ids,
+            date_from,
+            date_to,
         )
         # Pendientes por PROYECTO (no por empleado): incluye las horas de quien
         # cargó sin estar (o antes de estar) asignado. Una sola consulta.
-        pending_lines = self.timesheet_line_gateway.get_pending_lines_minimal(
-            project_ids
+        pending_lines = timer.call(
+            "pending_lines",
+            self.timesheet_line_gateway.get_pending_lines_minimal,
+            project_ids,
         )
 
         month_start = date.today().replace(day=1)
@@ -443,7 +456,10 @@ class TeamAccessService:
         employees_by_id: Dict[int, Any] = {}
         if employee_ids:
             employees_by_id = {
-                e.id: e for e in self.employee_gateway.get_by_ids(list(employee_ids))
+                e.id: e
+                for e in timer.call(
+                    "employees", self.employee_gateway.get_by_ids, list(employee_ids)
+                )
             }
 
         def _member(
@@ -470,7 +486,10 @@ class TeamAccessService:
             ]
             members_by_project[pid] = members
 
-        approver_names = self.project_approver_names([p.id for p in projects])
+        approver_names = timer.call(
+            "approver_names", self.project_approver_names, [p.id for p in projects]
+        )
+        timer.log()
         return [
             LedProjectTeam(
                 project=p,

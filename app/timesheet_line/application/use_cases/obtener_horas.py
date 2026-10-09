@@ -23,6 +23,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     ProjectNotManagedError,
 )
 from app.team.application.team_access import TeamAccessService
+from app.shared.utils.step_timer import StepTimer
 
 
 class ListTimesheetLinesUseCase:
@@ -52,13 +53,17 @@ class ListTimesheetLinesUseCase:
         team: bool | None,
         id: int | None,
     ) -> List[DetailedTimesheetLine]:
+        timer = StepTimer(
+            f"timesheet.list team={bool(team)} project_id={project_id} validated={validated}"
+        )
+
         # Validación de employee_id
         if employee_id is not None and employee_id <= 0:
             raise InvalidEmployeeIdError(employee_id)
 
         # Verificar si el empleado existe
-        if employee_id is not None and not self.employee_gateway.exists_by_id(
-            employee_id
+        if employee_id is not None and not timer.call(
+            "exists_by_id", self.employee_gateway.exists_by_id, employee_id
         ):
             raise EmployeeNotExistsError(employee_id)
 
@@ -71,7 +76,9 @@ class ListTimesheetLinesUseCase:
             if project_id is not None:
                 # Validación "por proyecto": sólo quienes el líder asignó a
                 # ESE proyecto puntual (project.assignment), no jerarquía.
-                if not self.team_access.manages_project(id, project_id):
+                if not timer.call(
+                    "manages_project", self.team_access.manages_project, id, project_id
+                ):
                     raise ProjectNotManagedError(project_id)
                 # El alcance lo da el proyecto: todas las líneas de ESE
                 # proyecto, también las de quien cargó sin (o antes de tener)
@@ -81,7 +88,13 @@ class ListTimesheetLinesUseCase:
                 # Vista plana de equipo = jerarquía ∪ proyectos gerenciados
                 # + permisos locales.
                 ids = sorted(
-                    self.team_access.visible_employee_ids(id, date_from, date_to)
+                    timer.call(
+                        "visible_employee_ids",
+                        self.team_access.visible_employee_ids,
+                        id,
+                        date_from,
+                        date_to,
+                    )
                 )
 
 
@@ -92,7 +105,9 @@ class ListTimesheetLinesUseCase:
         
 
         extra = {"project_wide": True} if project_wide else {}
-        timesheets = self.timesheet_line_gateway.all(
+        timesheets = timer.call(
+            "gateway_all",
+            self.timesheet_line_gateway.all,
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
             **extra,
         )
@@ -112,11 +127,16 @@ class ListTimesheetLinesUseCase:
             and self.team_access is not None
             and id is not None
         ):
-            authority = self.team_access.lines_authority(
-                id, [(line.employee_id, line.project.id) for line in timesheets]
+            authority = timer.call(
+                "lines_authority",
+                self.team_access.lines_authority,
+                id,
+                [(line.employee_id, line.project.id) for line in timesheets],
             )
-            approver_names = self.team_access.project_approver_names(
-                [line.project.id for line in timesheets]
+            approver_names = timer.call(
+                "approver_names",
+                self.team_access.project_approver_names,
+                [line.project.id for line in timesheets],
             )
             for line in timesheets:
                 allowed = authority.get((line.employee_id, line.project.id), False)
@@ -127,8 +147,11 @@ class ListTimesheetLinesUseCase:
         if self.task_gateway and timesheets:
             task_ids = [t.task.id for t in timesheets if t.task is not None]
             if task_ids:
-                tasks_info = collect_tasks_info_with_ancestors(
-                    self.task_gateway, task_ids
+                tasks_info = timer.call(
+                    "task_hierarchy",
+                    collect_tasks_info_with_ancestors,
+                    self.task_gateway,
+                    task_ids,
                 )
                 for line in timesheets:
                     if line.task is None:
@@ -138,8 +161,10 @@ class ListTimesheetLinesUseCase:
                         line.task = replace(line.task, name=full_name)
 
         # Una sola query batch para todas las notificaciones (reemplaza el loop N+1)
-        notifications = self.notification_repository.get_by_timesheet_ids(
-            [t.id for t in timesheets]
+        notifications = timer.call(
+            "notifications_db",
+            self.notification_repository.get_by_timesheet_ids,
+            [t.id for t in timesheets],
         )
         notifications_map = {n.timesheet_line_id: n for n in notifications}
 
@@ -151,7 +176,11 @@ class ListTimesheetLinesUseCase:
             approver_ids = {n.approver_id for n in notifications}
             employees_dict = {
                 employee.id: employee
-                for employee in self.employee_gateway.get_by_ids(list(approver_ids))
+                for employee in timer.call(
+                    "notification_employees",
+                    self.employee_gateway.get_by_ids,
+                    list(approver_ids),
+                )
             }
 
         for timesheet in timesheets:
@@ -162,4 +191,5 @@ class ListTimesheetLinesUseCase:
                     sender_name=employees_dict[notification.approver_id].full_name,
                     sended_at=notification.created_at,
                 )
+        timer.log()
         return timesheets
