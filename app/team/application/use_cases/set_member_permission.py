@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Optional
 
 from app.team.application.team_access import TeamAccessService
@@ -21,6 +22,8 @@ class SetMemberPermissionUseCase:
         leader_employee_id: int,
         member_employee_id: int,
         level: Optional[PermissionLevel],
+        valid_from: Optional[date] = None,
+        valid_until: Optional[date] = None,
     ) -> Optional[TeamMemberPermission]:
         team_ids = self.team_access.get_led_team_member_ids(leader_employee_id)
         if not team_ids:
@@ -36,11 +39,22 @@ class SetMemberPermissionUseCase:
             self.permission_repo.delete(leader_employee_id, member_employee_id)
             return None
 
+        if (
+            valid_from is not None
+            and valid_until is not None
+            and valid_from > valid_until
+        ):
+            raise ValueError("La fecha 'desde' no puede ser posterior a la fecha 'hasta'")
+        if valid_until is not None and valid_until < date.today():
+            raise ValueError("La fecha 'hasta' ya pasó: el permiso no tendría efecto")
+
         return self.permission_repo.upsert(
             TeamMemberPermission(
                 id=None,
                 leader_employee_odoo_id=leader_employee_id,
                 member_employee_odoo_id=member_employee_id,
                 level=level,
+                valid_from=valid_from,
+                valid_until=valid_until,
             )
         )

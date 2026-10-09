@@ -1,3 +1,4 @@
+from datetime import date
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel
@@ -9,6 +10,9 @@ class TeamMemberView(BaseModel):
     email: Optional[str] = None
     # None = sin permiso: la persona sólo ve sus propias horas
     level: Optional[Literal["view", "validate"]] = None
+    # Vigencia del permiso (inclusive). None = sin límite en ese extremo.
+    valid_from: Optional[date] = None
+    valid_until: Optional[date] = None
 
 
 class TeamView(BaseModel):
@@ -39,6 +43,10 @@ class MyTeamAccessView(BaseModel):
 class SetPermissionRequest(BaseModel):
     # "none" elimina el permiso (la persona vuelve a ver sólo sus horas)
     level: Literal["view", "validate", "none"]
+    # Vigencia opcional, p. ej. para cubrir aprobaciones durante unas vacaciones.
+    # Sin fechas el permiso no vence. Se ignoran con level="none".
+    valid_from: Optional[date] = None
+    valid_until: Optional[date] = None
 
 
 class ProjectBasicView(BaseModel):
@@ -58,3 +66,7 @@ class TeamProjectView(BaseModel):
     pending_previous_count: int = 0
     # Quiénes pueden aprobar las horas del proyecto (PM y gerente).
     approver_names: List[str] = []
+    # Presente si el usuario ve este proyecto porque su líder le delegó la
+    # aprobación (no porque lo gerencie): a quién cubre y hasta cuándo.
+    covering_leader_name: Optional[str] = None
+    covering_until: Optional[date] = None

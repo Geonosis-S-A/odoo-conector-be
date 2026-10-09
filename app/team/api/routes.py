@@ -1,4 +1,5 @@
-from typing import List
+from datetime import date
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -40,6 +41,8 @@ def _member_to_view(m: TeamMemberInfo) -> TeamMemberView:
         name=m.name,
         email=m.email,
         level=m.level.value if m.level is not None else None,
+        valid_from=m.valid_from,
+        valid_until=m.valid_until,
     )
 
 
@@ -65,6 +68,8 @@ def _project_team_to_view(team: LedProjectTeam) -> TeamProjectView:
         pending_count=team.pending_count,
         pending_previous_count=team.pending_previous_count,
         approver_names=team.approver_names,
+        covering_leader_name=team.covering_leader_name,
+        covering_until=team.covering_until,
     )
 
 
@@ -97,11 +102,13 @@ def _apply_permission(
     leader_id: int,
     member_id: int,
     level_str: str,
+    valid_from: Optional[date] = None,
+    valid_until: Optional[date] = None,
 ) -> TeamMemberView:
     level = None if level_str == "none" else PermissionLevel(level_str)
     try:
         SetMemberPermissionUseCase(access, repo).execute(
-            leader_id, member_id, level
+            leader_id, member_id, level, valid_from, valid_until
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -174,7 +181,13 @@ def set_my_member_permission(
 ):
     leader_id: int = current_user["user_id"]
     return _apply_permission(
-        access, repo, leader_id, member_employee_odoo_id, request.level
+        access,
+        repo,
+        leader_id,
+        member_employee_odoo_id,
+        request.level,
+        request.valid_from,
+        request.valid_until,
     )
 
 
@@ -225,4 +238,6 @@ def set_member_permission_as_admin(
         leader_employee_odoo_id,
         member_employee_odoo_id,
         request.level,
+        request.valid_from,
+        request.valid_until,
     )

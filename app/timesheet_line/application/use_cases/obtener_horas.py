@@ -74,12 +74,12 @@ class ListTimesheetLinesUseCase:
             if self.team_access is None:
                 raise EmployeeNotHasUserError(id)
             if project_id is not None:
-                # Validación "por proyecto": sólo quienes el líder asignó a
-                # ESE proyecto puntual (project.assignment), no jerarquía.
+                # Validación "por proyecto": quien gerencia ESE proyecto o lo
+                # cubre porque su líder le delegó la aprobación (vigente hoy).
                 # Listado de solo lectura: puede usar la caché de autoridad.
                 if not timer.call(
-                    "manages_project",
-                    self.team_access.manages_project,
+                    "can_access_project",
+                    self.team_access.can_access_project,
                     id,
                     project_id,
                     cached=True,

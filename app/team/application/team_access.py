@@ -9,7 +9,7 @@ from app.project.domain.gateway import ProjectAssignmentGateway
 from app.project.domain.models import Project
 from app.shared.utils.step_timer import StepTimer
 from app.shared.utils.ttl_cache import TtlCache
-from app.team.domain.models import PermissionLevel
+from app.team.domain.models import PermissionLevel, TeamMemberPermission
 from app.team.domain.repositories import TeamPermissionRepository
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 _USER_ID_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # employee_id -> user_id
 _LED_PROJECTS_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # user_id -> proyectos
 _APPROVERS_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # project_id -> aprobadores
+_COVERAGE_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # employee_id -> [Coverage]
 
 
 @dataclass
@@ -31,6 +32,9 @@ class TeamMemberInfo:
     level: Optional[PermissionLevel]
     # False: tiene horas en el proyecto pero sin project.assignment vigente.
     assigned: bool = True
+    # Vigencia del permiso `level` (inclusive); None = sin límite en ese extremo.
+    valid_from: Optional[date] = None
+    valid_until: Optional[date] = None
 
 
 @dataclass
@@ -41,6 +45,21 @@ class LedProjectTeam:
     pending_count: int = 0
     pending_previous_count: int = 0
     approver_names: List[str] = field(default_factory=list)
+    # Si el actor ve este proyecto porque su líder le delegó la aprobación (y no
+    # porque lo gerencie él): quién lo cubre y hasta cuándo (None = sin límite).
+    covering_leader_id: Optional[int] = None
+    covering_leader_name: Optional[str] = None
+    covering_until: Optional[date] = None
+
+
+@dataclass
+class Coverage:
+    """Delegación de aprobación vigente que recibió un empleado: actúa con la
+    autoridad de ``leader_employee_id`` (su user de Odoo es ``leader_user_id``)."""
+
+    leader_employee_id: int
+    leader_user_id: int
+    valid_until: Optional[date] = None
 
 
 _VIEW_LEVELS = {PermissionLevel.view, PermissionLevel.validate}
@@ -153,6 +172,23 @@ class TeamAccessService:
     # plana de equipo.
     # ------------------------------------------------------------------
     # ------------------------------------------------------------------
+    # Permisos delegados vigentes
+    # ------------------------------------------------------------------
+    def _active_permissions(
+        self, member_employee_id: int
+    ) -> List[TeamMemberPermission]:
+        """Permisos que otros líderes le dieron a ``member_employee_id`` y que
+        están vigentes HOY. Fuera de su ventana (``valid_from``/``valid_until``)
+        un permiso no concede nada: así la cobertura de un líder de vacaciones
+        vence sola."""
+        today = date.today()
+        return [
+            p
+            for p in self.permission_repo.list_by_member(member_employee_id)
+            if p.is_active(today)
+        ]
+
+    # ------------------------------------------------------------------
     # Lecturas de autoridad con caché opcional (TTL corto, en memoria).
     # Solo para vistas de lectura: quien valida/borra llama sin ``cached`` y
     # consulta Odoo en el momento. No se guardan fallas ni ``None``.
@@ -243,7 +279,7 @@ class TeamAccessService:
         date_to: Optional[date] = None,
     ) -> Set[int]:
         result: Set[int] = set()
-        for perm in self.permission_repo.list_by_member(member_employee_id):
+        for perm in self._active_permissions(member_employee_id):
             if perm.level not in levels:
                 continue
             leader_id = perm.leader_employee_odoo_id
@@ -303,7 +339,20 @@ class TeamAccessService:
         if own_user is not None:
             authorities.append((actor_employee_id, own_user))
 
-        for perm in self.permission_repo.list_by_member(actor_employee_id):
+        for cov in self._coverages(actor_employee_id, cached):
+            authorities.append((cov.leader_employee_id, cov.leader_user_id))
+        return authorities
+
+    def _coverages(self, actor_employee_id: int, cached: bool = False) -> List[Coverage]:
+        """Delegaciones ``validate`` VIGENTES hoy que recibió el actor, de líderes
+        en cuyo equipo Odoo todavía lo ubica. La autoridad no se transmite: solo
+        cuenta el líder que delegó directamente, no cadenas de delegación."""
+        if cached:
+            hit, value = _COVERAGE_CACHE.get(actor_employee_id)
+            if hit:
+                return value
+        coverages: List[Coverage] = []
+        for perm in self._active_permissions(actor_employee_id):
             if perm.level not in _VALIDATE_LEVELS:
                 continue
             leader_id = perm.leader_employee_odoo_id
@@ -311,8 +360,25 @@ class TeamAccessService:
                 continue
             leader_user = self._user_id(leader_id, cached)
             if leader_user is not None:
-                authorities.append((leader_id, leader_user))
-        return authorities
+                coverages.append(Coverage(leader_id, leader_user, perm.valid_until))
+        if cached:
+            _COVERAGE_CACHE.set(actor_employee_id, coverages)
+        return coverages
+
+    def can_access_project(
+        self, actor_employee_id: int, project_id: int, cached: bool = False
+    ) -> bool:
+        """True si el actor gerencia el proyecto o lo cubre porque su líder le
+        delegó la aprobación (vigente hoy). Para ver su tablero; las acciones
+        (validar/borrar) se siguen decidiendo por línea con ``lines_authority``."""
+        if self.manages_project(actor_employee_id, project_id, cached):
+            return True
+        for cov in self._coverages(actor_employee_id, cached):
+            if any(
+                p.id == project_id for p in self._led_projects(cov.leader_user_id, cached)
+            ):
+                return True
+        return False
 
     def lines_authority(
         self,
@@ -424,7 +490,7 @@ class TeamAccessService:
             _add(u)
 
         # Equipos donde tiene permiso como miembro
-        for perm in self.permission_repo.list_by_member(employee_id):
+        for perm in self._active_permissions(employee_id):
             leader_id = perm.leader_employee_odoo_id
             team = self.get_led_team(leader_id)
             if employee_id not in {u["id"] for u in team}:
@@ -446,23 +512,40 @@ class TeamAccessService:
         date_from: Optional[date] = None,
         date_to: Optional[date] = None,
     ) -> List[LedProjectTeam]:
-        """Proyectos que gerencia ``leader_employee_id``, con los empleados
-        asignados a cada uno (excluyendo al propio líder).
+        """Proyectos que gerencia ``leader_employee_id`` (y los de los líderes
+        que le delegaron la aprobación, vigente hoy), con los empleados asignados
+        a cada uno (excluyendo al propio líder y, en los proyectos que cubre, a
+        quien le delegó: no se aprueban las horas de quien delegó).
 
-        No cruza con permisos locales (``TeamMemberPermission``): esos siguen
-        aplicando sólo a la vista plana (``get_led_team``/``visible_team_members``)
-        y a ``validatable_employee_ids``.
+        Los permisos locales de la vista plana (``get_led_team``/
+        ``visible_team_members``) no cambian lo que se ve por proyecto: acá solo
+        suma la cobertura, que da acceso a los proyectos de quien la otorgó.
         """
         timer = StepTimer("team.projects")
         # Vista de solo lectura: usa la caché de autoridad (TTL corto).
         user_id = timer.call("user_id", self._user_id, leader_employee_id, True)
-        if user_id is None:
-            return []
+        projects: List[Project] = []
+        if user_id is not None:
+            projects = list(
+                timer.call("led_projects", self._led_projects, user_id, True)
+            )
 
-        projects = timer.call("led_projects", self._led_projects, user_id, True)
+        # Proyectos de los líderes que le delegaron la aprobación.
+        covered: Dict[int, Coverage] = {}
+        own_ids = {p.id for p in projects}
+        for cov in timer.call("coverages", self._coverages, leader_employee_id, True):
+            for p in self._led_projects(cov.leader_user_id, True):
+                if p.id not in own_ids and p.id not in covered:
+                    covered[p.id] = cov
+                    projects.append(p)
+
         if not projects:
             timer.log()
             return []
+
+        def _excluded(project_id: int) -> Set[int]:
+            cov = covered.get(project_id)
+            return {leader_employee_id} | ({cov.leader_employee_id} if cov else set())
 
         project_ids = [p.id for p in projects]
         assignments = timer.call(
@@ -488,7 +571,7 @@ class TeamAccessService:
         for line in pending_lines:
             employee = line.get("employee_id")
             project = line.get("project_id")
-            if not employee or not project or employee[0] == leader_employee_id:
+            if not employee or not project or employee[0] in _excluded(project[0]):
                 continue
             project_id = project[0]
             with_pending[project_id][employee[0]] = (
@@ -504,12 +587,13 @@ class TeamAccessService:
         for a in assignments:
             employee = a.get("employee_id")
             project = a.get("project_id")
-            if employee and project and employee[0] != leader_employee_id:
+            if employee and project and employee[0] not in _excluded(project[0]):
                 assigned_by_project[project[0]].add(employee[0])
 
         employee_ids = set().union(
             *assigned_by_project.values(),
             *(m.keys() for m in with_pending.values()),
+            {c.leader_employee_id for c in covered.values()},
         )
         employees_by_id: Dict[int, Any] = {}
         if employee_ids:
@@ -551,6 +635,12 @@ class TeamAccessService:
             True,
         )
         timer.log()
+
+        def _covering_name(project_id: int) -> Optional[str]:
+            cov = covered.get(project_id)
+            leader = employees_by_id.get(cov.leader_employee_id) if cov else None
+            return leader.full_name if leader else None
+
         return [
             LedProjectTeam(
                 project=p,
@@ -558,6 +648,13 @@ class TeamAccessService:
                 members=members_by_project.get(p.id, []),
                 pending_count=pending_count_by_project.get(p.id, 0),
                 pending_previous_count=pending_previous_by_project.get(p.id, 0),
+                covering_leader_id=(
+                    covered[p.id].leader_employee_id if p.id in covered else None
+                ),
+                covering_leader_name=_covering_name(p.id),
+                covering_until=(
+                    covered[p.id].valid_until if p.id in covered else None
+                ),
             )
             for p in projects
         ]

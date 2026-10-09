@@ -1,4 +1,4 @@
-from datetime import datetime, UTC
+from datetime import date, datetime, UTC
 from typing import Optional
 
 from sqlalchemy import CheckConstraint, UniqueConstraint
@@ -24,3 +24,6 @@ class TeamMemberPermissionModel(SQLModel, table=True):
     member_employee_odoo_id: int = Field(index=True)
     level: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    # Vigencia del permiso (inclusive). NULL = sin límite en ese extremo.
+    valid_from: Optional[date] = Field(default=None)
+    valid_until: Optional[date] = Field(default=None)

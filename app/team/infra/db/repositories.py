@@ -14,6 +14,8 @@ def _to_domain(m: TeamMemberPermissionModel) -> TeamMemberPermission:
         member_employee_odoo_id=m.member_employee_odoo_id,
         level=PermissionLevel(m.level),
         created_at=m.created_at,
+        valid_from=m.valid_from,
+        valid_until=m.valid_until,
     )
 
 
@@ -70,9 +72,13 @@ class SQLModelTeamPermissionRepository(TeamPermissionRepository):
                 leader_employee_odoo_id=permission.leader_employee_odoo_id,
                 member_employee_odoo_id=permission.member_employee_odoo_id,
                 level=permission.level.value,
+                valid_from=permission.valid_from,
+                valid_until=permission.valid_until,
             )
         else:
             m.level = permission.level.value
+            m.valid_from = permission.valid_from
+            m.valid_until = permission.valid_until
         self.db.add(m)
         self.db.commit()
         self.db.refresh(m)

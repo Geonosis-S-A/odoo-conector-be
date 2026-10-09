@@ -1288,7 +1288,7 @@ class TestListTimesheetLinesCanValidateFlag:
             self._line(2, employee_id=40, validated=False, project_id=139),  # jerarquía, no asignado
         ]
         team_access = Mock()
-        team_access.manages_project.return_value = True
+        team_access.can_access_project.return_value = True
         team_access.project_assigned_employee_ids.return_value = {30}
         team_access.visible_employee_ids.return_value = {40}
         team_access.lines_authority.return_value = {
@@ -1309,7 +1309,7 @@ class TestListTimesheetLinesCanValidateFlag:
         result = use_case.execute(None, None, None, 139, None, True, 5)
 
         assert all(l.can_validate for l in result)
-        team_access.manages_project.assert_called_once_with(5, 139, cached=True)
+        team_access.can_access_project.assert_called_once_with(5, 139, cached=True)
         team_access.project_assigned_employee_ids.assert_not_called()
         team_access.visible_employee_ids.assert_not_called()
         assert gw.all.call_args.args[-1] is None
@@ -1321,7 +1321,7 @@ class TestListTimesheetLinesCanValidateFlag:
             self._line(2, employee_id=5, validated=False, project_id=139),  # el líder
         ]
         team_access = Mock()
-        team_access.manages_project.return_value = True
+        team_access.can_access_project.return_value = True
         team_access.lines_authority.return_value = {(30, 139): True}
         gw = Mock(spec=TimesheetLineGateway)
         gw.all.return_value = lines
@@ -1343,7 +1343,7 @@ class TestListTimesheetLinesCanValidateFlag:
         )
 
         team_access = Mock()
-        team_access.manages_project.return_value = False
+        team_access.can_access_project.return_value = False
         gw = Mock(spec=TimesheetLineGateway)
         emp_gw = Mock(spec=EmployeeGateway)
         emp_gw.exists_by_id.return_value = True

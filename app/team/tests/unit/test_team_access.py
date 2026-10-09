@@ -62,7 +62,11 @@ class TestTeamAccessService:
 
     @pytest.fixture
     def permission_repo(self):
-        return Mock()
+        repo = Mock()
+        # Por defecto nadie recibió permisos delegados; los tests que lo necesitan
+        # sobreescriben `list_by_member.return_value`.
+        repo.list_by_member.return_value = []
+        return repo
 
     @pytest.fixture
     def service(

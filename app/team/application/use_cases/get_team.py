@@ -20,16 +20,23 @@ class GetTeamUseCase:
         if not team:
             return []
 
-        levels = {
-            p.member_employee_odoo_id: p.level
+        # Se muestran todos los permisos, también los vencidos o futuros: el
+        # líder necesita verlos para renovarlos o quitarlos.
+        permissions = {
+            p.member_employee_odoo_id: p
             for p in self.permission_repo.list_by_leader(leader_employee_id)
         }
-        return [
-            TeamMemberInfo(
-                employee_odoo_id=u["id"],
-                name=u.get("name"),
-                email=u.get("work_email") or None,
-                level=levels.get(u["id"]),
+        members: List[TeamMemberInfo] = []
+        for u in team:
+            perm = permissions.get(u["id"])
+            members.append(
+                TeamMemberInfo(
+                    employee_odoo_id=u["id"],
+                    name=u.get("name"),
+                    email=u.get("work_email") or None,
+                    level=perm.level if perm else None,
+                    valid_from=perm.valid_from if perm else None,
+                    valid_until=perm.valid_until if perm else None,
+                )
             )
-            for u in team
-        ]
+        return members

@@ -17,6 +17,7 @@ def _clear_authz_caches():
         team_access._USER_ID_CACHE,
         team_access._LED_PROJECTS_CACHE,
         team_access._APPROVERS_CACHE,
+        team_access._COVERAGE_CACHE,
     ):
         cache.clear()
     yield 
