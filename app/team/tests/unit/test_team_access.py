@@ -440,6 +440,55 @@ class TestTeamAccessService:
         assert team_ids == {1, 2, 3}
         timesheet_line_gateway.get_team_users.assert_not_called()
 
+    def test_pm_only_boss_in_hierarchy_does_not_see_or_validate_subordinates(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # PM de un proyecto (no gerente de ninguno) que además es jefe en la
+        # jerarquía de Odoo: sus subordinados (id 99) no aparecen en su equipo.
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.is_project_manager_only.return_value = True
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        assert service.visible_employee_ids(10) == {1, 2, 3}
+        assert service.validatable_employee_ids(10) == {1, 2, 3}
+
+    def test_pm_only_cannot_act_on_hierarchy_subordinate_line_in_foreign_project(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # El subordinado 99 carga en el proyecto 5, cuyo PM es otro (user 200).
+        # Ser su jefe por jerarquía no alcanza: manda el proyecto.
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.is_project_manager_only.return_value = True
+        project_assignment_gateway.get_project_approvers.return_value = {5: [(200, "Marta")]}
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        assert service.can_act_on_line(10, 99, 5) is False
+
+    def test_pm_of_some_and_manager_of_others_gets_projects_and_hierarchy(
+        self, service, project_assignment_gateway, timesheet_line_gateway
+    ):
+        # Gerente (user_id) de al menos un proyecto => no es PM "puro":
+        # equipo = asignados a sus proyectos ∪ jerarquía.
+        project_assignment_gateway.is_project_manager_only.return_value = False
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        assert {u["id"] for u in service.get_led_team(10)} == {1, 2, 3, 99}
+
+    def test_pm_of_some_and_manager_of_others_acts_on_both_kinds_of_projects(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        # user 100 es PM del proyecto 1 y gerente del proyecto 2.
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Iván")],
+            2: [(100, "Iván")],
+        }
+
+        assert service.lines_authority(10, [(1, 1), (1, 2)]) == {
+            (1, 1): True,
+            (1, 2): True,
+        }
+
     def test_project_approver_names(self, service, project_assignment_gateway):
         project_assignment_gateway.get_project_approvers.return_value = {
             1: [(200, "Marta"), (100, "Iván")],
