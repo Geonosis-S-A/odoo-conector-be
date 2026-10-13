@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from app.core.config import settings
 from app.project.domain.gateway import ProjectAssignmentGateway
 from app.project.domain.models import Project
-from app.shared.utils.step_timer import StepTimer
 from app.shared.utils.ttl_cache import TtlCache
 from app.team.domain.models import PermissionLevel, TeamMemberPermission
 from app.team.domain.repositories import TeamPermissionRepository
@@ -521,26 +520,22 @@ class TeamAccessService:
         ``visible_team_members``) no cambian lo que se ve por proyecto: acá solo
         suma la cobertura, que da acceso a los proyectos de quien la otorgó.
         """
-        timer = StepTimer("team.projects")
         # Vista de solo lectura: usa la caché de autoridad (TTL corto).
-        user_id = timer.call("user_id", self._user_id, leader_employee_id, True)
+        user_id = self._user_id(leader_employee_id, True)
         projects: List[Project] = []
         if user_id is not None:
-            projects = list(
-                timer.call("led_projects", self._led_projects, user_id, True)
-            )
+            projects = list(self._led_projects(user_id, True))
 
         # Proyectos de los líderes que le delegaron la aprobación.
         covered: Dict[int, Coverage] = {}
         own_ids = {p.id for p in projects}
-        for cov in timer.call("coverages", self._coverages, leader_employee_id, True):
+        for cov in self._coverages(leader_employee_id, True):
             for p in self._led_projects(cov.leader_user_id, True):
                 if p.id not in own_ids and p.id not in covered:
                     covered[p.id] = cov
                     projects.append(p)
 
         if not projects:
-            timer.log()
             return []
 
         def _excluded(project_id: int) -> Set[int]:
@@ -548,19 +543,13 @@ class TeamAccessService:
             return {leader_employee_id} | ({cov.leader_employee_id} if cov else set())
 
         project_ids = [p.id for p in projects]
-        assignments = timer.call(
-            "assignments",
-            self.project_assignment_gateway.get_project_assignments,
-            project_ids,
-            date_from,
-            date_to,
+        assignments = self.project_assignment_gateway.get_project_assignments(
+            project_ids, date_from, date_to
         )
         # Pendientes por PROYECTO (no por empleado): incluye las horas de quien
         # cargó sin estar (o antes de estar) asignado. Una sola consulta.
-        pending_lines = timer.call(
-            "pending_lines",
-            self.timesheet_line_gateway.get_pending_lines_minimal,
-            project_ids,
+        pending_lines = self.timesheet_line_gateway.get_pending_lines_minimal(
+            project_ids
         )
 
         month_start = date.today().replace(day=1)
@@ -599,9 +588,7 @@ class TeamAccessService:
         if employee_ids:
             employees_by_id = {
                 e.id: e
-                for e in timer.call(
-                    "employees", self.employee_gateway.get_by_ids, list(employee_ids)
-                )
+                for e in self.employee_gateway.get_by_ids(list(employee_ids))
             }
 
         def _member(
@@ -628,13 +615,7 @@ class TeamAccessService:
             ]
             members_by_project[pid] = members
 
-        approver_names = timer.call(
-            "approver_names",
-            self.project_approver_names,
-            [p.id for p in projects],
-            True,
-        )
-        timer.log()
+        approver_names = self.project_approver_names([p.id for p in projects], True)
 
         def _covering_name(project_id: int) -> Optional[str]:
             cov = covered.get(project_id)
