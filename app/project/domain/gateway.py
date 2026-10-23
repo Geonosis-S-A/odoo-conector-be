@@ -64,6 +64,11 @@ class ProjectAssignmentGateway(ABC):
         (`user_id`) o Project Manager (`x_project_manager_id`)."""
 
     @abstractmethod
+    def is_project_head(self, user_id: int) -> bool:
+        """True si `user_id` es gerente (`project.project.user_id`) de algún
+        proyecto vigente. El Project Manager (`x_project_manager_id`) NO cuenta."""
+
+    @abstractmethod
     def get_project_approvers(
         self, project_ids: list[int]
     ) -> Dict[int, list[tuple[int, str]]]:

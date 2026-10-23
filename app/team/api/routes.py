@@ -129,6 +129,7 @@ def get_my_team_access(
         is_leader=access.is_leader(employee_id),
         can_view_team=bool(members),
         can_validate_team=access.can_validate_team(employee_id),
+        can_view_team_hours=access.can_view_team_hours(employee_id),
         members=[
             TeamMemberBasicView(
                 employee_odoo_id=m.employee_odoo_id, name=m.name, email=m.email

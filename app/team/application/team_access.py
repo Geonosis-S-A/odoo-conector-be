@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 _USER_ID_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # employee_id -> user_id
 _LED_PROJECTS_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # user_id -> proyectos
 _APPROVERS_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # project_id -> aprobadores
+_PROJECT_HEAD_CACHE = TtlCache(settings.AUTHZ_CACHE_TTL_SECONDS)  # user_id -> es gerente de proyectos
 
 
 @dataclass
@@ -232,6 +233,38 @@ class TeamAccessService:
         return bool(self.get_led_team_member_ids(employee_id))
 
     # ------------------------------------------------------------------
+    # "Horas del equipo": sólo para gerentes de proyectos (deliveries)
+    # ------------------------------------------------------------------
+    def is_project_head(self, employee_id: int, cached: bool = False) -> bool:
+        """True si es gerente (``project.project.user_id``) de algún proyecto
+        vigente. El Project Manager no cuenta: trabaja desde la vista por proyecto."""
+        user_id = self._user_id(employee_id, cached)
+        if user_id is None:
+            return False
+        if not cached:
+            return self.project_assignment_gateway.is_project_head(user_id)
+        hit, value = _PROJECT_HEAD_CACHE.get(user_id)
+        if hit:
+            return value
+        value = self.project_assignment_gateway.is_project_head(user_id)
+        _PROJECT_HEAD_CACHE.set(user_id, value)
+        return value
+
+    def can_view_team_hours(self, employee_id: int) -> bool:
+        """Acceso a la vista plana "Horas del equipo" (lectura, usa la caché)."""
+        return self.is_project_head(employee_id, cached=True)
+
+    def get_department_team(self, employee_id: int) -> List[Dict[str, Any]]:
+        """Compañeros de departamento de un gerente de proyectos (vacío si no lo es).
+
+        Cubre departamentos donde quien está a cargo de los proyectos no es el
+        gerente del departamento y por eso no ve a su gente por jerarquía.
+        """
+        if not self.is_project_head(employee_id, cached=True):
+            return []
+        return self.timesheet_line_gateway.get_department_users(employee_id) or []
+
+    # ------------------------------------------------------------------
     # Permisos locales cruzados con el equipo por proyecto
     # ------------------------------------------------------------------
     def _granted_ids(
@@ -267,6 +300,7 @@ class TeamAccessService:
         ids = {
             u["id"] for u in self.get_led_team(employee_id, date_from, date_to)
         }
+        ids |= {u["id"] for u in self.get_department_team(employee_id)}
         ids |= self._granted_ids(employee_id, _VIEW_LEVELS, date_from, date_to)
         return ids
 
@@ -420,6 +454,10 @@ class TeamAccessService:
 
         # Equipo propio (si gerencia proyectos en Odoo)
         for u in self.get_led_team(employee_id):
+            _add(u)
+
+        # Gerente de proyectos: también su departamento
+        for u in self.get_department_team(employee_id):
             _add(u)
 
         # Equipos donde tiene permiso como miembro

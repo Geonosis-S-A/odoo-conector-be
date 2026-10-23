@@ -22,7 +22,7 @@ BASE = {"date_from": "2026-10-01", "date_to": "2026-10-09"}
 @pytest.fixture
 def ctx():
     team_access = Mock()
-    team_access.can_view_team.return_value = True
+    team_access.can_view_team_hours.return_value = True
     team_access.manages_project.return_value = True
     team_access.visible_employee_ids.return_value = {1, 2}
     team_access.lines_authority.return_value = {}
@@ -54,7 +54,7 @@ class TestPorProyecto:
         )
 
         assert response.status_code == 200
-        ctx.team_access.can_view_team.assert_not_called()
+        ctx.team_access.can_view_team_hours.assert_not_called()
         ctx.team_access.visible_employee_ids.assert_not_called()
 
     def test_el_acceso_lo_decide_manages_project(self, ctx):
@@ -78,7 +78,7 @@ class TestPorProyecto:
 
     def test_la_lista_de_empleados_asignados_no_condiciona_el_acceso(self, ctx):
         # Un PM sin personas asignadas igual puede ver las horas de su proyecto
-        ctx.team_access.can_view_team.return_value = False
+        ctx.team_access.can_view_team_hours.return_value = False
 
         response = ctx.client.get(
             "/api/v1/timesheet/", params={**BASE, "team": "true", "project_id": 115}
@@ -88,20 +88,20 @@ class TestPorProyecto:
 
 
 class TestVistaPlana:
-    def test_sigue_exigiendo_equipo_visible(self, ctx):
-        ctx.team_access.can_view_team.return_value = False
+    def test_exige_ser_gerente_de_proyectos(self, ctx):
+        ctx.team_access.can_view_team_hours.return_value = False
 
         response = ctx.client.get("/api/v1/timesheet/", params={**BASE, "team": "true"})
 
         assert response.status_code == 403
-        ctx.team_access.can_view_team.assert_called_once_with(USER)
+        ctx.team_access.can_view_team_hours.assert_called_once_with(USER)
         ctx.gateway.all.assert_not_called()
 
-    def test_con_equipo_visible_responde(self, ctx):
+    def test_gerente_de_proyectos_responde(self, ctx):
         response = ctx.client.get("/api/v1/timesheet/", params={**BASE, "team": "true"})
 
         assert response.status_code == 200
-        ctx.team_access.can_view_team.assert_called_once_with(USER)
+        ctx.team_access.can_view_team_hours.assert_called_once_with(USER)
 
 
 class TestHorasPropias:
@@ -111,7 +111,7 @@ class TestHorasPropias:
         )
 
         assert response.status_code == 200
-        ctx.team_access.can_view_team.assert_not_called()
+        ctx.team_access.can_view_team_hours.assert_not_called()
 
     def test_ver_a_otro_sin_team_es_403(self, ctx):
         response = ctx.client.get(

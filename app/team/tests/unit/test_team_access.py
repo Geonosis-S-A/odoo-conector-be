@@ -43,6 +43,8 @@ class TestTeamAccessService:
             ],
         }
         gw.is_project_manager_only.return_value = False
+        # Por defecto no es gerente de proyectos: no suma departamento.
+        gw.is_project_head.return_value = False
         gw.get_project_approvers.return_value = {}
         gw.get_team_users.side_effect = (
             lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: teams.get(
@@ -57,6 +59,7 @@ class TestTeamAccessService:
         # Sin equipo por jerarquía ni pendientes por defecto; los tests que
         # los necesiten sobreescriben `side_effect`/`return_value`.
         gw.get_team_users.return_value = []
+        gw.get_department_users.return_value = []
         gw.get_pending_lines_minimal.return_value = []
         return gw
 
@@ -318,6 +321,82 @@ class TestTeamAccessService:
 
         team = service.get_led_team(10)
         assert sorted(u["id"] for u in team) == [1, 2, 3]
+
+    # ------------------------------------------------------------------
+    # "Horas del equipo": gerente de proyectos = jerarquía ∪ departamento
+    # ------------------------------------------------------------------
+    _DEPT = [
+        {"id": 7, "name": "Gus", "work_email": "gus@x.com"},
+        {"id": 8, "name": "Hilda", "work_email": "hilda@x.com"},
+    ]
+
+    def test_project_head_also_sees_department(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        assert service.can_view_team_hours(10) is True
+        # proyectos {1,2,3} ∪ departamento {7,8}
+        assert service.visible_employee_ids(10) == {1, 2, 3, 7, 8}
+        timesheet_line_gateway.get_department_users.assert_called_once_with(10)
+
+    def test_project_head_department_members_show_in_visible_members(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        ids = {m.employee_odoo_id for m in service.visible_team_members(10)}
+
+        assert {7, 8} <= ids
+
+    def test_not_project_head_does_not_get_department(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Jefe de departamento o PM que no es gerente de ningún proyecto
+        project_assignment_gateway.is_project_head.return_value = False
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        assert service.can_view_team_hours(10) is False
+        assert service.get_department_team(10) == []
+        assert service.visible_employee_ids(10) == {1, 2, 3}
+        timesheet_line_gateway.get_department_users.assert_not_called()
+
+    def test_project_head_without_odoo_user_has_no_team_hours(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+
+        assert service.can_view_team_hours(99) is False
+        project_assignment_gateway.is_project_head.assert_not_called()
+
+    def test_department_does_not_extend_validation(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Ver al departamento no da autoridad para validar: eso lo decide el
+        # gerente/PM del proyecto de cada línea.
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        assert service.validatable_employee_ids(10) == {1, 2, 3}
+
+    def test_is_project_head_uses_cache_only_when_asked(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+
+        for _ in range(3):
+            assert service.is_project_head(10, cached=True) is True
+        assert project_assignment_gateway.is_project_head.call_count == 1
+
+        for _ in range(2):
+            service.is_project_head(10)
+        assert project_assignment_gateway.is_project_head.call_count == 3
 
     # ------------------------------------------------------------------
     # Equipo acotado a un proyecto puntual (solo project.assignment)

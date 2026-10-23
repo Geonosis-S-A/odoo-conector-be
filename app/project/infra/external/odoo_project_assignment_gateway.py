@@ -87,6 +87,15 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
             Project(id=r["id"], name=r["name"], manager_user_id=user_id) for r in rows
         ]
 
+    def is_project_head(self, user_id: int) -> bool:
+        return bool(
+            self._execute_kw(
+                "project.project",
+                "search_count",
+                [self._managed_projects_domain(user_id)],
+            )
+        )
+
     def get_project_approvers(
         self, project_ids: list[int]
     ) -> Dict[int, list[tuple[int, str]]]:

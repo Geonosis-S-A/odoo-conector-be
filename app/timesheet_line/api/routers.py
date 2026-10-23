@@ -239,18 +239,19 @@ def list_timesheet_lines(
     """
     current_employee_id: int = current_user["user_id"]
 
-    # Ver más allá de las propias horas siempre requiere que el equipo real
-    # en Odoo (jerarquía o proyectos gerenciados) respalde el acceso — el
-    # rol approver no habilita ver a toda la empresa sin ese respaldo.
+    # Ver más allá de las propias horas requiere un respaldo real en Odoo: la
+    # vista plana de equipo ("Horas del equipo") es sólo para gerentes de
+    # proyectos (deliveries); el rol approver no habilita ver a toda la empresa
+    # ni reemplaza ese respaldo.
     #
     # Excepción: en la vista de UN proyecto (team + project_id) el acceso lo decide
-    # el caso de uso (`manages_project`: gerenciar el proyecto). Resolver antes
-    # el equipo completo del usuario cuesta varias consultas a Odoo y no agrega
-    # ninguna garantía.
+    # el caso de uso (`manages_project`: gerenciar el proyecto, o ser su PM).
+    # Resolver antes el equipo completo del usuario cuesta varias consultas a
+    # Odoo y no agrega ninguna garantía.
     project_scoped = bool(team) and project_id is not None and employee_id is None
     can_view_team = False
     if team and not project_scoped:
-        can_view_team = team_access.can_view_team(current_employee_id)
+        can_view_team = team_access.can_view_team_hours(current_employee_id)
 
     requires_elevated = (
         employee_id is not None and current_employee_id != employee_id

@@ -32,6 +32,11 @@ class GetTeamProjectsUseCase:
         validatable_ids = self.team_access.validatable_employee_ids(
             leader_employee_id, date_from, date_to
         )
+        # El gerente de proyectos también ve a su departamento en "Horas del
+        # equipo": sus proyectos tienen que estar en el filtro.
+        validatable_ids |= {
+            u["id"] for u in self.team_access.get_department_team(leader_employee_id)
+        }
         if not validatable_ids:
             return []
 
