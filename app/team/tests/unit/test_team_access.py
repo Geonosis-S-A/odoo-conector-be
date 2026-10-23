@@ -45,6 +45,17 @@ class TestTeamAccessService:
         gw.is_project_manager_only.return_value = False
         # Por defecto no es gerente de proyectos: no suma departamento.
         gw.is_project_head.return_value = False
+        # Candidatos a suplente: PM de los proyectos que gerencia cada líder.
+        # Cira (3) es PM de proyectos de 10 y de 20; Beto (2), de 10; Dino (4) no
+        # es PM de ninguno de los dos.
+        pms = {
+            100: [
+                {"id": 2, "name": "Beto", "work_email": "beto@x.com"},
+                {"id": 3, "name": "Cira", "work_email": "cira@x.com"},
+            ],
+            200: [{"id": 3, "name": "Cira", "work_email": "cira@x.com"}],
+        }
+        gw.get_managed_project_pms.side_effect = lambda user_id: pms.get(user_id, [])
         gw.get_project_approvers.return_value = {}
         gw.get_team_users.side_effect = (
             lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: teams.get(
@@ -123,10 +134,10 @@ class TestTeamAccessService:
         # nunca puede validarse a sí mismo
         assert 2 not in service.validatable_employee_ids(2)
 
-    def test_permission_ignored_when_member_no_longer_in_odoo_team(
+    def test_permission_ignored_when_member_is_no_longer_a_pm_of_the_leader(
         self, service, permission_repo
     ):
-        # Dino (4) tiene permiso del líder 10, pero el equipo Odoo de 10 no lo incluye
+        # Dino (4) tiene permiso del líder 10, pero ya no es PM de sus proyectos
         permission_repo.list_by_member.return_value = [
             _perm(10, 4, PermissionLevel.validate)
         ]

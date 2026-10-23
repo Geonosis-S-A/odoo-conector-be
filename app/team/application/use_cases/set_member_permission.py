@@ -7,7 +7,8 @@ from app.team.domain.repositories import TeamPermissionRepository
 
 
 class SetMemberPermissionUseCase:
-    """Fija (o elimina) el permiso de un miembro dentro del equipo Odoo de un líder."""
+    """Fija (o elimina) la delegación de aprobación de un gerente de proyectos en
+    uno de los PM de sus proyectos."""
 
     def __init__(
         self,
@@ -25,19 +26,25 @@ class SetMemberPermissionUseCase:
         valid_from: Optional[date] = None,
         valid_until: Optional[date] = None,
     ) -> Optional[TeamMemberPermission]:
-        team_ids = self.team_access.get_led_team_member_ids(leader_employee_id)
-        if not team_ids:
-            raise ValueError(
-                f"El empleado {leader_employee_id} no lidera un equipo en Odoo"
-            )
-        if member_employee_id not in team_ids:
-            raise ValueError(
-                "La persona indicada no pertenece al equipo de este líder en Odoo"
-            )
-
         if level is None:
+            # Quitar una delegación se permite siempre, también si la persona ya
+            # dejó de ser PM de sus proyectos: si no, quedaría sin poder borrarse.
             self.permission_repo.delete(leader_employee_id, member_employee_id)
             return None
+
+        if not self.team_access.is_project_head(leader_employee_id):
+            raise ValueError(
+                "Solo los gerentes de proyectos pueden delegar la aprobación"
+            )
+        candidate_ids = {
+            u["id"]
+            for u in self.team_access.get_coverage_candidates(leader_employee_id)
+        }
+        if member_employee_id not in candidate_ids:
+            raise ValueError(
+                "La persona indicada no es PM de ninguno de los proyectos que "
+                "gerencia este líder"
+            )
 
         if (
             valid_from is not None

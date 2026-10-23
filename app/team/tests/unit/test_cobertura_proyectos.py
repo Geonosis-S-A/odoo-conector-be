@@ -48,6 +48,12 @@ def service(permissions):
 
     assignment_gateway = Mock()
     assignment_gateway.is_project_manager_only.return_value = False
+    # El suplente es PM de un proyecto del líder (user 100): puede cubrirlo.
+    assignment_gateway.get_managed_project_pms.side_effect = lambda uid: (
+        [{"id": SUPLENTE, "name": "Suplente", "work_email": "s@x.com"}]
+        if uid == 100
+        else []
+    )
     # El líder (user 100) gerencia P_LIDER; el suplente (user 20) gerencia P_PROPIO.
     assignment_gateway.get_led_projects.side_effect = lambda uid: {
         100: [Project(id=P_LIDER, name="Del líder", manager_user_id=100)],

@@ -5,7 +5,8 @@ from app.team.domain.repositories import TeamPermissionRepository
 
 
 class GetTeamUseCase:
-    """Lista el equipo Odoo de un líder con el nivel de permiso de cada miembro."""
+    """Lista los posibles suplentes de un gerente de proyectos (los PM de sus
+    proyectos) con el permiso que ya les dio, si hay."""
 
     def __init__(
         self,
@@ -16,7 +17,7 @@ class GetTeamUseCase:
         self.permission_repo = permission_repo
 
     def execute(self, leader_employee_id: int) -> List[TeamMemberInfo]:
-        team = self.team_access.get_led_team(leader_employee_id)
+        team = self.team_access.get_coverage_candidates(leader_employee_id)
         if not team:
             return []
 

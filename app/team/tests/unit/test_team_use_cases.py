@@ -13,9 +13,9 @@ from app.team.domain.models import PermissionLevel, TeamMemberPermission
 
 
 class TestGetTeamUseCase:
-    def test_enriches_odoo_team_with_permission_levels(self):
+    def test_enriches_pm_candidates_with_permission_levels(self):
         access = Mock()
-        access.get_led_team.return_value = [
+        access.get_coverage_candidates.return_value = [
             {"id": 1, "name": "Ana", "work_email": "ana@x.com"},
             {"id": 2, "name": "Beto", "work_email": False},
         ]
@@ -37,9 +37,9 @@ class TestGetTeamUseCase:
         ]
         assert result[1].email is None
 
-    def test_returns_empty_when_not_a_leader(self):
+    def test_returns_empty_when_there_are_no_pm_candidates(self):
         access = Mock()
-        access.get_led_team.return_value = []
+        access.get_coverage_candidates.return_value = []
         repo = Mock()
 
         assert GetTeamUseCase(access, repo).execute(10) == []
@@ -70,27 +70,32 @@ class TestSetMemberPermissionUseCase:
     @pytest.fixture
     def access(self):
         a = Mock()
-        a.get_led_team_member_ids.return_value = {1, 2, 3}
+        a.is_project_head.return_value = True
+        # PM de los proyectos que gerencia el líder 10
+        a.get_coverage_candidates.return_value = [
+            {"id": 1, "name": "Ana", "work_email": "ana@x.com"},
+            {"id": 2, "name": "Beto", "work_email": "beto@x.com"},
+        ]
         return a
 
-    def test_rejects_when_leader_has_no_team(self, access):
-        access.get_led_team_member_ids.return_value = set()
+    def test_rejects_when_leader_is_not_a_project_head(self, access):
+        access.is_project_head.return_value = False
         repo = Mock()
 
-        with pytest.raises(ValueError, match="no lidera un equipo"):
+        with pytest.raises(ValueError, match="gerentes de proyectos"):
             SetMemberPermissionUseCase(access, repo).execute(10, 2, PermissionLevel.view)
         repo.upsert.assert_not_called()
 
-    def test_rejects_member_outside_current_odoo_team(self, access):
+    def test_rejects_member_who_is_not_a_pm_of_the_leader_projects(self, access):
         repo = Mock()
 
-        with pytest.raises(ValueError, match="no pertenece al equipo"):
+        with pytest.raises(ValueError, match="no es PM de ninguno"):
             SetMemberPermissionUseCase(access, repo).execute(
                 10, 99, PermissionLevel.view
             )
         repo.upsert.assert_not_called()
 
-    def test_upserts_permission_for_valid_member(self, access):
+    def test_upserts_permission_for_a_pm_of_the_leader(self, access):
         repo = Mock()
 
         SetMemberPermissionUseCase(access, repo).execute(10, 2, PermissionLevel.validate)
@@ -109,3 +114,14 @@ class TestSetMemberPermissionUseCase:
         assert result is None
         repo.delete.assert_called_once_with(10, 2)
         repo.upsert.assert_not_called()
+
+    def test_level_none_deletes_even_if_the_member_is_no_longer_a_pm(self, access):
+        # Una delegación vieja tiene que poder quitarse aunque la persona ya no
+        # sea PM de sus proyectos (o el líder ya no gerencie ninguno).
+        access.is_project_head.return_value = False
+        access.get_coverage_candidates.return_value = []
+        repo = Mock()
+
+        SetMemberPermissionUseCase(access, repo).execute(10, 99, None)
+
+        repo.delete.assert_called_once_with(10, 99)

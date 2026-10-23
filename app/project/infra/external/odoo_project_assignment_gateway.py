@@ -96,6 +96,26 @@ class OdooProjectAssignmentGateway(ProjectAssignmentGateway):
             )
         )
 
+    def get_managed_project_pms(self, user_id: int) -> list[Dict[str, Any]]:
+        rows = self._execute_kw(
+            "project.project",
+            "search_read",
+            [self._managed_projects_domain(user_id)],
+            {"fields": ["x_project_manager_id"]},
+        )
+        pm_user_ids = {
+            r["x_project_manager_id"][0] for r in rows if r.get("x_project_manager_id")
+        }
+        pm_user_ids.discard(user_id)
+        if not pm_user_ids:
+            return []
+        return self._execute_kw(
+            "hr.employee",
+            "search_read",
+            [[("user_id", "in", sorted(pm_user_ids)), ("active", "=", True)]],
+            {"fields": ["id", "name", "work_email"]},
+        )
+
     def get_project_approvers(
         self, project_ids: list[int]
     ) -> Dict[int, list[tuple[int, str]]]:

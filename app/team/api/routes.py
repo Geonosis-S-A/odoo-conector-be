@@ -81,6 +81,15 @@ def _require_admin(current_user: dict) -> None:
         )
 
 
+def _require_project_head(access: TeamAccessService, employee_id: int) -> None:
+    """La cobertura de aprobaciones es solo para gerentes de proyectos (deliveries)."""
+    if not access.is_project_head(employee_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo los gerentes de proyectos pueden delegar la aprobación",
+        )
+
+
 def _get_team_or_error(
     access: TeamAccessService,
     repo: SQLModelTeamPermissionRepository,
@@ -92,7 +101,7 @@ def _get_team_or_error(
     if not members:
         raise HTTPException(
             status_code=not_found_status,
-            detail=f"El empleado {leader_id} no lidera un equipo en Odoo",
+            detail=f"El empleado {leader_id} no tiene PMs en sus proyectos para delegar",
         )
     return members
 
@@ -118,6 +127,9 @@ def _apply_permission(
     for m in members:
         if m.employee_odoo_id == member_id:
             return _member_to_view(m)
+    if level is None:
+        # Ya no es PM de sus proyectos, pero la delegación vieja se quitó igual.
+        return TeamMemberView(employee_odoo_id=member_id, level=None)
     raise HTTPException(
         status_code=404, detail="El miembro ya no pertenece al equipo"
     )
@@ -157,9 +169,9 @@ def get_my_team(
     current_user: dict = Depends(get_current_user),
 ):
     leader_id: int = current_user["user_id"]
-    members = _get_team_or_error(
-        access, repo, leader_id, not_found_status=403
-    )
+    _require_project_head(access, leader_id)
+    # Sin PMs en sus proyectos la lista queda vacía: no es un error.
+    members = GetTeamUseCase(access, repo).execute(leader_id)
     return _team_to_view(leader_id, members)
 
 
@@ -182,6 +194,8 @@ def set_my_member_permission(
     current_user: dict = Depends(get_current_user),
 ):
     leader_id: int = current_user["user_id"]
+    if request.level != "none":
+        _require_project_head(access, leader_id)
     return _apply_permission(
         access,
         repo,

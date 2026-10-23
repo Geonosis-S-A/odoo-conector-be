@@ -64,6 +64,12 @@ class TestVigenciaEnElAcceso:
         gw.is_project_manager_only.return_value = False
         # No es gerente de proyectos: no suma departamento.
         gw.is_project_head.return_value = False
+        # Beto (2) es PM de un proyecto del líder 10 (user 100)
+        gw.get_managed_project_pms.side_effect = lambda user_id: (
+            [{"id": 2, "name": "Beto", "work_email": "beto@x.com"}]
+            if user_id == 100
+            else []
+        )
         gw.get_project_approvers.return_value = {1: [(100, "Líder")]}
         gw.get_team_users.side_effect = (
             lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: (

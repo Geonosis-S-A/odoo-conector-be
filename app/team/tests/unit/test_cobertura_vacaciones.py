@@ -22,7 +22,13 @@ EN_UNA_SEMANA = HOY + timedelta(days=7)
 @pytest.fixture
 def team_access():
     ta = Mock()
-    ta.get_led_team_member_ids.return_value = {1, 2, 3}
+    ta.is_project_head.return_value = True
+    # PM de los proyectos que gerencia el líder 10
+    ta.get_coverage_candidates.return_value = [
+        {"id": 1, "name": "Ana", "work_email": "a@x.com"},
+        {"id": 2, "name": "Beto", "work_email": "b@x.com"},
+        {"id": 3, "name": "Cira", "work_email": "c@x.com"},
+    ]
     return ta
 
 
@@ -79,8 +85,8 @@ class TestSetMemberPermissionConFechas:
         repo.delete.assert_called_once_with(10, 2)
         repo.upsert.assert_not_called()
 
-    def test_solo_se_delega_a_gente_de_su_equipo(self, team_access, repo):
-        with pytest.raises(ValueError, match="no pertenece"):
+    def test_solo_se_delega_a_un_pm_de_sus_proyectos(self, team_access, repo):
+        with pytest.raises(ValueError, match="no es PM"):
             SetMemberPermissionUseCase(team_access, repo).execute(
                 10, 99, PermissionLevel.validate, HOY, EN_UNA_SEMANA
             )
@@ -89,7 +95,7 @@ class TestSetMemberPermissionConFechas:
 class TestGetTeamDevuelveLaVigencia:
     def test_incluye_las_fechas_aunque_el_permiso_este_vencido(self):
         team_access = Mock()
-        team_access.get_led_team.return_value = [
+        team_access.get_coverage_candidates.return_value = [
             {"id": 2, "name": "Beto", "work_email": "b@x.com"},
             {"id": 3, "name": "Cira", "work_email": False},
         ]
@@ -137,8 +143,15 @@ class TestElSuplenteNoDelegaALoSuyo:
                 teams.get(emp_id, [])
             )
         )
+        # Beto (user 20) es PM de un proyecto del líder 10 (user 100); Beto no
+        # gerencia nada, así que no tiene a quién delegar.
+        pms = {100: [{"id": 2, "name": "Beto", "work_email": "b@x.com"}]}
+        assignment_gateway.get_managed_project_pms.side_effect = (
+            lambda user_id: pms.get(user_id, [])
+        )
         timesheet_gateway = Mock()
         timesheet_gateway.get_team_users.return_value = []
+        timesheet_gateway.get_department_users.return_value = []
 
         permissions = {
             2: [  # Beto recibió 'validate' del líder 10

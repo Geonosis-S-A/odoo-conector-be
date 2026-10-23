@@ -301,6 +301,28 @@ class TeamAccessService:
         return self.timesheet_line_gateway.get_department_users(employee_id) or []
 
     # ------------------------------------------------------------------
+    # Cobertura de aprobaciones: un gerente de proyectos (delivery) solo puede
+    # delegar en los PM de sus proyectos
+    # ------------------------------------------------------------------
+    def get_coverage_candidates(self, leader_employee_id: int) -> List[Dict[str, Any]]:
+        """Posibles suplentes de ``leader_employee_id``: los Project Manager de
+        los proyectos vigentes que gerencia. Vacío si no es gerente de proyectos
+        (los PM no delegan) o si sus proyectos no tienen PM. Consulta Odoo en el
+        momento: de esto depende que una delegación siga valiendo."""
+        user_id = self._user_id(leader_employee_id)
+        if user_id is None:
+            return []
+        pms = self.project_assignment_gateway.get_managed_project_pms(user_id) or []
+        return [u for u in pms if u["id"] != leader_employee_id]
+
+    def _covers(self, leader_employee_id: int, member_employee_id: int) -> bool:
+        """True si ``member_employee_id`` sigue siendo PM de un proyecto del líder."""
+        return any(
+            u["id"] == member_employee_id
+            for u in self.get_coverage_candidates(leader_employee_id)
+        )
+
+    # ------------------------------------------------------------------
     # Permisos locales cruzados con el equipo por proyecto
     # ------------------------------------------------------------------
     def _granted_ids(
@@ -315,12 +337,12 @@ class TeamAccessService:
             if perm.level not in levels:
                 continue
             leader_id = perm.leader_employee_odoo_id
+            if not self._covers(leader_id, member_employee_id):
+                # El permiso dejó de aplicar: ya no es PM de un proyecto del líder.
+                continue
             team_ids = {
                 u["id"] for u in self.get_led_team(leader_id, date_from, date_to)
             }
-            if member_employee_id not in team_ids:
-                # El permiso dejó de aplicar: Odoo sacó a la persona del equipo.
-                continue
             team_ids.discard(leader_id)
             team_ids.discard(member_employee_id)
             result |= team_ids
@@ -365,8 +387,8 @@ class TeamAccessService:
         self, actor_employee_id: int, cached: bool = False
     ) -> List[Tuple[int, int]]:
         """Pares ``(employee_id, user_id)`` con cuya autoridad actúa el actor:
-        él mismo y los líderes que le delegaron ``validate`` (mientras Odoo
-        siga ubicándolo en el equipo de ese líder)."""
+        él mismo y los líderes que le delegaron ``validate`` (mientras siga
+        siendo PM de un proyecto de ese líder)."""
         authorities: List[Tuple[int, int]] = []
         own_user = self._user_id(actor_employee_id, cached)
         if own_user is not None:
@@ -378,7 +400,7 @@ class TeamAccessService:
 
     def _coverages(self, actor_employee_id: int, cached: bool = False) -> List[Coverage]:
         """Delegaciones ``validate`` VIGENTES hoy que recibió el actor, de líderes
-        en cuyo equipo Odoo todavía lo ubica. La autoridad no se transmite: solo
+        de cuyos proyectos todavía es PM. La autoridad no se transmite: solo
         cuenta el líder que delegó directamente, no cadenas de delegación."""
         if cached:
             hit, value = _COVERAGE_CACHE.get(actor_employee_id)
@@ -389,7 +411,7 @@ class TeamAccessService:
             if perm.level not in _VALIDATE_LEVELS:
                 continue
             leader_id = perm.leader_employee_odoo_id
-            if actor_employee_id not in {u["id"] for u in self.get_led_team(leader_id)}:
+            if not self._covers(leader_id, actor_employee_id):
                 continue
             leader_user = self._user_id(leader_id, cached)
             if leader_user is not None:
@@ -529,11 +551,10 @@ class TeamAccessService:
         # Equipos donde tiene permiso como miembro
         for perm in self._active_permissions(employee_id):
             leader_id = perm.leader_employee_odoo_id
-            team = self.get_led_team(leader_id)
-            if employee_id not in {u["id"] for u in team}:
-                # El permiso dejó de aplicar: Odoo sacó a la persona del equipo.
+            if not self._covers(leader_id, employee_id):
+                # El permiso dejó de aplicar: ya no es PM de un proyecto del líder.
                 continue
-            for u in team:
+            for u in self.get_led_team(leader_id):
                 if u["id"] == leader_id:
                     continue
                 _add(u)

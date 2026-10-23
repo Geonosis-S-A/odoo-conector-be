@@ -69,6 +69,13 @@ class ProjectAssignmentGateway(ABC):
         proyecto vigente. El Project Manager (`x_project_manager_id`) NO cuenta."""
 
     @abstractmethod
+    def get_managed_project_pms(self, user_id: int) -> list[Dict[str, Any]]:
+        """Empleados activos que son Project Manager (`x_project_manager_id`) de
+        los proyectos vigentes que `user_id` gerencia (`user_id`), sin incluirlo.
+        Shape: `{"id","name","work_email"}`. Son los posibles suplentes de un
+        gerente de proyectos (cobertura de aprobaciones)."""
+
+    @abstractmethod
     def get_project_approvers(
         self, project_ids: list[int]
     ) -> Dict[int, list[tuple[int, str]]]:
