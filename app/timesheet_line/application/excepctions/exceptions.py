@@ -225,6 +225,17 @@ class ApproverNotFoundError(TimesheetDomainError):
         super().__init__(message)
 
 
+class TimesheetReviewForbiddenError(TimesheetDomainError):
+    """El solicitante no puede rechazar alguna de las líneas pedidas."""
+
+    def __init__(self, timesheet_ids: list[int]):
+        message = (
+            "No tienes permiso para rechazar las líneas de timesheet con IDs "
+            f"{timesheet_ids} (no gerenciás su proyecto)"
+        )
+        super().__init__(message)
+
+
 class TimesheetReviewError(TimesheetDomainError):
     """Error al enviar correos de revisión de timesheet."""
 

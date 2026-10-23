@@ -82,6 +82,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetValidateError,
     ApproverNotFoundError,
     TimesheetReviewError,
+    TimesheetReviewForbiddenError,
 )
 
 
@@ -455,9 +456,13 @@ async def review_mail(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
+    team_access: TeamAccessService = Depends(get_team_access_service),
 ):
     """
     Envía correos de revisión o eliminación a los empleados sobre sus timesheets.
+
+    Requiere el rol approver Y autoridad sobre cada línea (gerente o PM de su
+    proyecto): rechazar horas de proyectos ajenos devuelve 403.
 
     Args:
         request: Objeto con lista de IDs de timesheets, email del aprobador, mensaje opcional y tipo de email
@@ -479,21 +484,28 @@ async def review_mail(
 
     try:
         use_case = ReviewTimesheetsUseCase(
-            employee_gateway, timesheet_gateway, email_service, notification_repository
+            employee_gateway,
+            timesheet_gateway,
+            email_service,
+            notification_repository,
+            team_access,
         )
         # Obtener el tipo de email del request (por defecto REVIEW)
         email_type = request.email_type or TimesheetEmailType.REVIEW
         success = await use_case.execute(
-            request.timesheetline_ids, 
-            request.approver_mail, 
+            request.timesheetline_ids,
+            request.approver_mail,
             request.body,
-            email_type
+            email_type,
+            reviewer_employee_id=current_user["user_id"],
         )
         return {"success": success}
     except ApproverNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetReviewForbiddenError as e:
+        raise HTTPException(status_code=403, detail=e.message)
     except TimesheetReviewError as e:
         raise HTTPException(status_code=500, detail=e.message)
     except TimesheetDomainError as e:
