@@ -509,6 +509,41 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
                 f"Error al obtener cantidad de usuarios del equipo: {str(e)}"
             )
 
+    def get_department_users(self, employee_id: int) -> list[Dict[str, Any]]:
+        try:
+            rows = self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",
+                "read",
+                [[employee_id]],
+                {"fields": ["department_id"]},
+            )
+            department = rows[0].get("department_id") if rows else None
+            if not department:
+                return []
+
+            return self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",
+                "search_read",
+                [
+                    [
+                        ("active", "=", True),
+                        ("id", "!=", employee_id),
+                        ("department_id", "=", department[0]),
+                    ]
+                ],
+                {"fields": ["id", "name", "work_email"]},
+            )
+        except Exception as e:
+            raise Exception(
+                f"Error al obtener los empleados del departamento: {str(e)}"
+            )
+
     def get_pending_lines_minimal(
         self, project_ids: list[int]
     ) -> list[Dict[str, Any]]:

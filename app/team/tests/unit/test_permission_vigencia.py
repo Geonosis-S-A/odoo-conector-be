@@ -62,6 +62,8 @@ class TestVigenciaEnElAcceso:
             {"id": 2, "name": "Beto", "work_email": "beto@x.com"},
         ]
         gw.is_project_manager_only.return_value = False
+        # No es gerente de proyectos: no suma departamento.
+        gw.is_project_head.return_value = False
         gw.get_project_approvers.return_value = {1: [(100, "Líder")]}
         gw.get_team_users.side_effect = (
             lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: (
@@ -78,6 +80,7 @@ class TestVigenciaEnElAcceso:
     def service(self, employee_gateway, project_assignment_gateway, permission_repo):
         timesheet_gw = Mock()
         timesheet_gw.get_team_users.return_value = []
+        timesheet_gw.get_department_users.return_value = []
         return TeamAccessService(
             employee_gateway, project_assignment_gateway, timesheet_gw, permission_repo
         )

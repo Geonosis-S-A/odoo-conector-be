@@ -5,12 +5,15 @@ def load_roles_enum():
     """Carga el enum de roles adecuado según ENV y lo expone como Roles.
 
     - ENV=STAGING -> app.shared.security.role_enums.staging.Roles
+    - ENV=PROD -> app.shared.security.role_enums.prod.Roles
     - por defecto -> app.shared.security.role_enums.dev.Roles
     """
 
     env_value = os.getenv("ENV", "LOCAL").upper()
     if env_value == "STAGING":
         from app.shared.security.role_enums.staging import Roles as RolesEnum
+    elif env_value == "PROD":
+        from app.shared.security.role_enums.prod import Roles as RolesEnum
     else:
         from app.shared.security.role_enums.dev import Roles as RolesEnum
     return RolesEnum

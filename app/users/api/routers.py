@@ -68,8 +68,9 @@ def get_all_employees(
 ):
     """
     Obtiene los empleados visibles para el usuario autenticado: su equipo
-    (jerarquía Odoo ∪ proyectos que gerencia) más los equipos ajenos donde
-    tenga un permiso de vista/validación delegado.
+    (jerarquía Odoo ∪ proyectos que gerencia, más su departamento si es
+    gerente de proyectos) y los equipos ajenos donde tenga un permiso de
+    vista/validación delegado.
     """
 
     members = team_access.visible_team_members(current_user["user_id"])

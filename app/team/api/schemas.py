@@ -32,11 +32,14 @@ class MyTeamAccessView(BaseModel):
     - can_view_team=False               -> sin acceso: sólo ve sus horas
     - can_view_team=True, validate=False -> ve las horas del equipo, sin validar
     - can_validate_team=True (o is_leader) -> ve y valida
+    - can_view_team_hours=True          -> es gerente de proyectos: ve el menú
+      "Horas del equipo" (vista plana: jerarquía ∪ departamento)
     """
 
     is_leader: bool
     can_view_team: bool
     can_validate_team: bool
+    can_view_team_hours: bool = False
     members: List[TeamMemberBasicView] = []
 
 

@@ -82,6 +82,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetValidateError,
     ApproverNotFoundError,
     TimesheetReviewError,
+    TimesheetReviewForbiddenError,
 )
 
 
@@ -239,9 +240,10 @@ def list_timesheet_lines(
     """
     current_employee_id: int = current_user["user_id"]
 
-    # Ver más allá de las propias horas siempre requiere que el equipo real
-    # en Odoo (jerarquía o proyectos gerenciados) respalde el acceso — el
-    # rol approver no habilita ver a toda la empresa sin ese respaldo.
+    # Ver más allá de las propias horas requiere un respaldo real en Odoo: la
+    # vista plana de equipo ("Horas del equipo") es sólo para gerentes de
+    # proyectos (deliveries); el rol approver no habilita ver a toda la empresa
+    # ni reemplaza ese respaldo.
     #
     # Excepción: en la vista de UN proyecto (team + project_id) el acceso lo decide
     # el caso de uso (`can_access_project`: gerenciarlo o cubrirlo). Resolver antes
@@ -250,7 +252,7 @@ def list_timesheet_lines(
     project_scoped = bool(team) and project_id is not None and employee_id is None
     can_view_team = False
     if team and not project_scoped:
-        can_view_team = team_access.can_view_team(current_employee_id)
+        can_view_team = team_access.can_view_team_hours(current_employee_id)
 
     requires_elevated = (
         employee_id is not None and current_employee_id != employee_id
@@ -454,9 +456,13 @@ async def review_mail(
     notification_repository: TimesheetLineNotificationRepository = Depends(
         get_notification_repository
     ),
+    team_access: TeamAccessService = Depends(get_team_access_service),
 ):
     """
     Envía correos de revisión o eliminación a los empleados sobre sus timesheets.
+
+    Requiere el rol approver Y autoridad sobre cada línea (gerente o PM de su
+    proyecto): rechazar horas de proyectos ajenos devuelve 403.
 
     Args:
         request: Objeto con lista de IDs de timesheets, email del aprobador, mensaje opcional y tipo de email
@@ -478,21 +484,28 @@ async def review_mail(
 
     try:
         use_case = ReviewTimesheetsUseCase(
-            employee_gateway, timesheet_gateway, email_service, notification_repository
+            employee_gateway,
+            timesheet_gateway,
+            email_service,
+            notification_repository,
+            team_access,
         )
         # Obtener el tipo de email del request (por defecto REVIEW)
         email_type = request.email_type or TimesheetEmailType.REVIEW
         success = await use_case.execute(
-            request.timesheetline_ids, 
-            request.approver_mail, 
+            request.timesheetline_ids,
+            request.approver_mail,
             request.body,
-            email_type
+            email_type,
+            reviewer_employee_id=current_user["user_id"],
         )
         return {"success": success}
     except ApproverNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
     except TimesheetNotFoundError as e:
         raise HTTPException(status_code=404, detail=e.message)
+    except TimesheetReviewForbiddenError as e:
+        raise HTTPException(status_code=403, detail=e.message)
     except TimesheetReviewError as e:
         raise HTTPException(status_code=500, detail=e.message)
     except TimesheetDomainError as e:

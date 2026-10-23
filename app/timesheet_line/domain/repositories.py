@@ -56,6 +56,13 @@ class TimesheetLineGateway(ABC):
     ) -> list[Dict[str, Any]]: ...
 
     @abstractmethod
+    def get_department_users(self, employee_id: int) -> list[Dict[str, Any]]:
+        """Empleados activos del mismo departamento (``hr.employee.department_id``)
+        que ``employee_id``, sin incluirlo. Lista vacía si no tiene departamento.
+        Mismo shape que ``get_team_users``: ``{"id","name","work_email"}``."""
+        ...
+
+    @abstractmethod
     def get_pending_lines_minimal(
         self, project_ids: list[int]
     ) -> list[Dict[str, Any]]:
