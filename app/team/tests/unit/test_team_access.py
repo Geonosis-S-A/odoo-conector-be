@@ -385,6 +385,27 @@ class TestTeamAccessService:
 
         assert service.validatable_employee_ids(10) == {1, 2, 3}
 
+    def test_project_head_only_approves_lines_of_own_projects_for_department(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Gus (7) es del departamento del gerente 10: lo ve, pero solo aprueba
+        # sus horas en los proyectos que 10 gerencia.
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Gerente propio")],
+            2: [(200, "Gerente de otro proyecto")],
+            3: [],  # sin gerente ni PM
+        }
+
+        assert 7 in service.visible_employee_ids(10)
+        result = service.lines_authority(10, [(7, 1), (7, 2), (7, 3)])
+
+        assert result[(7, 1)] is True  # proyecto que gerencia
+        assert result[(7, 2)] is False  # proyecto de otro: solo lectura
+        assert result[(7, 3)] is False  # sin aprobadores: ser del departamento no alcanza
+
     def test_is_project_head_uses_cache_only_when_asked(
         self, service, project_assignment_gateway
     ):
