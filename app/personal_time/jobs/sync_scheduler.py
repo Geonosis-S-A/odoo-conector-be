@@ -4,10 +4,13 @@ Job programado para sincronizar solicitudes de licencias de Humand a Odoo.
 Este job se ejecuta automáticamente a las 18:00 hrs (horario de Buenos Aires, Argentina).
 """
 
+import logging
+
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from pytz import timezone
 
+from app.core.config import settings
 from app.shared.infra.db.session import SessionLocal
 from app.shared.infra.external.odoo.odoo_client import OdooClient
 from app.personal_time.application.use_cases.sync_new_timeoff_requests import (
@@ -34,6 +37,8 @@ from app.personal_time.api.schemas import (
     ErrorRecordDetail,
 )
 
+
+logger = logging.getLogger(__name__)
 
 # Zona horaria de Buenos Aires, Argentina
 ARGENTINA_TZ = timezone("America/Argentina/Buenos_Aires")
@@ -249,7 +254,12 @@ def start_scheduler():
     Inicia el scheduler con los jobs configurados.
 
     Configura un job que se ejecuta diariamente a las 18:00 hrs (Buenos Aires, Argentina).
+    Si no hay `HUMAND_API_KEY` la integración está apagada: no se programa nada.
     """
+    if not settings.HUMAND_API_KEY:
+        logger.info("HUMAND_API_KEY no configurada: sincronización de Humand desactivada")
+        return
+
     scheduler.add_job(
         func=execute_timeoff_sync_job,
         trigger=CronTrigger(hour=18, minute=00, timezone=ARGENTINA_TZ),
