@@ -131,7 +131,7 @@ class TestListTeamEmployeePricesUseCase:
         assert len(result) == 3
         mock_employee_gateway.get_by_id.assert_called_once_with(user_id)
         mock_timesheet_gateway.get_team_users.assert_called_once_with(
-            user_id, sample_current_employee.id
+            user_id, sample_current_employee.id, only_active=True
         )
         assert mock_employee_price_repository.get_open_record_by_user_id.call_count == 3
 
@@ -166,7 +166,7 @@ class TestListTeamEmployeePricesUseCase:
         assert len(result) == 0
         mock_employee_gateway.get_by_id.assert_called_once_with(user_id)
         mock_timesheet_gateway.get_team_users.assert_called_once_with(
-            user_id, sample_current_employee.id
+            user_id, sample_current_employee.id, only_active=True
         )
 
     def test_execute_raises_value_error_when_no_employee(
@@ -710,6 +710,7 @@ class TestListTeamEmployeePricesUseCase:
             mock_employee_gateway,
             timesheet_line_gateway=hierarchy_gateway,  # jerarquía
         )
+        mock_timesheet_gateway.is_project_manager_only = Mock(return_value=False)
         mock_employee_gateway.get_by_id.return_value = sample_current_employee
         mock_timesheet_gateway.get_team_users.return_value = [
             {"id": 10, "name": "Asignado", "work_email": "a@test.com"},
@@ -746,6 +747,7 @@ class TestListTeamEmployeePricesUseCase:
         )
         mock_employee_gateway.get_by_id.return_value = sample_current_employee
         mock_timesheet_gateway.get_team_users.return_value = []
+        mock_timesheet_gateway.is_project_manager_only = Mock(return_value=False)
         hierarchy_gateway.get_team_users.return_value = [
             {"id": 30, "name": "Solo jerarquía", "work_email": "j@test.com"},
         ]
@@ -755,3 +757,68 @@ class TestListTeamEmployeePricesUseCase:
 
         assert [r["employee_id"] for r in result] == [30]
 
+
+    def _use_case_with_hierarchy(self, mock_employee_price_repository, mock_employee_gateway):
+        assignment_gateway = Mock()
+        hierarchy_gateway = Mock()
+        use_case = ListTeamEmployeePricesUseCase(
+            mock_employee_price_repository,
+            assignment_gateway,
+            mock_employee_gateway,
+            timesheet_line_gateway=hierarchy_gateway,
+        )
+        return use_case, assignment_gateway, hierarchy_gateway
+
+    def test_execute_suma_proyectos_y_jerarquia_sin_duplicados(
+        self,
+        mock_employee_price_repository,
+        mock_employee_gateway,
+        sample_current_employee,
+    ):
+        """Delivery: gente de sus proyectos (con o sin asignación) más su jerarquía."""
+        use_case, assignment, hierarchy = self._use_case_with_hierarchy(
+            mock_employee_price_repository, mock_employee_gateway
+        )
+        mock_employee_gateway.get_by_id.return_value = sample_current_employee
+        assignment.is_project_manager_only.return_value = False
+        assignment.get_team_users.return_value = [
+            {"id": 1, "name": "A", "work_email": "a@t.com"},
+            {"id": 2, "name": "B", "work_email": "b@t.com"},
+        ]
+        hierarchy.get_team_users.return_value = [
+            {"id": 2, "name": "B", "work_email": "b@t.com"},
+            {"id": 3, "name": "C", "work_email": "c@t.com"},
+        ]
+        mock_employee_price_repository.get_open_record_by_user_id.return_value = None
+
+        result = use_case.execute(7)
+
+        assert sorted(r["employee_id"] for r in result) == [1, 2, 3]
+        assignment.get_team_users.assert_called_once_with(
+            7, sample_current_employee.id, only_active=True
+        )
+
+    def test_execute_pm_puro_no_suma_jerarquia(
+        self,
+        mock_employee_price_repository,
+        mock_employee_gateway,
+        sample_current_employee,
+    ):
+        """PM puro: solo la gente de sus proyectos, sin consultar la jerarquía."""
+        use_case, assignment, hierarchy = self._use_case_with_hierarchy(
+            mock_employee_price_repository, mock_employee_gateway
+        )
+        mock_employee_gateway.get_by_id.return_value = sample_current_employee
+        assignment.is_project_manager_only.return_value = True
+        assignment.get_team_users.return_value = [
+            {"id": 1, "name": "A", "work_email": "a@t.com"}
+        ]
+        hierarchy.get_team_users.return_value = [
+            {"id": 3, "name": "C", "work_email": "c@t.com"}
+        ]
+        mock_employee_price_repository.get_open_record_by_user_id.return_value = None
+
+        result = use_case.execute(7)
+
+        assert [r["employee_id"] for r in result] == [1]
+        hierarchy.get_team_users.assert_not_called()

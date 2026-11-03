@@ -29,9 +29,10 @@ class ListTeamEmployeePricesUseCase:
         """
         Ejecuta la obtención de precios de empleados del equipo.
 
-        El equipo es la unión de los asignados a los proyectos que gerencia y
-        de su jerarquía de Odoo (misma gente cuyas horas cuentan en las
-        métricas), sin duplicados.
+        El equipo es la unión de quienes están en los proyectos vigentes que
+        gerencia o de los que es PM (asignados o con horas cargadas) y de su
+        jerarquía de Odoo (misma gente cuyas horas cuentan en las métricas),
+        sin duplicados. Un PM puro no suma su jerarquía.
 
         Obtiene únicamente los registros abiertos (date_to = NULL) de cada empleado.
 
@@ -49,10 +50,13 @@ class ListTeamEmployeePricesUseCase:
         if employee_id is None:
             raise ValueError("El usuario no tiene un empleado asociado")
         team_users = self.project_assignment_gateway.get_team_users(
-            user_id, employee_id.id
+            user_id, employee_id.id, only_active=True
         )
 
-        if self.timesheet_line_gateway is not None:
+        if (
+            self.timesheet_line_gateway is not None
+            and not self.project_assignment_gateway.is_project_manager_only(user_id)
+        ):
             hierarchy_users = (
                 self.timesheet_line_gateway.get_team_users(user_id, employee_id.id)
                 or []
