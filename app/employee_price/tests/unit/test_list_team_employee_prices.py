@@ -12,6 +12,9 @@ from app.users.domain.repositories import EmployeeGateway
 from app.users.domain.models import Employee
 
 
+ODOO_USER_ID = 500
+
+
 class TestListTeamEmployeePricesUseCase:
     @pytest.fixture
     def mock_employee_price_repository(self):
@@ -26,7 +29,10 @@ class TestListTeamEmployeePricesUseCase:
     @pytest.fixture
     def mock_employee_gateway(self):
         """Fixture que proporciona un gateway de empleados mockeado."""
-        return Mock(spec=EmployeeGateway)
+        gateway = Mock(spec=EmployeeGateway)
+        # id de res.users de Odoo al que se convierte el id de empleado
+        gateway.get_user_id_by_employee_id.return_value = ODOO_USER_ID
+        return gateway
 
     @pytest.fixture
     def use_case(
@@ -131,7 +137,7 @@ class TestListTeamEmployeePricesUseCase:
         assert len(result) == 3
         mock_employee_gateway.get_by_id.assert_called_once_with(user_id)
         mock_timesheet_gateway.get_team_users.assert_called_once_with(
-            user_id, sample_current_employee.id, only_active=True
+            ODOO_USER_ID, sample_current_employee.id, only_active=True
         )
         assert mock_employee_price_repository.get_open_record_by_user_id.call_count == 3
 
@@ -166,7 +172,7 @@ class TestListTeamEmployeePricesUseCase:
         assert len(result) == 0
         mock_employee_gateway.get_by_id.assert_called_once_with(user_id)
         mock_timesheet_gateway.get_team_users.assert_called_once_with(
-            user_id, sample_current_employee.id, only_active=True
+            ODOO_USER_ID, sample_current_employee.id, only_active=True
         )
 
     def test_execute_raises_value_error_when_no_employee(
@@ -728,7 +734,7 @@ class TestListTeamEmployeePricesUseCase:
         # ante un duplicado se conserva el dato de la asignación
         assert next(r for r in result if r["employee_id"] == 20)["name"] == "Ambos"
         hierarchy_gateway.get_team_users.assert_called_once_with(
-            1, sample_current_employee.id
+            ODOO_USER_ID, sample_current_employee.id
         )
 
     def test_execute_returns_hierarchy_members_when_no_assignments(
@@ -795,7 +801,7 @@ class TestListTeamEmployeePricesUseCase:
 
         assert sorted(r["employee_id"] for r in result) == [1, 2, 3]
         assignment.get_team_users.assert_called_once_with(
-            7, sample_current_employee.id, only_active=True
+            ODOO_USER_ID, sample_current_employee.id, only_active=True
         )
 
     def test_execute_pm_puro_no_suma_jerarquia(
@@ -822,3 +828,46 @@ class TestListTeamEmployeePricesUseCase:
 
         assert [r["employee_id"] for r in result] == [1]
         hierarchy.get_team_users.assert_not_called()
+
+    def test_execute_convierte_id_de_empleado_en_id_de_usuario_de_odoo(
+        self,
+        mock_employee_price_repository,
+        mock_employee_gateway,
+        sample_current_employee,
+    ):
+        """El token trae el id de empleado; las consultas usan el de res.users."""
+        use_case, assignment, hierarchy = self._use_case_with_hierarchy(
+            mock_employee_price_repository, mock_employee_gateway
+        )
+        mock_employee_gateway.get_by_id.return_value = sample_current_employee
+        assignment.is_project_manager_only.return_value = False
+        assignment.get_team_users.return_value = []
+        hierarchy.get_team_users.return_value = []
+
+        use_case.execute(1445)
+
+        mock_employee_gateway.get_by_id.assert_called_once_with(1445)
+        mock_employee_gateway.get_user_id_by_employee_id.assert_called_once_with(
+            sample_current_employee.id
+        )
+        assignment.is_project_manager_only.assert_called_once_with(ODOO_USER_ID)
+        hierarchy.get_team_users.assert_called_once_with(
+            ODOO_USER_ID, sample_current_employee.id
+        )
+
+    def test_execute_falla_si_el_empleado_no_tiene_usuario_de_odoo(
+        self,
+        mock_employee_price_repository,
+        mock_employee_gateway,
+        sample_current_employee,
+    ):
+        use_case, assignment, _ = self._use_case_with_hierarchy(
+            mock_employee_price_repository, mock_employee_gateway
+        )
+        mock_employee_gateway.get_by_id.return_value = sample_current_employee
+        mock_employee_gateway.get_user_id_by_employee_id.return_value = None
+
+        with pytest.raises(ValueError):
+            use_case.execute(1445)
+
+        assignment.get_team_users.assert_not_called()
