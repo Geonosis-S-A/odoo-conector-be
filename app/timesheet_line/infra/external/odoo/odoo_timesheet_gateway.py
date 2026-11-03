@@ -666,9 +666,10 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         """
         Obtiene líneas de timesheet que cumplen una de estas condiciones:
         1. Pertenecen a empleados específicos (employee_ids)
-        2. Pertenecen a proyectos donde requester_user_id es gerente
+        2. Pertenecen a proyectos donde requester_user_id es gerente o PM
         """
         # Primero obtenemos los proyectos donde el requester_user_id es gerente
+        # (user_id) o Project Manager (x_project_manager_id)
         managed_projects = self.odoo_client["models"].execute_kw(
             self.odoo_client["ODOO_DB"],
             self.odoo_client["uid"],
@@ -676,8 +677,12 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             "project.project",
             "search",
             [
-                [("user_id", "=", requester_user_id)]
-            ],  # user_id es el campo para el gerente del proyecto
+                [
+                    "|",
+                    ("user_id", "=", requester_user_id),
+                    ("x_project_manager_id", "=", requester_user_id),
+                ]
+            ],
         )
 
         # Construir dominio con lógica OR correcta
