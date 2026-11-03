@@ -69,11 +69,15 @@ class ExportTimesheetsByTeamUseCase:
         if not manager_user_id:
             raise UserNotFound("Manager not found")
         # Misma regla que el resumen del dashboard: equipo = jerarquía de Odoo;
-        # las horas de los proyectos que gerencia se suman en la consulta.
-        users = self.timesheet_line_gateway.get_team_users(
-            manager_user_id, self.manager_employee_id
-        )
-        team_employee_ids = [user["id"] for user in users]
+        # las horas de los proyectos que gerencia o de los que es PM se suman
+        # en la consulta. Un PM puro no suma su jerarquía.
+        if self.project_assignment_gateway.is_project_manager_only(manager_user_id):
+            team_employee_ids = []
+        else:
+            users = self.timesheet_line_gateway.get_team_users(
+                manager_user_id, self.manager_employee_id
+            )
+            team_employee_ids = [user["id"] for user in users]
 
         # Obtengo los timesheets de los ids que paso y que pertenecen al equipo del manager
         timesheet_lines = (

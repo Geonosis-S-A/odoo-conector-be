@@ -51,9 +51,16 @@ class GetDashboardSummaryUseCase:
         # de líneas (`requester_user_id`). Así, alguien asignado a un
         # proyecto suyo pero de otra jerarquía NO trae sus horas en proyectos
         # ajenos al dashboard.
-        team_users = self.timesheet_line_gateway.get_team_users(user_id, employee_id)
-
-        ids = [user["id"] for user in team_users]
+        # Un PM puro (PM de proyectos pero gerente de ninguno) no suma su
+        # jerarquía: solo ve las horas de los proyectos de los que es PM.
+        if self.project_assignment_gateway.is_project_manager_only(user_id):
+            team_users = []
+            ids = []
+        else:
+            team_users = self.timesheet_line_gateway.get_team_users(
+                user_id, employee_id
+            )
+            ids = [user["id"] for user in team_users]
 
         timesheet_data = self.dashboard_service.get_timesheet_summary(
             ids,
