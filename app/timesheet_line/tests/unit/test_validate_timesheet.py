@@ -36,9 +36,10 @@ class TestValidateTimesheetUseCase:
             id=999, email="approver@test.com", full_name="Test Approver"
         )
         # Mock por defecto para empleados
-        mock.get_by_id.return_value = Employee(
-            id=1, email="employee@test.com", full_name="Test Employee"
-        )
+        mock.get_by_ids.side_effect = lambda ids: [
+            Employee(id=i, email="employee@test.com", full_name="Test Employee")
+            for i in ids
+        ]
         return mock
 
     @pytest.fixture
@@ -61,6 +62,46 @@ class TestValidateTimesheetUseCase:
             mock_employee_gateway,
             mock_notification_repository,
         )
+
+    @staticmethod
+    def _line(line_id: int, validated: bool) -> DetailedTimesheetLine:
+        return DetailedTimesheetLine(
+            id=line_id,
+            name="Test Timesheet",
+            employee_id=1,
+            project=Project(id=1, name="Test Project"),
+            task=None,
+            hours=8.0,
+            date=date(2024, 3, 20),
+            validated=validated,
+        )
+
+    async def test_already_validated_lines_are_skipped_without_error(
+        self, use_case, mock_gateway, mock_email_service
+    ):
+        """Si otro aprobador (PM o gerente) ya validó todo, no se vuelve a
+        validar, no se pisa x_validated_by ni se reenvía el mail."""
+        mock_gateway.get_by_ids.return_value = [self._line(1, True), self._line(2, True)]
+
+        result = await use_case.execute([1, 2], "approver@test.com")
+
+        assert result is True
+        mock_gateway.validate.assert_not_called()
+        mock_email_service.send_approved_mail.assert_not_called()
+
+    async def test_only_pending_lines_are_validated_when_some_already_validated(
+        self, use_case, mock_gateway
+    ):
+        mock_gateway.get_by_ids.side_effect = [
+            [self._line(1, True), self._line(2, False)],
+            [self._line(2, True)],
+        ]
+        mock_gateway.validate.return_value = True
+
+        result = await use_case.execute([1, 2], "approver@test.com")
+
+        assert result is True
+        mock_gateway.validate.assert_called_once_with([2], 999)
 
     async def test_validate_single_timesheet_success(
         self, use_case, mock_gateway, mock_email_service, mock_employee_gateway
@@ -91,9 +132,39 @@ class TestValidateTimesheetUseCase:
         # Assert
         assert result is True
         mock_gateway.get_by_ids.assert_called_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_called_once_with([1], 999)
         mock_employee_gateway.get_by_email.assert_called_once_with(approver_mail)
         mock_email_service.send_approved_mail.assert_called_once()
+
+    async def test_validate_uses_validator_employee_id_when_provided(
+        self, use_case, mock_gateway, mock_employee_gateway
+    ):
+        """El id enviado a Odoo debe ser el del usuario Geo que ejecuta la acción,
+        no el del approver resuelto por email."""
+        # Arrange
+        timesheet_ids = [1]
+        approver_mail = "approver@test.com"
+        mock_gateway.get_by_ids.return_value = [
+            DetailedTimesheetLine(
+                id=1,
+                name="Test Timesheet",
+                employee_id=1,
+                project=Project(id=1, name="Test Project"),
+                task=None,
+                hours=8.0,
+                date=date(2024, 3, 20),
+                validated=False,
+            )
+        ]
+        mock_gateway.validate.return_value = True
+
+        # Act
+        await use_case.execute(
+            timesheet_ids, approver_mail, validator_employee_id=42
+        )
+
+        # Assert
+        mock_gateway.validate.assert_called_once_with([1], 42)
 
     async def test_validate_multiple_timesheets_success(
         self, use_case, mock_gateway, mock_email_service, mock_employee_gateway
@@ -144,7 +215,7 @@ class TestValidateTimesheetUseCase:
         # Assert
         assert result is True
         mock_gateway.get_by_ids.assert_called_with([1, 2, 3])
-        mock_gateway.validate.assert_called_once_with([1, 2, 3])
+        mock_gateway.validate.assert_called_once_with([1, 2, 3], 999)
         mock_employee_gateway.get_by_email.assert_called_once_with(approver_mail)
         mock_email_service.send_approved_mail.assert_called_once()
 
@@ -230,7 +301,7 @@ class TestValidateTimesheetUseCase:
             await use_case.execute(timesheet_ids, approver_mail)
 
         mock_gateway.get_by_ids.assert_called_once_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_called_once_with([1], 999)
 
     async def test_validate_timesheet_validate_exception(self, use_case, mock_gateway):
         """Test que verifica el comportamiento cuando validate lanza una excepción."""
@@ -261,7 +332,7 @@ class TestValidateTimesheetUseCase:
             await use_case.execute(timesheet_ids, approver_mail)
 
         mock_gateway.get_by_ids.assert_called_once_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_called_once_with([1], 999)
 
     async def test_validate_empty_list(self, use_case, mock_gateway):
         """Test que verifica el comportamiento cuando se pasa una lista vacía de IDs."""
@@ -281,6 +352,34 @@ class TestValidateTimesheetUseCase:
 
         mock_gateway.get_by_ids.assert_called_once_with([])
         mock_gateway.validate.assert_not_called()
+
+    async def test_employees_are_resolved_in_a_single_call(
+        self, use_case, mock_gateway, mock_employee_gateway
+    ):
+        """Al armar los mails se consultan los empleados una sola vez, no una
+        por línea."""
+        lines = []
+        for line_id, employee_id in [(1, 1), (2, 1), (3, 2)]:
+            lines.append(
+                DetailedTimesheetLine(
+                    id=line_id,
+                    name="T",
+                    employee_id=employee_id,
+                    project=Project(id=1, name="P"),
+                    task=None,
+                    hours=8.0,
+                    date=date(2024, 3, 20),
+                    validated=False,
+                )
+            )
+        mock_gateway.get_by_ids.return_value = lines
+        mock_gateway.validate.return_value = True
+
+        await use_case.execute([1, 2, 3], "approver@test.com")
+
+        mock_employee_gateway.get_by_ids.assert_called_once()
+        (called_ids,) = mock_employee_gateway.get_by_ids.call_args[0]
+        assert sorted(called_ids) == [1, 2]
 
     async def test_validate_multiple_timesheets_with_exception_detail(
         self, use_case, mock_gateway
@@ -328,7 +427,60 @@ class TestValidateTimesheetUseCase:
         )
 
         mock_gateway.get_by_ids.assert_called_once_with([1, 2])
-        mock_gateway.validate.assert_called_once_with([1, 2])
+        mock_gateway.validate.assert_called_once_with([1, 2], 999)
+
+    async def test_non_admin_cannot_validate_outside_validatable_team(
+        self, mock_gateway, mock_email_service, mock_employee_gateway,
+        mock_notification_repository,
+    ):
+        """Un no-admin no puede validar líneas de proyectos que no gerencia."""
+        team_access = Mock()
+        team_access.lines_authority.return_value = {(7, 1): False}
+        use_case = ValidateTimesheetUseCase(
+            mock_gateway, mock_email_service, mock_employee_gateway,
+            mock_notification_repository, team_access,
+        )
+        mock_gateway.get_by_ids.return_value = [
+            DetailedTimesheetLine(
+                id=1, name="ts", employee_id=7,
+                project=Project(id=1, name="P"), task=None, hours=8.0,
+                date=date(2024, 3, 20), validated=False,
+            )
+        ]
+
+        with pytest.raises(TimesheetValidateError, match="no gerenciás su proyecto"):
+            await use_case.execute(
+                [1], "approver@test.com", validator_employee_id=5
+            )
+        mock_gateway.validate.assert_not_called()
+        team_access.lines_authority.assert_called_once_with(5, [(7, 1)])
+
+    async def test_non_admin_validates_within_validatable_team(
+        self, mock_gateway, mock_email_service, mock_employee_gateway,
+        mock_notification_repository,
+    ):
+        """Un no-admin sí puede validar líneas de proyectos que gerencia."""
+        team_access = Mock()
+        team_access.lines_authority.return_value = {(7, 1): True}
+        use_case = ValidateTimesheetUseCase(
+            mock_gateway, mock_email_service, mock_employee_gateway,
+            mock_notification_repository, team_access,
+        )
+        mock_gateway.get_by_ids.return_value = [
+            DetailedTimesheetLine(
+                id=1, name="ts", employee_id=7,
+                project=Project(id=1, name="P"), task=None, hours=8.0,
+                date=date(2024, 3, 20), validated=False,
+            )
+        ]
+        mock_gateway.validate.return_value = True
+
+        result = await use_case.execute(
+            [1], "approver@test.com", validator_employee_id=5
+        )
+
+        assert result is True
+        mock_gateway.validate.assert_called_once_with([1], 5)
 
     async def test_validate_timesheet_approver_not_found(
         self, use_case, mock_gateway, mock_employee_gateway
@@ -351,7 +503,6 @@ class TestValidateTimesheetUseCase:
                 validated=False,
             )
         ]
-        mock_gateway.validate.return_value = True
         # Mock para que el approver no se encuentre
         mock_employee_gateway.get_by_email.return_value = None
 
@@ -362,6 +513,7 @@ class TestValidateTimesheetUseCase:
         ):
             await use_case.execute(timesheet_ids, approver_mail)
 
+        # El approver se verifica antes de validar en Odoo
         mock_gateway.get_by_ids.assert_called_once_with([1])
-        mock_gateway.validate.assert_called_once_with([1])
+        mock_gateway.validate.assert_not_called()
         mock_employee_gateway.get_by_email.assert_called_once_with(approver_mail)

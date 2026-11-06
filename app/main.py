@@ -19,6 +19,7 @@ from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
 from app.saved_prompts.api.routers import router as saved_prompts_router
 from app.timesheet_templates.api.routers import router as timesheet_templates_router
+from app.team.api.routes import router as team_router
 from app.personal_time.jobs.sync_scheduler import start_scheduler, stop_scheduler
 import logging
 
@@ -56,9 +57,9 @@ async def lifespan(app):
     
     # Iniciar el scheduler de jobs programados
     start_scheduler()
-    
+
     yield  # acá arranca la app
-    
+
     # Detener el scheduler al cerrar la aplicación
     stop_scheduler()
 
@@ -110,6 +111,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Sin esto el navegador solo recuerda el preflight 5 s y casi cada llamada
+    # paga un OPTIONS previo (~una ida y vuelta de red). Chrome limita a 2 h.
+    max_age=7200,
 )
 
 
@@ -144,6 +148,7 @@ app.include_router(accounting_router, prefix=API_PREFIX)
 app.include_router(agent_router, prefix=API_PREFIX)
 app.include_router(saved_prompts_router, prefix=API_PREFIX)
 app.include_router(timesheet_templates_router, prefix=API_PREFIX)
+app.include_router(team_router, prefix=API_PREFIX)
 
 
 @app.get("/")

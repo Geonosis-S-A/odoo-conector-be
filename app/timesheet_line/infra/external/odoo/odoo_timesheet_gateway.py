@@ -45,9 +45,12 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
 
         # Manejar employee_id que puede ser False o [id, nombre]
         employee_id = 0
+        employee_name = None
         raw_employee_id = odoo_data.get("employee_id", False)
         if isinstance(raw_employee_id, list) and len(raw_employee_id) > 0:
             employee_id = raw_employee_id[0]
+            if len(raw_employee_id) > 1 and raw_employee_id[1]:
+                employee_name = raw_employee_id[1]
         elif isinstance(raw_employee_id, (int, str)):
             employee_id = int(raw_employee_id)
 
@@ -71,6 +74,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             id=odoo_data.get("id"),
             name=odoo_data.get("name"),
             employee_id=employee_id,
+            employee_name=employee_name,
             project=Project(
                 id=project_id,
                 name=project_name,
@@ -135,6 +139,7 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
         team_members_ids: Optional[list[int]] = None,
+        project_wide: bool = False,
     ) -> List[DetailedTimesheetLine]:
         """Obtiene todas las líneas de hoja de tiempo de Odoo."""
         domain: list[tuple[str, str, Any]] = [("is_timesheet", "=", True)]
@@ -157,11 +162,16 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         proyecto_interno = [3, 1, 87, 2]
         domain.append(("project_id", "not in", proyecto_interno))
 
-        if team and user_id is not None:
-            team_domain = [
-                ("employee_id", "in", team_members_ids),
-            ]
-            domain.extend(team_domain)
+        if team and project_wide and project_id is not None:
+            # Vista por proyecto: el alcance lo da el proyecto (el llamador ya
+            # verificó que el líder lo gerencia), sin importar quién cargó.
+            # Los empleados archivados no se muestran.
+            domain.append(("employee_id.active", "=", True))
+        elif team:
+            # La vista de equipo siempre se acota a la lista explícita de
+            # empleados resuelta por TeamAccessService. Lista vacía => sin
+            # resultados (nunca "todos").
+            domain.append(("employee_id", "in", team_members_ids or []))
 
         odoo_timesheet_lines = cast(
             List[Dict[str, Any]],
@@ -377,19 +387,23 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             for line_data in odoo_data
         ]
 
-    def validate(self, timesheet_line_ids: list[int]) -> bool:
+    def validate(self, timesheet_line_ids: list[int], approved_by_employee_id: int) -> bool:
         """Valida múltiples líneas de hoja de tiempo en Odoo (marca validated=True).
 
         Args:
             timesheet_line_ids: Lista de IDs de las líneas de hoja de tiempo a validar
+            approved_by_employee_id: ID del empleado (hr.employee) que aprueba
 
         Returns:
-            bool: True si la validación fue exitosa, False en caso contrario
+            bool: True si todas las líneas quedaron validated=True, False en caso contrario
         """
         if not timesheet_line_ids:
             return True
 
-        response = self.odoo_client["models"].execute_kw(
+        import logging
+        log = logging.getLogger(__name__)
+
+        self.odoo_client["models"].execute_kw(
             self.odoo_client["ODOO_DB"],
             self.odoo_client["uid"],
             self.odoo_client["ODOO_PASSWORD"],
@@ -399,7 +413,58 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             {},
         )
 
-        return bool(response)
+        results = self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "read",
+            [timesheet_line_ids],
+            {"fields": ["validated", "x_validated_by"]},
+        )
+
+        all_validated = all(r["validated"] for r in results)
+        log.info(
+            "validate(): ids=%s all_validated=%s x_validated_by_actual=%s "
+            "approved_by_employee_id=%s",
+            timesheet_line_ids,
+            all_validated,
+            [r.get("x_validated_by") for r in results],
+            approved_by_employee_id,
+        )
+
+        if all_validated:
+            try:
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "account.analytic.line",
+                    "write",
+                    [timesheet_line_ids, {"x_validated_by": approved_by_employee_id}],
+                )
+                check = self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "account.analytic.line",
+                    "read",
+                    [timesheet_line_ids],
+                    {"fields": ["x_validated_by"]},
+                )
+                log.info(
+                    "validate(): x_validated_by escrito=%s -> post-write=%s",
+                    approved_by_employee_id,
+                    [r.get("x_validated_by") for r in check],
+                )
+            except Exception:
+                log.error(
+                    "No se pudo escribir x_validated_by (employee_id=%s) en Odoo",
+                    approved_by_employee_id,
+                    exc_info=True,
+                )
+
+        return all_validated
 
     def get_team_users(self, user_id: int, employee_id: int) -> list[Dict[str, Any]]:
         """
@@ -443,6 +508,68 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             raise Exception(
                 f"Error al obtener cantidad de usuarios del equipo: {str(e)}"
             )
+
+    def get_department_users(self, employee_id: int) -> list[Dict[str, Any]]:
+        try:
+            rows = self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",
+                "read",
+                [[employee_id]],
+                {"fields": ["department_id"]},
+            )
+            department = rows[0].get("department_id") if rows else None
+            if not department:
+                return []
+
+            return self.odoo_client["models"].execute_kw(
+                self.odoo_client["ODOO_DB"],
+                self.odoo_client["uid"],
+                self.odoo_client["ODOO_PASSWORD"],
+                "hr.employee",
+                "search_read",
+                [
+                    [
+                        ("active", "=", True),
+                        ("id", "!=", employee_id),
+                        ("department_id", "=", department[0]),
+                    ]
+                ],
+                {"fields": ["id", "name", "work_email"]},
+            )
+        except Exception as e:
+            raise Exception(
+                f"Error al obtener los empleados del departamento: {str(e)}"
+            )
+
+    def get_pending_lines_minimal(
+        self, project_ids: list[int]
+    ) -> list[Dict[str, Any]]:
+        """``employee_id``/``project_id``/``date`` de cada línea pendiente en
+        esos proyectos, de quien sea que la cargó. Una sola consulta (sin loop
+        por proyecto ni por empleado) para contar pendientes por proyecto."""
+        if not project_ids:
+            return []
+
+        domain = [
+            ("is_timesheet", "=", True),
+            ("validated", "=", False),
+            ("project_id", "in", project_ids),
+            # Empleados archivados: no se muestran ni cuentan.
+            ("employee_id.active", "=", True),
+        ]
+
+        return self.odoo_client["models"].execute_kw(
+            self.odoo_client["ODOO_DB"],
+            self.odoo_client["uid"],
+            self.odoo_client["ODOO_PASSWORD"],
+            "account.analytic.line",
+            "search_read",
+            [domain],
+            {"fields": ["employee_id", "project_id", "date"]},
+        )
 
     def get_by_task_or_project(
         self,
@@ -539,9 +666,10 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
         """
         Obtiene líneas de timesheet que cumplen una de estas condiciones:
         1. Pertenecen a empleados específicos (employee_ids)
-        2. Pertenecen a proyectos donde requester_user_id es gerente
+        2. Pertenecen a proyectos donde requester_user_id es gerente o PM
         """
         # Primero obtenemos los proyectos donde el requester_user_id es gerente
+        # (user_id) o Project Manager (x_project_manager_id)
         managed_projects = self.odoo_client["models"].execute_kw(
             self.odoo_client["ODOO_DB"],
             self.odoo_client["uid"],
@@ -549,8 +677,12 @@ class OdooTimesheetLineGateway(TimesheetLineGateway):
             "project.project",
             "search",
             [
-                [("user_id", "=", requester_user_id)]
-            ],  # user_id es el campo para el gerente del proyecto
+                [
+                    "|",
+                    ("user_id", "=", requester_user_id),
+                    ("x_project_manager_id", "=", requester_user_id),
+                ]
+            ],
         )
 
         # Construir dominio con lógica OR correcta

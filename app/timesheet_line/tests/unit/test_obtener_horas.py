@@ -120,7 +120,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, None, True, None, None
         )
@@ -167,7 +167,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, None, True, None, None
         )
@@ -209,7 +209,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, None, True, None, None
         )
@@ -337,7 +337,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         # No debe llamar get_user_id_by_employee_id cuando employee_id no es None
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, None, True, None, None
         )
@@ -378,7 +378,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         # No debe llamar get_user_id_by_employee_id cuando team=False
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, None, False, None, None
         )
@@ -426,7 +426,7 @@ class TestListTimesheetLinesUseCase:
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
         # No debe llamar get_user_id_by_employee_id cuando team=False
         mock_employee_gateway.get_user_id_by_employee_id.assert_not_called()
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, project_id, None, False, None, None
         )
@@ -470,7 +470,7 @@ class TestListTimesheetLinesUseCase:
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
 
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, project_id, None, False, None, None
         )
@@ -521,7 +521,7 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, validated, False, None, None
         )
@@ -564,7 +564,7 @@ class TestListTimesheetLinesUseCase:
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
 
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, None, validated, False, None, None
         )
@@ -622,7 +622,7 @@ class TestListTimesheetLinesUseCase:
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
 
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, project_id, validated, False, None, None
         )
@@ -674,7 +674,7 @@ class TestListTimesheetLinesUseCase:
         # Assert
         mock_employee_gateway.exists_by_id.assert_called_once_with(employee_id)
 
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, project_id, validated, False, None, None
         )
@@ -716,7 +716,7 @@ class TestListTimesheetLinesUseCase:
         # No debe llamar a exists_by_id cuando employee_id es None
         mock_employee_gateway.exists_by_id.assert_not_called()
 
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             employee_id, date_from, date_to, project_id, validated, False, None, None
         )
@@ -744,7 +744,7 @@ class TestListTimesheetLinesUseCase:
         id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
-        mock_employee_gateway.all.return_value = sample_employees
+        mock_employee_gateway.get_by_ids.return_value = sample_employees
         mock_gateway.all.return_value = [
             sample_timesheet_lines[0]
         ]  # Solo el primer timesheet
@@ -759,6 +759,9 @@ class TestListTimesheetLinesUseCase:
 
         # Assert
         mock_notification_repository.get_by_timesheet_ids.assert_called_once_with([1])
+        # Sólo se resuelve el empleado del approver_id de la notificación (id=2),
+        # no toda la empresa.
+        mock_employee_gateway.get_by_ids.assert_called_once_with([2])
         assert len(result) == 1
         timesheet = result[0]
         assert timesheet.notification is not None
@@ -784,7 +787,7 @@ class TestListTimesheetLinesUseCase:
         id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
-        mock_employee_gateway.all.return_value = sample_employees
+        mock_employee_gateway.get_by_ids.return_value = sample_employees
         mock_gateway.all.return_value = sample_timesheet_lines
 
         # Solo el primer timesheet tiene notificación (batch)
@@ -835,7 +838,7 @@ class TestListTimesheetLinesUseCase:
         ]
 
         mock_employee_gateway.exists_by_id.return_value = True
-        mock_employee_gateway.all.return_value = limited_employees
+        mock_employee_gateway.get_by_ids.return_value = limited_employees
         mock_gateway.all.return_value = [
             sample_timesheet_lines[0]
         ]  # Solo el primer timesheet
@@ -989,7 +992,7 @@ class TestListTimesheetLinesUseCase:
         # Assert
         mock_employee_gateway.exists_by_id.assert_not_called()  # No valida employee_id cuando es None
 
-        mock_employee_gateway.all.assert_called_once()
+        mock_employee_gateway.get_by_ids.assert_not_called()
         mock_gateway.all.assert_called_once_with(
             None, None, None, None, None, False, None, None
         )
@@ -1047,7 +1050,7 @@ class TestListTimesheetLinesUseCase:
         id = 1
 
         mock_employee_gateway.exists_by_id.return_value = True
-        mock_employee_gateway.all.return_value = []  # Lista vacía de empleados
+        mock_employee_gateway.get_by_ids.return_value = []  # Lista vacía de empleados
         mock_gateway.all.return_value = [sample_timesheet_lines[0]]
         mock_notification_repository.get_by_timesheet_ids.return_value = [
             sample_notification
@@ -1197,3 +1200,172 @@ class TestListTimesheetLinesUseCase:
             use_case.execute(employee_id, date_from, date_to, None, None, False, id)
 
         assert "Notification DB error" in str(exc_info.value)
+
+
+class TestListTimesheetLinesCanValidateFlag:
+    """`can_validate` por línea en la vista de equipo (`team=True`)."""
+
+    def _line(
+        self, line_id: int, employee_id: int, validated: bool, project_id: int = 1
+    ):
+        return DetailedTimesheetLine(
+            id=line_id,
+            name=f"ts-{line_id}",
+            employee_id=employee_id,
+            project=Project(id=project_id, name="P"),
+            task=None,
+            hours=8.0,
+            date=date(2026, 9, 8),
+            validated=validated,
+        )
+
+    def _use_case(self, lines, team_access):
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = lines
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        emp_gw.all.return_value = []
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        notif.get_by_timesheet_ids.return_value = []
+        return ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
+        )
+
+    def test_authority_is_per_line_not_per_employee(self):
+        """Mismo empleado en dos proyectos: sólo se habilita el que gerencia."""
+        lines = [
+            self._line(1, employee_id=20, validated=False, project_id=1),  # mío
+            self._line(2, employee_id=20, validated=True, project_id=1),   # mío, ya validada
+            self._line(3, employee_id=20, validated=False, project_id=2),  # de otro líder
+        ]
+        team_access = Mock()
+        team_access.visible_employee_ids.return_value = {20}
+        team_access.lines_authority.return_value = {
+            (20, 1): True,
+            (20, 2): False,
+        }
+
+        result = self._use_case(lines, team_access).execute(
+            None, None, None, None, None, True, 5
+        )
+
+        by_id = {l.id: l for l in result}
+        assert by_id[1].can_validate is True
+        assert by_id[1].can_delete is True
+        assert by_id[2].can_validate is False  # ya validada
+        assert by_id[2].can_delete is True     # borrar no depende de validated
+        assert by_id[3].can_validate is False
+        assert by_id[3].can_delete is False
+        team_access.lines_authority.assert_called_once()
+        # El listado es de solo lectura: puede usar la caché de autoridad
+        assert team_access.lines_authority.call_args.kwargs == {"cached": True}
+        assert team_access.project_approver_names.call_args.kwargs == {"cached": True}
+
+    def test_can_validate_never_set_without_team_flag_regardless_of_role(self):
+        """Sin `team=True` no se marca `can_validate` en ninguna línea: el rol
+        approver ya no habilita validar fuera del equipo real en Odoo."""
+        lines = [
+            self._line(1, employee_id=20, validated=False),
+            self._line(2, employee_id=99, validated=True),
+        ]
+        team_access = Mock()
+
+        result = self._use_case(lines, team_access).execute(
+            20, None, None, None, None, False, 5
+        )
+
+        by_id = {l.id: l for l in result}
+        assert by_id[1].can_validate is False
+        assert by_id[2].can_validate is False
+        team_access.lines_authority.assert_not_called()
+
+    def test_team_plus_project_is_scoped_by_project_not_by_employee(self):
+        """project_id + team=True: el alcance lo da el proyecto: el gerente ve
+        las líneas de ese proyecto de quien sea (incluso sin asignación) y no
+        se resuelve el equipo; los botones salen de la autoridad por línea."""
+        lines = [
+            self._line(1, employee_id=30, validated=False, project_id=139),  # asignado
+            self._line(2, employee_id=40, validated=False, project_id=139),  # jerarquía, no asignado
+        ]
+        team_access = Mock()
+        team_access.can_access_project.return_value = True
+        team_access.project_assigned_employee_ids.return_value = {30}
+        team_access.visible_employee_ids.return_value = {40}
+        team_access.lines_authority.return_value = {
+            (30, 139): True,
+            (40, 139): True,
+        }
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = lines
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        emp_gw.all.return_value = []
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        notif.get_by_timesheet_ids.return_value = []
+        use_case = ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
+        )
+
+        result = use_case.execute(None, None, None, 139, None, True, 5)
+
+        assert all(l.can_validate for l in result)
+        team_access.can_access_project.assert_called_once_with(5, 139, cached=True)
+        team_access.project_assigned_employee_ids.assert_not_called()
+        team_access.visible_employee_ids.assert_not_called()
+        assert gw.all.call_args.args[-1] is None
+        assert gw.all.call_args.kwargs == {"project_wide": True}
+
+    def test_team_plus_project_excludes_leaders_own_lines(self):
+        lines = [
+            self._line(1, employee_id=30, validated=False, project_id=139),
+            self._line(2, employee_id=5, validated=False, project_id=139),  # el líder
+        ]
+        team_access = Mock()
+        team_access.can_access_project.return_value = True
+        team_access.lines_authority.return_value = {(30, 139): True}
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = lines
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        notif.get_by_timesheet_ids.return_value = []
+        use_case = ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
+        )
+
+        result = use_case.execute(None, None, None, 139, None, True, 5)
+
+        assert [l.employee_id for l in result] == [30]
+
+    def test_team_plus_project_raises_when_project_not_managed(self):
+        from app.timesheet_line.application.excepctions.exceptions import (
+            ProjectNotManagedError,
+        )
+
+        team_access = Mock()
+        team_access.can_access_project.return_value = False
+        gw = Mock(spec=TimesheetLineGateway)
+        emp_gw = Mock(spec=EmployeeGateway)
+        emp_gw.exists_by_id.return_value = True
+        notif = Mock(spec=TimesheetLineNotificationRepository)
+        use_case = ListTimesheetLinesUseCase(
+            gw, emp_gw, notif, task_gateway=None, team_access=team_access
+        )
+
+        import pytest
+
+        with pytest.raises(ProjectNotManagedError):
+            use_case.execute(None, None, None, 139, None, True, 5)
+
+        gw.all.assert_not_called()
+
+    def test_non_team_request_leaves_can_validate_false(self):
+        lines = [self._line(1, employee_id=5, validated=False)]
+        team_access = Mock()
+        result = self._use_case(lines, team_access).execute(
+            5, None, None, None, None, False, 5
+        )
+
+        assert result[0].can_validate is False
+        assert result[0].can_delete is False
+        team_access.lines_authority.assert_not_called()

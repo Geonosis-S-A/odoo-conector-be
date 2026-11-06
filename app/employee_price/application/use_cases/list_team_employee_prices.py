@@ -1,6 +1,7 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.employee_price.domain.repositories import EmployeePriceRepository
+from app.project.domain.gateway import ProjectAssignmentGateway
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
 
@@ -13,18 +14,26 @@ class ListTeamEmployeePricesUseCase:
     def __init__(
         self,
         employee_price_repository: EmployeePriceRepository,
-        timesheet_line_gateway: TimesheetLineGateway,
+        project_assignment_gateway: ProjectAssignmentGateway,
         employee_gateway: EmployeeGateway,
+        timesheet_line_gateway: Optional[TimesheetLineGateway] = None,
     ):
         self.employee_price_repository = employee_price_repository
-        self.timesheet_line_gateway = timesheet_line_gateway
+        self.project_assignment_gateway = project_assignment_gateway
         self.employee_gateway = employee_gateway
+        self.timesheet_line_gateway = timesheet_line_gateway
+
     def execute(
         self, user_id: int
     ) -> List[Dict[str, Any]]:
         """
         Ejecuta la obtención de precios de empleados del equipo.
-        
+
+        El equipo es la unión de quienes están en los proyectos vigentes que
+        gerencia o de los que es PM (asignados o con horas cargadas) y de su
+        jerarquía de Odoo (misma gente cuyas horas cuentan en las métricas),
+        sin duplicados. Un PM puro no suma su jerarquía.
+
         Obtiene únicamente los registros abiertos (date_to = NULL) de cada empleado.
 
         Args:
@@ -40,7 +49,33 @@ class ListTeamEmployeePricesUseCase:
         employee_id = self.employee_gateway.get_by_id(user_id)
         if employee_id is None:
             raise ValueError("El usuario no tiene un empleado asociado")
-        team_users = self.timesheet_line_gateway.get_team_users(user_id, employee_id.id)
+        # `user_id` es el id de empleado (así viene en el token); las consultas de
+        # proyectos y de responsable de horas necesitan el id de res.users de Odoo.
+        odoo_user_id = self.employee_gateway.get_user_id_by_employee_id(
+            employee_id.id
+        )
+        if odoo_user_id is None:
+            raise ValueError("El empleado no tiene un usuario de Odoo asociado")
+        team_users = self.project_assignment_gateway.get_team_users(
+            odoo_user_id, employee_id.id, only_active=True
+        )
+
+        if (
+            self.timesheet_line_gateway is not None
+            and not self.project_assignment_gateway.is_project_manager_only(
+                odoo_user_id
+            )
+        ):
+            hierarchy_users = (
+                self.timesheet_line_gateway.get_team_users(
+                    odoo_user_id, employee_id.id
+                )
+                or []
+            )
+            by_id = {user["id"]: user for user in (team_users or [])}
+            for user in hierarchy_users:
+                by_id.setdefault(user["id"], user)
+            team_users = list(by_id.values())
 
         if not team_users:
             return []
@@ -77,4 +112,3 @@ class ListTeamEmployeePricesUseCase:
             result.append(employee_info)
 
         return result
-

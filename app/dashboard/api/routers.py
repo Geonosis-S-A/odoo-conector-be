@@ -44,6 +44,10 @@ from app.dashboard.application.use_cases.get_task_detail import (
 )
 from app.dashboard.domain.repositories import DashboardDataService
 from app.dashboard.infra.dashboard_service import OdooDashboardDataService
+from app.project.domain.gateway import ProjectAssignmentGateway
+from app.project.infra.external.odoo_project_assignment_gateway import (
+    OdooProjectAssignmentGateway,
+)
 from app.shared.infra.external.odoo.odoo_client import (
     get_odoo_connection_dependency,
     OdooConnection,
@@ -88,6 +92,19 @@ def get_timesheet_gateway(
         return OdooTimesheetLineGateway(odoo_connection)
     except Exception as e:
         raise HTTPException(status_code=500, detail="Error al conectar con el gateway")
+
+
+def get_project_assignment_gateway(
+    odoo_connection: OdooConnection = Depends(get_odoo_connection_dependency),
+) -> ProjectAssignmentGateway:
+    """Dependencia para obtener el gateway de asignaciones a proyecto."""
+    try:
+        return OdooProjectAssignmentGateway(odoo_connection)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail="Error al conectar con el gateway de asignaciones a proyecto",
+        )
 
 
 def get_task_gateway(
@@ -140,6 +157,9 @@ async def get_dashboard_summary(
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
     task_gateway: TaskGateway = Depends(get_task_gateway),
     timesheet_line_gateway: TimesheetLineGateway = Depends(get_timesheet_gateway),
+    project_assignment_gateway: ProjectAssignmentGateway = Depends(
+        get_project_assignment_gateway
+    ),
     employee_price_repository: EmployeePriceRepository = Depends(
         get_employee_price_repository
     ),
@@ -185,6 +205,7 @@ async def get_dashboard_summary(
             task_gateway,
             timesheet_line_gateway,
             employee_price_repository,
+            project_assignment_gateway,
         )
         dashboard_summary = use_case.execute(
             user_id, requester_employee_id, date_from, date_to
@@ -366,6 +387,9 @@ async def export_timesheets(
     current_user: JWTPayload = Depends(get_current_user),
     task_gateway: TaskGateway = Depends(get_task_gateway),
     employee_gateway: EmployeeGateway = Depends(get_employee_gateway),
+    project_assignment_gateway: ProjectAssignmentGateway = Depends(
+        get_project_assignment_gateway
+    ),
     employee_price_repository: EmployeePriceRepository = Depends(
         get_employee_price_repository
     ),
@@ -382,6 +406,7 @@ async def export_timesheets(
         employee_gateway,
         task_gateway,
         current_user["user_id"],
+        project_assignment_gateway,
         employee_price_repository,
         dolar_value=dolar_value,
     )

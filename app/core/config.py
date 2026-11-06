@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     RESEND_APIKEY: str = os.getenv("RESEND_APIKEY", "")
     HUMAND_API_URL: str = os.getenv("HUMAND_API_URL", "https://api-prod.humand.co/public/api/v1")
     HUMAND_API_KEY: str = os.getenv("HUMAND_API_KEY", "")
+    # Segundos que se cachean, en memoria, los datos de autoridad que se leen de
+    # Odoo (user_id del empleado, proyectos que gerencia, aprobadores) en las
+    # vistas de lectura. 0 la desactiva. Validar/borrar nunca la usan.
+    AUTHZ_CACHE_TTL_SECONDS: int = int(os.getenv("AUTHZ_CACHE_TTL_SECONDS", "60"))
 
     class Config:
         env_file = ".env"

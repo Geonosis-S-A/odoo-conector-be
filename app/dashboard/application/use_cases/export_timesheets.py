@@ -3,6 +3,7 @@
 from datetime import date
 from typing import Dict, List, Optional
 from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
+from app.project.domain.gateway import ProjectAssignmentGateway
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.users.domain.repositories import EmployeeGateway
 from app.task.domain.gateway import TaskGateway
@@ -21,6 +22,7 @@ class ExportTimesheetsByTeamUseCase:
         employee_gateway: EmployeeGateway,
         task_gateway: TaskGateway,
         manager_employee_id: int,
+        project_assignment_gateway: ProjectAssignmentGateway,
         employee_price_repository: Optional[EmployeePriceRepository] = None,
         dolar_value: float = 0,
     ):
@@ -28,6 +30,7 @@ class ExportTimesheetsByTeamUseCase:
         self.employee_gateway = employee_gateway
         self.task_gateway = task_gateway
         self.manager_employee_id = manager_employee_id
+        self.project_assignment_gateway = project_assignment_gateway
         self.employee_price_repository = employee_price_repository
         self.dolar_value = dolar_value
 
@@ -65,10 +68,16 @@ class ExportTimesheetsByTeamUseCase:
         )
         if not manager_user_id:
             raise UserNotFound("Manager not found")
-        users = self.timesheet_line_gateway.get_team_users(
-            manager_user_id, self.manager_employee_id
-        )
-        team_employee_ids = [user["id"] for user in users]
+        # Misma regla que el resumen del dashboard: equipo = jerarquía de Odoo;
+        # las horas de los proyectos que gerencia o de los que es PM se suman
+        # en la consulta. Un PM puro no suma su jerarquía.
+        if self.project_assignment_gateway.is_project_manager_only(manager_user_id):
+            team_employee_ids = []
+        else:
+            users = self.timesheet_line_gateway.get_team_users(
+                manager_user_id, self.manager_employee_id
+            )
+            team_employee_ids = [user["id"] for user in users]
 
         # Obtengo los timesheets de los ids que paso y que pertenecen al equipo del manager
         timesheet_lines = (

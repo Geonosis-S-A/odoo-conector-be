@@ -1,0 +1,652 @@
+from unittest.mock import Mock
+
+import pytest
+
+from app.team.application.team_access import TeamAccessService
+from app.team.domain.models import PermissionLevel, TeamMemberPermission
+
+
+def _perm(leader: int, member: int, level: PermissionLevel) -> TeamMemberPermission:
+    return TeamMemberPermission(
+        id=None,
+        leader_employee_odoo_id=leader,
+        member_employee_odoo_id=member,
+        level=level,
+    )
+
+
+class TestTeamAccessService:
+    @pytest.fixture
+    def employee_gateway(self):
+        gw = Mock()
+        # leader 10 -> user 100 ; leader 20 -> user 200 ; leader 99 -> sin usuario
+        gw.get_user_id_by_employee_id.side_effect = lambda eid: {
+            10: 100,
+            20: 200,
+            99: None,
+        }.get(eid)
+        return gw
+
+    @pytest.fixture
+    def project_assignment_gateway(self):
+        gw = Mock()
+        # equipo (proyectos gerenciados) por líder (excluye siempre al propio líder)
+        teams = {
+            10: [
+                {"id": 1, "name": "Ana", "work_email": "ana@x.com"},
+                {"id": 2, "name": "Beto", "work_email": "beto@x.com"},
+                {"id": 3, "name": "Cira", "work_email": False},
+            ],
+            20: [
+                {"id": 3, "name": "Cira", "work_email": "cira@x.com"},
+                {"id": 4, "name": "Dino", "work_email": "dino@x.com"},
+            ],
+        }
+        gw.is_project_manager_only.return_value = False
+        # Por defecto no es gerente de proyectos: no suma departamento.
+        gw.is_project_head.return_value = False
+        # Candidatos a suplente: PM de los proyectos que gerencia cada líder.
+        # Cira (3) es PM de proyectos de 10 y de 20; Beto (2), de 10; Dino (4) no
+        # es PM de ninguno de los dos.
+        pms = {
+            100: [
+                {"id": 2, "name": "Beto", "work_email": "beto@x.com"},
+                {"id": 3, "name": "Cira", "work_email": "cira@x.com"},
+            ],
+            200: [{"id": 3, "name": "Cira", "work_email": "cira@x.com"}],
+        }
+        gw.get_managed_project_pms.side_effect = lambda user_id: pms.get(user_id, [])
+        gw.get_project_approvers.return_value = {}
+        gw.get_team_users.side_effect = (
+            lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: teams.get(
+                emp_id, []
+            )
+        )
+        return gw
+
+    @pytest.fixture
+    def timesheet_line_gateway(self):
+        gw = Mock()
+        # Sin equipo por jerarquía ni pendientes por defecto; los tests que
+        # los necesiten sobreescriben `side_effect`/`return_value`.
+        gw.get_team_users.return_value = []
+        gw.get_department_users.return_value = []
+        gw.get_pending_lines_minimal.return_value = []
+        return gw
+
+    @pytest.fixture
+    def permission_repo(self):
+        repo = Mock()
+        # Por defecto nadie recibió permisos delegados; los tests que lo necesitan
+        # sobreescriben `list_by_member.return_value`.
+        repo.list_by_member.return_value = []
+        return repo
+
+    @pytest.fixture
+    def service(
+        self,
+        employee_gateway,
+        project_assignment_gateway,
+        timesheet_line_gateway,
+        permission_repo,
+    ):
+        return TeamAccessService(
+            employee_gateway,
+            project_assignment_gateway,
+            timesheet_line_gateway,
+            permission_repo,
+        )
+
+    def test_leader_sees_and_validates_own_odoo_team(self, service, permission_repo):
+        permission_repo.list_by_member.return_value = []
+
+        assert service.is_leader(10) is True
+        assert service.visible_employee_ids(10) == {1, 2, 3}
+        assert service.validatable_employee_ids(10) == {1, 2, 3}
+
+    def test_non_leader_without_permissions_has_nothing(self, service, permission_repo):
+        permission_repo.list_by_member.return_value = []
+
+        assert service.is_leader(1) is False
+        assert service.visible_employee_ids(1) == set()
+        assert service.can_view_team(1) is False
+        assert service.can_validate_team(1) is False
+
+    def test_member_with_view_permission_sees_team_minus_leader_and_self(
+        self, service, permission_repo
+    ):
+        # Beto (2) recibe 'view' del líder 10
+        permission_repo.list_by_member.return_value = [_perm(10, 2, PermissionLevel.view)]
+
+        assert service.visible_employee_ids(2) == {1, 3}
+        # 'view' no habilita validación
+        assert service.validatable_employee_ids(2) == set()
+        assert service.can_validate_team(2) is False
+
+    def test_member_with_validate_permission_can_validate_team(
+        self, service, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = [
+            _perm(10, 2, PermissionLevel.validate)
+        ]
+
+        assert service.validatable_employee_ids(2) == {1, 3}
+        # nunca puede validarse a sí mismo
+        assert 2 not in service.validatable_employee_ids(2)
+
+    def test_permission_ignored_when_member_is_no_longer_a_pm_of_the_leader(
+        self, service, permission_repo
+    ):
+        # Dino (4) tiene permiso del líder 10, pero ya no es PM de sus proyectos
+        permission_repo.list_by_member.return_value = [
+            _perm(10, 4, PermissionLevel.validate)
+        ]
+
+        assert service.validatable_employee_ids(4) == set()
+        assert service.visible_employee_ids(4) == set()
+
+    def test_multiple_leaders_union(self, service, permission_repo):
+        # Cira (3) está en el equipo de 10 y de 20; recibe validate de ambos
+        permission_repo.list_by_member.return_value = [
+            _perm(10, 3, PermissionLevel.validate),
+            _perm(20, 3, PermissionLevel.validate),
+        ]
+
+        # team(10)={1,2,3} menos {10,3} = {1,2} ; team(20)={3,4} menos {20,3} = {4}
+        assert service.validatable_employee_ids(3) == {1, 2, 4}
+
+    def test_leader_without_odoo_user_has_no_team(self, service, permission_repo):
+        permission_repo.list_by_member.return_value = []
+
+        assert service.get_led_team(99) == []
+        assert service.is_leader(99) is False
+
+    def test_visible_team_members_for_leader(self, service, permission_repo):
+        permission_repo.list_by_member.return_value = []
+
+        members = service.visible_team_members(10)
+        by_id = {m.employee_odoo_id: m for m in members}
+        assert set(by_id) == {1, 2, 3}
+        assert by_id[1].name == "Ana"
+        assert by_id[1].email == "ana@x.com"
+        assert by_id[3].email is None  # work_email False -> None
+        assert all(m.level is None for m in members)
+
+    def test_visible_team_members_for_member_with_permission(
+        self, service, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = [
+            _perm(10, 2, PermissionLevel.view)
+        ]
+
+        members = service.visible_team_members(2)
+        assert {m.employee_odoo_id for m in members} == {1, 3}
+
+    def test_visible_team_members_empty_when_no_access(self, service, permission_repo):
+        permission_repo.list_by_member.return_value = []
+
+        assert service.visible_team_members(1) == []
+
+    def test_get_led_team_by_project_groups_members_and_excludes_leader(
+        self, service, project_assignment_gateway
+    ):
+        from app.project.domain.models import Project
+        from app.users.domain.models import Employee
+
+        project_assignment_gateway.get_led_projects.return_value = [
+            Project(id=1, name="P1", manager_user_id=100),
+            Project(id=2, name="P2", manager_user_id=100),
+        ]
+        project_assignment_gateway.get_project_assignments.return_value = [
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            {"employee_id": [2, "Beto"], "project_id": [1, "P1"]},
+            {"employee_id": [10, "Lider"], "project_id": [2, "P2"]},  # el propio líder
+            {"employee_id": [4, "Dino"], "project_id": [2, "P2"]},
+        ]
+        service.employee_gateway.get_by_ids.return_value = [
+            Employee(id=1, email="ana@x.com", full_name="Ana"),
+            Employee(id=2, email="beto@x.com", full_name="Beto"),
+            Employee(id=4, email="dino@x.com", full_name="Dino"),
+        ]
+
+        result = service.get_led_team_by_project(10)
+
+        assert {t.project.id for t in result} == {1, 2}
+        by_project = {t.project.id: t for t in result}
+        assert {m.employee_odoo_id for m in by_project[1].members} == {1, 2}
+        assert {m.employee_odoo_id for m in by_project[2].members} == {4}
+
+    def test_get_led_team_by_project_no_managed_projects_returns_empty(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.get_led_projects.return_value = []
+
+        assert service.get_led_team_by_project(10) == []
+
+    def test_get_led_team_by_project_leader_without_odoo_user(self, service):
+        assert service.get_led_team_by_project(99) == []
+
+    def test_get_led_team_by_project_project_without_assignments_has_empty_members(
+        self, service, project_assignment_gateway
+    ):
+        from app.project.domain.models import Project
+
+        project_assignment_gateway.get_led_projects.return_value = [
+            Project(id=1, name="P1", manager_user_id=100),
+        ]
+        project_assignment_gateway.get_project_assignments.return_value = []
+
+        result = service.get_led_team_by_project(10)
+
+        assert len(result) == 1
+        assert result[0].project.id == 1
+        assert result[0].members == []
+
+    def test_get_led_team_by_project_counts_pending_lines_per_project(
+        self, service, project_assignment_gateway, timesheet_line_gateway
+    ):
+        from app.project.domain.models import Project
+        from app.users.domain.models import Employee
+
+        project_assignment_gateway.get_led_projects.return_value = [
+            Project(id=1, name="P1", manager_user_id=100),
+            Project(id=2, name="P2", manager_user_id=100),
+        ]
+        project_assignment_gateway.get_project_assignments.return_value = [
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"]},
+            {"employee_id": [2, "Beto"], "project_id": [2, "P2"]},
+        ]
+        service.employee_gateway.get_by_ids.return_value = [
+            Employee(id=1, email="ana@x.com", full_name="Ana"),
+            Employee(id=2, email="beto@x.com", full_name="Beto"),
+        ]
+        from datetime import date, timedelta
+
+        today = date.today()
+        prev_month = (today.replace(day=1) - timedelta(days=1)).isoformat()
+        first = today.replace(day=1).isoformat()
+        timesheet_line_gateway.get_pending_lines_minimal.return_value = [
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": first},
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": today.isoformat()},
+            {"employee_id": [1, "Ana"], "project_id": [1, "P1"], "date": prev_month},
+            # Beto no está asignado a P1 pero cargó ahí (histórico): suma a P1.
+            {"employee_id": [2, "Beto"], "project_id": [1, "P1"], "date": first},
+        ]
+
+        result = service.get_led_team_by_project(10)
+
+        by_project = {t.project.id: t for t in result}
+        assert by_project[1].pending_count == 3
+        assert by_project[1].pending_previous_count == 1
+        # Beto aparece en P1 marcado como no asignado; en P2 sí está asignado.
+        p1 = {m.employee_odoo_id: m for m in by_project[1].members}
+        assert p1[1].assigned is True
+        assert p1[2].assigned is False
+        assert by_project[2].members[0].assigned is True
+        assert by_project[2].pending_count == 0
+        assert by_project[2].pending_previous_count == 0
+        timesheet_line_gateway.get_pending_lines_minimal.assert_called_once()
+        (called_project_ids,) = (
+            timesheet_line_gateway.get_pending_lines_minimal.call_args[0]
+        )
+        assert set(called_project_ids) == {1, 2}
+
+    def test_get_led_team_asks_for_active_projects_only(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+
+        service.get_led_team(10)
+
+        _, kwargs = project_assignment_gateway.get_team_users.call_args
+        assert kwargs.get("only_active") is True
+
+    # ------------------------------------------------------------------
+    # Unión jerarquía (Odoo timesheet_manager_id/child_of) ∪ proyectos
+    # ------------------------------------------------------------------
+    def test_get_led_team_includes_hierarchy_only_members(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Líder sin proyectos gerenciados, pero con equipo por jerarquía en Odoo
+        project_assignment_gateway.get_team_users.side_effect = (
+            lambda user_id, emp_id, date_from=None, date_to=None, only_active=False: []
+        )
+        timesheet_line_gateway.get_team_users.side_effect = (
+            lambda user_id, emp_id: [{"id": 5, "name": "Eva", "work_email": "eva@x.com"}]
+            if emp_id == 10
+            else []
+        )
+        permission_repo.list_by_member.return_value = []
+
+        assert service.get_led_team_member_ids(10) == {5}
+        assert service.is_leader(10) is True
+        assert service.validatable_employee_ids(10) == {5}
+
+    def test_get_led_team_dedupes_member_in_both_hierarchy_and_project(
+        self, service, timesheet_line_gateway, permission_repo
+    ):
+        # Cira (3) ya está en el equipo por proyecto del líder 10; también
+        # aparece por jerarquía: no debe duplicarse.
+        timesheet_line_gateway.get_team_users.side_effect = (
+            lambda user_id, emp_id: [{"id": 3, "name": "Cira", "work_email": "cira@x.com"}]
+            if emp_id == 10
+            else []
+        )
+        permission_repo.list_by_member.return_value = []
+
+        team = service.get_led_team(10)
+        assert sorted(u["id"] for u in team) == [1, 2, 3]
+
+    # ------------------------------------------------------------------
+    # "Horas del equipo": gerente de proyectos = jerarquía ∪ departamento
+    # ------------------------------------------------------------------
+    _DEPT = [
+        {"id": 7, "name": "Gus", "work_email": "gus@x.com"},
+        {"id": 8, "name": "Hilda", "work_email": "hilda@x.com"},
+    ]
+
+    def test_project_head_also_sees_department(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        assert service.can_view_team_hours(10) is True
+        # proyectos {1,2,3} ∪ departamento {7,8}
+        assert service.visible_employee_ids(10) == {1, 2, 3, 7, 8}
+        timesheet_line_gateway.get_department_users.assert_called_once_with(10)
+
+    def test_project_head_department_members_show_in_visible_members(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        ids = {m.employee_odoo_id for m in service.visible_team_members(10)}
+
+        assert {7, 8} <= ids
+
+    def test_not_project_head_does_not_get_department(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Jefe de departamento o PM que no es gerente de ningún proyecto
+        project_assignment_gateway.is_project_head.return_value = False
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        assert service.can_view_team_hours(10) is False
+        assert service.get_department_team(10) == []
+        assert service.visible_employee_ids(10) == {1, 2, 3}
+        timesheet_line_gateway.get_department_users.assert_not_called()
+
+    def test_project_head_without_odoo_user_has_no_team_hours(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+
+        assert service.can_view_team_hours(99) is False
+        project_assignment_gateway.is_project_head.assert_not_called()
+
+    def test_department_does_not_extend_validation(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Ver al departamento no da autoridad para validar: eso lo decide el
+        # gerente/PM del proyecto de cada línea.
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+
+        assert service.validatable_employee_ids(10) == {1, 2, 3}
+
+    def test_project_head_only_approves_lines_of_own_projects_for_department(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # Gus (7) es del departamento del gerente 10: lo ve, pero solo aprueba
+        # sus horas en los proyectos que 10 gerencia.
+        project_assignment_gateway.is_project_head.return_value = True
+        timesheet_line_gateway.get_department_users.return_value = self._DEPT
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Gerente propio")],
+            2: [(200, "Gerente de otro proyecto")],
+            3: [],  # sin gerente ni PM
+        }
+
+        assert 7 in service.visible_employee_ids(10)
+        result = service.lines_authority(10, [(7, 1), (7, 2), (7, 3)])
+
+        assert result[(7, 1)] is True  # proyecto que gerencia
+        assert result[(7, 2)] is False  # proyecto de otro: solo lectura
+        assert result[(7, 3)] is False  # sin aprobadores: ser del departamento no alcanza
+
+    def test_is_project_head_uses_cache_only_when_asked(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.is_project_head.return_value = True
+
+        for _ in range(3):
+            assert service.is_project_head(10, cached=True) is True
+        assert project_assignment_gateway.is_project_head.call_count == 1
+
+        for _ in range(2):
+            service.is_project_head(10)
+        assert project_assignment_gateway.is_project_head.call_count == 3
+
+    # ------------------------------------------------------------------
+    # Equipo acotado a un proyecto puntual (solo project.assignment)
+    # ------------------------------------------------------------------
+    def test_manages_project_true_when_project_in_managed_list(
+        self, service, project_assignment_gateway
+    ):
+        from app.project.domain.models import Project
+
+        project_assignment_gateway.get_led_projects.return_value = [
+            Project(id=139, name="Mesa evolutiva", manager_user_id=100),
+        ]
+
+        assert service.manages_project(10, 139) is True
+        project_assignment_gateway.get_led_projects.assert_called_once_with(100)
+
+    def test_manages_project_false_when_not_in_managed_list(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.get_led_projects.return_value = []
+
+        assert service.manages_project(10, 139) is False
+
+    def test_manages_project_false_when_leader_has_no_odoo_user(self, service):
+        assert service.manages_project(99, 139) is False
+
+    def test_project_assigned_employee_ids_reads_project_assignment(
+        self, service, project_assignment_gateway
+    ):
+        project_assignment_gateway.get_project_assignments.return_value = [
+            {"employee_id": [30, "Marta"], "project_id": [139, "Mesa evolutiva"]},
+            {"employee_id": [31, "Nico"], "project_id": [139, "Mesa evolutiva"]},
+        ]
+
+        ids = service.project_assigned_employee_ids(139)
+
+        assert ids == {30, 31}
+        project_assignment_gateway.get_project_assignments.assert_called_once_with(
+            [139], None, None
+        )
+
+    # ------------------------------------------------------------------
+    # Autoridad por línea: gerente del proyecto de cada línea
+    # ------------------------------------------------------------------
+    def test_lines_authority_manager_of_project_can_act(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        # proyecto 1 lo aprueba el user 100 (líder 10); proyecto 2 el user 200
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Iván")],
+            2: [(200, "Marta")],
+        }
+
+        result = service.lines_authority(10, [(1, 1), (1, 2), (3, 1)])
+
+        assert result == {(1, 1): True, (1, 2): False, (3, 1): True}
+        # una sola lectura de gerentes para todas las líneas
+        project_assignment_gateway.get_project_approvers.assert_called_once_with(
+            [1, 2]
+        )
+
+    def test_lines_authority_never_on_own_lines(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_approvers.return_value = {1: [(100, "Iván")]}
+
+        assert service.can_act_on_line(10, 10, 1) is False
+
+    def test_lines_authority_hierarchy_only_when_project_has_no_manager(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [],
+            2: [(200, "Marta")],
+        }
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 1}]
+
+        result = service.lines_authority(10, [(1, 1), (3, 1), (1, 2)])
+
+        # sin gerente: valida el jefe por jerarquía, sólo de su gente
+        assert result[(1, 1)] is True
+        assert result[(3, 1)] is False
+        # con gerente ajeno: la jerarquía NO alcanza
+        assert result[(1, 2)] is False
+
+    def test_lines_authority_hierarchy_does_not_override_other_manager(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_approvers.return_value = {5: [(200, "Marta")]}
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 1}]
+
+        # 1 está bajo la jerarquía del 10, pero el proyecto lo gerencia el user 200
+        assert service.can_act_on_line(10, 1, 5) is False
+
+    def test_lines_authority_pm_and_manager_can_both_act(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+        # proyecto 1: PM = user 200 (líder 20), gerente = user 100 (líder 10)
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(200, "Marta"), (100, "Iván")],
+        }
+
+        assert service.can_act_on_line(10, 1, 1) is True
+        assert service.can_act_on_line(20, 3, 1) is True
+
+    def test_pm_only_does_not_get_hierarchy_team(
+        self, service, project_assignment_gateway, timesheet_line_gateway
+    ):
+        project_assignment_gateway.is_project_manager_only.return_value = True
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        team_ids = {u["id"] for u in service.get_led_team(10)}
+
+        assert 99 not in team_ids
+        assert team_ids == {1, 2, 3}
+        timesheet_line_gateway.get_team_users.assert_not_called()
+
+    def test_pm_only_boss_in_hierarchy_does_not_see_or_validate_subordinates(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # PM de un proyecto (no gerente de ninguno) que además es jefe en la
+        # jerarquía de Odoo: sus subordinados (id 99) no aparecen en su equipo.
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.is_project_manager_only.return_value = True
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        assert service.visible_employee_ids(10) == {1, 2, 3}
+        assert service.validatable_employee_ids(10) == {1, 2, 3}
+
+    def test_pm_only_cannot_act_on_hierarchy_subordinate_line_in_foreign_project(
+        self, service, project_assignment_gateway, timesheet_line_gateway, permission_repo
+    ):
+        # El subordinado 99 carga en el proyecto 5, cuyo PM es otro (user 200).
+        # Ser su jefe por jerarquía no alcanza: manda el proyecto.
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.is_project_manager_only.return_value = True
+        project_assignment_gateway.get_project_approvers.return_value = {5: [(200, "Marta")]}
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        assert service.can_act_on_line(10, 99, 5) is False
+
+    def test_pm_of_some_and_manager_of_others_gets_projects_and_hierarchy(
+        self, service, project_assignment_gateway, timesheet_line_gateway
+    ):
+        # Gerente (user_id) de al menos un proyecto => no es PM "puro":
+        # equipo = asignados a sus proyectos ∪ jerarquía.
+        project_assignment_gateway.is_project_manager_only.return_value = False
+        timesheet_line_gateway.get_team_users.return_value = [{"id": 99}]
+
+        assert {u["id"] for u in service.get_led_team(10)} == {1, 2, 3, 99}
+
+    def test_pm_of_some_and_manager_of_others_acts_on_both_kinds_of_projects(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        # user 100 es PM del proyecto 1 y gerente del proyecto 2.
+        permission_repo.list_by_member.return_value = []
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Iván")],
+            2: [(100, "Iván")],
+        }
+
+        assert service.lines_authority(10, [(1, 1), (1, 2)]) == {
+            (1, 1): True,
+            (1, 2): True,
+        }
+
+    def test_project_approver_names(self, service, project_assignment_gateway):
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(200, "Marta"), (100, "Iván")],
+            2: [],
+        }
+
+        assert service.project_approver_names([2, 1, 1]) == {
+            1: ["Marta", "Iván"],
+            2: [],
+        }
+        project_assignment_gateway.get_project_approvers.assert_called_once_with([1, 2])
+
+    def test_lines_authority_delegated_validate_acts_with_leader_projects(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = [
+            _perm(10, 2, PermissionLevel.validate)
+        ]
+        project_assignment_gateway.get_project_approvers.return_value = {
+            1: [(100, "Iván")],
+            2: [(200, "Marta")],
+        }
+
+        result = service.lines_authority(2, [(1, 1), (1, 2), (10, 1)])
+
+        assert result[(1, 1)] is True   # proyecto del líder que delegó
+        assert result[(1, 2)] is False  # proyecto de otro líder
+        assert result[(10, 1)] is False  # nunca las horas del propio líder
+
+    def test_lines_authority_view_permission_does_not_grant_action(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = [_perm(10, 2, PermissionLevel.view)]
+        project_assignment_gateway.get_project_approvers.return_value = {1: [(100, "Iván")]}
+
+        assert service.can_act_on_line(2, 1, 1) is False
+
+    def test_lines_authority_actor_without_authority_reads_nothing(
+        self, service, project_assignment_gateway, permission_repo
+    ):
+        permission_repo.list_by_member.return_value = []
+
+        result = service.lines_authority(99, [(1, 1)])
+
+        assert result == {(1, 1): False}
+        project_assignment_gateway.get_project_approvers.assert_not_called()

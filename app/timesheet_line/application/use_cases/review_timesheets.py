@@ -1,3 +1,6 @@
+from typing import Optional
+
+from app.team.application.team_access import TeamAccessService
 from app.timesheet_line.domain.repositories import (
     TimesheetLineGateway,
     TimesheetLineNotificationRepository,
@@ -9,6 +12,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
     ApproverNotFoundError,
     TimesheetNotFoundError,
     TimesheetReviewError,
+    TimesheetReviewForbiddenError,
 )
 from app.email.domain.email_types import TimesheetEmailType
 
@@ -20,18 +24,21 @@ class ReviewTimesheetsUseCase:
         timesheet_gateway: TimesheetLineGateway,
         email_service: CommonResendEmailService,
         notification_repository: TimesheetLineNotificationRepository,
+        team_access: Optional[TeamAccessService] = None,
     ):
         self.employee_gateway = employee_gateway
         self.timesheet_gateway = timesheet_gateway
         self.email_service = email_service
         self.notification_repository = notification_repository
+        self.team_access = team_access
 
     async def execute(
-        self, 
-        timesheet_ids: list[int], 
-        approver_mail: str, 
+        self,
+        timesheet_ids: list[int],
+        approver_mail: str,
         body: str | None = None,
-        email_type: TimesheetEmailType = TimesheetEmailType.REVIEW
+        email_type: TimesheetEmailType = TimesheetEmailType.REVIEW,
+        reviewer_employee_id: Optional[int] = None,
     ) -> bool:
         """Ejecuta el caso de uso para enviar correos de revisión/eliminación de timesheets.
 
@@ -40,6 +47,10 @@ class ReviewTimesheetsUseCase:
             approver_mail: Email del aprobador que envía la revisión/eliminación
             body: Mensaje opcional para incluir en el correo
             email_type: Tipo de email a enviar (REVIEW o ELIMINATED)
+            reviewer_employee_id: Empleado que rechaza. Si se informa junto con
+                ``team_access``, cada línea debe poder ser validada por él
+                (gerente o PM del proyecto de la línea): tener el rol approver
+                no alcanza para rechazar horas de proyectos ajenos.
 
         Returns:
             bool: True si el envío fue exitoso
@@ -47,6 +58,7 @@ class ReviewTimesheetsUseCase:
         Raises:
             ApproverNotFoundError: Si no se encuentra el approver
             TimesheetNotFoundError: Si no se encuentran las líneas de timesheet
+            TimesheetReviewForbiddenError: Si alguna línea está fuera de su alcance
             TimesheetReviewError: Si hay un error al enviar los correos
         """
         # Verificar que el approver existe
@@ -59,6 +71,21 @@ class ReviewTimesheetsUseCase:
         timesheet_lines = self.timesheet_gateway.get_by_ids(timesheet_ids)
         if not timesheet_lines:
             raise TimesheetNotFoundError(timesheet_ids)
+
+        # Misma autoridad por línea que validar y borrar (consulta Odoo en el
+        # momento, sin caché): solo los proyectos que gerencia o de los que es PM.
+        if reviewer_employee_id is not None and self.team_access is not None:
+            authority = self.team_access.lines_authority(
+                reviewer_employee_id,
+                [(t.employee_id, t.project.id) for t in timesheet_lines],
+            )
+            forbidden = sorted(
+                t.id
+                for t in timesheet_lines
+                if not authority.get((t.employee_id, t.project.id), False)
+            )
+            if forbidden:
+                raise TimesheetReviewForbiddenError(forbidden)
 
         # Agrupar timesheets por empleado
         employees_bucket = {}

@@ -1,5 +1,8 @@
 """Excepciones específicas del dominio de timesheet."""
 
+from datetime import date
+from typing import Optional
+
 
 class TimesheetDomainError(Exception):
     """Excepción base para errores del dominio de timesheet."""
@@ -126,6 +129,43 @@ class EmployeeNotHasUserError(TimesheetDomainError):
         super().__init__(message)
 
 
+class ProjectNotManagedError(TimesheetDomainError):
+    """Error cuando se filtra por equipo dentro de un proyecto que el
+    solicitante no gerencia en Odoo."""
+
+    def __init__(self, project_id: int):
+        message = f"No gerenciás el proyecto {project_id}"
+        super().__init__(message)
+
+
+class EmployeeNotAssignedToProjectError(TimesheetDomainError):
+    """Error cuando un empleado carga horas a un proyecto sin asignación vigente."""
+
+    def __init__(
+        self,
+        employee_id: int,
+        project_id: int,
+        project_name: Optional[str] = None,
+        assigned_from: Optional[date] = None,
+        requested_date: Optional[date] = None,
+    ):
+        self.employee_id = employee_id
+        self.project_id = project_id
+        project = f"«{project_name}»" if project_name else f"{project_id}"
+        if assigned_from and requested_date and requested_date < assigned_from:
+            message = (
+                f"No podés cargar horas al proyecto {project} con fecha "
+                f"{requested_date:%d/%m/%Y}: tu asignación comienza el "
+                f"{assigned_from:%d/%m/%Y}."
+            )
+        else:
+            message = (
+                f"No tenés una asignación vigente al proyecto {project}. "
+                f"Consultá con el gerente del proyecto."
+            )
+        super().__init__(message)
+
+
 class TimesheetIdMismatchError(TimesheetDomainError):
     """Error cuando el ID en la URL no coincide con el ID en el body."""
 
@@ -156,6 +196,17 @@ class TimesheetDeleteError(TimesheetDomainError):
         super().__init__(message)
 
 
+class TimesheetDeleteForbiddenError(TimesheetDomainError):
+    """El solicitante no puede borrar alguna de las líneas pedidas."""
+
+    def __init__(self, timesheet_ids: list[int]):
+        message = (
+            "No tienes permiso para eliminar las líneas de timesheet con IDs "
+            f"{timesheet_ids}"
+        )
+        super().__init__(message)
+
+
 class TimesheetValidateError(TimesheetDomainError):
     """Error al validar una línea de timesheet."""
 
@@ -171,6 +222,17 @@ class ApproverNotFoundError(TimesheetDomainError):
 
     def __init__(self, approver_email: str):
         message = f"El empleado que intenta enviar el correo de revisión no existe: {approver_email}"
+        super().__init__(message)
+
+
+class TimesheetReviewForbiddenError(TimesheetDomainError):
+    """El solicitante no puede rechazar alguna de las líneas pedidas."""
+
+    def __init__(self, timesheet_ids: list[int]):
+        message = (
+            "No tienes permiso para rechazar las líneas de timesheet con IDs "
+            f"{timesheet_ids} (no gerenciás su proyecto)"
+        )
         super().__init__(message)
 
 

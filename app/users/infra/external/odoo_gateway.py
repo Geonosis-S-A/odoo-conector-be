@@ -156,31 +156,41 @@ class OdooEmployeeGateway(EmployeeGateway):
             print(f"Error al obtener usuarios con roles: {e}")
             return []
 
-    def all(self) -> List[Employee]:
-        """Obtiene todos los empleados de Odoo.
+    def all(self, page_size: int = 100) -> List[Employee]:
+        """Obtiene todos los empleados de Odoo paginando hasta traer el total completo.
 
         Returns:
             List[Employee]: Lista de empleados transformados al modelo de dominio
         """
-        odoo_employees = cast(
-            List[Dict[str, Any]],
-            self.odoo_client["models"].execute_kw(
-                self.odoo_client["ODOO_DB"],
-                self.odoo_client["uid"],
-                self.odoo_client["ODOO_PASSWORD"],
-                "hr.employee",  # Modelo de empleados en Odoo
-                "search_read",  # Método para buscar y leer registros
-                [[]],  # Sin filtros (obtiene todos los empleados)
-                {
-                    "fields": ["id", "name", "work_email"],
-                    "limit": 150,
-                },
-            ),
-        )
-        parsed_employees = [
-            self._transform_odoo_to_domain(employee) for employee in odoo_employees
-        ]
-        return parsed_employees
+        all_employees = []
+        offset = 0
+
+        while True:
+            page = cast(
+                List[Dict[str, Any]],
+                self.odoo_client["models"].execute_kw(
+                    self.odoo_client["ODOO_DB"],
+                    self.odoo_client["uid"],
+                    self.odoo_client["ODOO_PASSWORD"],
+                    "hr.employee",
+                    "search_read",
+                    [[]],
+                    {
+                        "fields": ["id", "name", "work_email"],
+                        "limit": page_size,
+                        "offset": offset,
+                    },
+                ),
+            )
+
+            all_employees.extend(page)
+
+            if len(page) < page_size:
+                break
+
+            offset += page_size
+
+        return [self._transform_odoo_to_domain(emp) for emp in all_employees]
 
     def get_by_id(self, id: int) -> Employee | None:
         """Obtiene un empleado por su ID."""
