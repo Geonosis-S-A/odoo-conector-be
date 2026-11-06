@@ -6,6 +6,16 @@ from app.auth.infra.auth_service import JWTPayload
 from pydantic import BaseModel
 import json
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Mensaje que ve el usuario cuando el asistente falla. El detalle del error (que
+# puede incluir datos de configuración, como fragmentos de claves) solo va al log.
+ASSISTANT_UNAVAILABLE_MESSAGE = (
+    "❌ El asistente no está disponible en este momento. "
+    "Intentá de nuevo en unos minutos."
+)
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -84,26 +94,42 @@ async def cargar_horas_agent(
                 """Produce chunks desde el generador síncrono en un thread separado."""
 
                 def iterate():
-                    # Determinar si es inicio/continuación o reanudación
-                    if request.prompt:
-                        # Modo normal: nuevo mensaje del usuario
-                        generator = run_agent_service(
-                            request.prompt, request.conversation_id, employee_id
+                    try:
+                        # Determinar si es inicio/continuación o reanudación
+                        if request.prompt:
+                            # Modo normal: nuevo mensaje del usuario
+                            generator = run_agent_service(
+                                request.prompt, request.conversation_id, employee_id
+                            )
+                        elif request.decisions is not None:
+                            # Modo HITL: reanudar con decisiones
+                            generator = resume_agent_service(
+                                request.conversation_id, employee_id, request.decisions
+                            )
+                        else:
+                            # Esto no debería ocurrir por la validación anterior
+                            raise ValueError("No se proporcionó prompt ni decisions")
+
+                        # Iterar sobre el generador correspondiente
+                        for chunk in generator:
+                            # Usar call_soon_threadsafe para enviar desde otro thread
+                            loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                    except Exception:
+                        # Si el asistente falla (clave del modelo, Redis, etc.) hay que
+                        # avisar al cliente: antes el error se perdía en este hilo y la
+                        # conexión quedaba muda hasta que el proxy la cortaba a los 5 min.
+                        logger.exception(
+                            "Error en el asistente de carga de horas "
+                            "(conversation_id=%s)",
+                            request.conversation_id,
                         )
-                    elif request.decisions is not None:
-                        # Modo HITL: reanudar con decisiones
-                        generator = resume_agent_service(
-                            request.conversation_id, employee_id, request.decisions
+                        loop.call_soon_threadsafe(
+                            queue.put_nowait,
+                            {"type": "error", "content": ASSISTANT_UNAVAILABLE_MESSAGE},
                         )
-                    else:
-                        # Esto no debería ocurrir por la validación anterior
-                        raise ValueError("No se proporcionó prompt ni decisions")
-                    
-                    # Iterar sobre el generador correspondiente
-                    for chunk in generator:
-                        # Usar call_soon_threadsafe para enviar desde otro thread
-                        loop.call_soon_threadsafe(queue.put_nowait, chunk)
-                    loop.call_soon_threadsafe(queue.put_nowait, None)  # Señal de fin
+                    finally:
+                        # Señal de fin: siempre, haya o no error
+                        loop.call_soon_threadsafe(queue.put_nowait, None)
 
                 await asyncio.to_thread(iterate)
 
@@ -125,10 +151,13 @@ async def cargar_horas_agent(
             # Enviar evento de finalización
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
 
-        except Exception as e:
-            # En caso de error, enviar mensaje de error en formato SSE
+        except Exception:
+            # En caso de error, enviar mensaje de error en formato SSE. No se envía
+            # str(e): puede traer detalles internos; el detalle queda en el log.
+            logger.exception("Error al transmitir la respuesta del asistente")
             error_data = json.dumps(
-                {"type": "error", "content": f"❌ Error: {str(e)}"}, ensure_ascii=False
+                {"type": "error", "content": ASSISTANT_UNAVAILABLE_MESSAGE},
+                ensure_ascii=False,
             )
             yield f"data: {error_data}\n\n"
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
