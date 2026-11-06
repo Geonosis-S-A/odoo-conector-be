@@ -20,7 +20,11 @@ from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUse
 from app.timesheet_line.infra.external.odoo.odoo_timesheet_gateway import (
     OdooTimesheetLineGateway,
 )
+from app.project.infra.external.odoo_project_assignment_gateway import (
+    OdooProjectAssignmentGateway,
+)
 from app.timesheet_line.application.excepctions.exceptions import (
+    EmployeeNotAssignedToProjectError,
     InvalidHoursError,
     TimesheetCreationError,
     TimesheetNotFoundError,
@@ -701,7 +705,13 @@ def create_timesheet_entries(
                 )
 
         # Ejecutar el use case con todas las requests
-        use_case = CargarHorasUseCase(timesheet_gateway)
+        # Misma construcción que POST /timesheet/: el caso de uso exige el gateway
+        # de asignaciones (solo se puede cargar en proyectos asignados o gerenciados).
+        use_case = CargarHorasUseCase(
+            timesheet_gateway,
+            OdooProjectAssignmentGateway(odoo_connection),
+            OdooEmployeeGateway(odoo_connection),
+        )
         created_lines = use_case.execute(requests)
 
         if not created_lines:
@@ -728,6 +738,18 @@ def create_timesheet_entries(
     except InvalidHoursError as e:
         return json.dumps(
             {"success": False, "error": "Horas inválidas", "message": str(e)},
+            ensure_ascii=False,
+        )
+
+    except EmployeeNotAssignedToProjectError as e:
+        # El mensaje ya explica el motivo (sin asignación vigente o fecha anterior
+        # al inicio de la asignación) y qué hacer.
+        return json.dumps(
+            {
+                "success": False,
+                "error": "Sin asignación al proyecto",
+                "message": str(e),
+            },
             ensure_ascii=False,
         )
 
