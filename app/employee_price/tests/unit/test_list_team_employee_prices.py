@@ -479,6 +479,32 @@ class TestListTeamEmployeePricesUseCase:
         assert result[0]["name"] == ""
         assert result[0]["email"] == ""
 
+    def test_execute_with_odoo_false_for_empty_fields(
+        self,
+        use_case,
+        mock_employee_gateway,
+        mock_timesheet_gateway,
+        mock_employee_price_repository,
+        sample_current_employee,
+    ):
+        """Odoo devuelve False (no ausente) en los campos de texto vacíos.
+
+        Un empleado sin email de trabajo llega como ``work_email: False``; el
+        resultado debe ser texto vacío, no el booleano (rompía el esquema de la
+        respuesta con "Input should be a valid string").
+        """
+        user_id = 1
+        team = [{"id": 10, "name": False, "work_email": False}]
+
+        mock_employee_gateway.get_by_id.return_value = sample_current_employee
+        mock_timesheet_gateway.get_team_users.return_value = team
+        mock_employee_price_repository.get_open_record_by_user_id.return_value = None
+
+        result = use_case.execute(user_id)
+
+        assert result[0]["name"] == ""
+        assert result[0]["email"] == ""
+
     def test_execute_with_different_user_ids(
         self,
         use_case,
