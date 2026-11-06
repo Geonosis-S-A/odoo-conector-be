@@ -102,8 +102,10 @@ class ListTeamEmployeePricesUseCase:
             # Construir el resultado para este empleado
             employee_info = {
                 "employee_id": employee_id,
-                "name": user_data.get("name", ""),
-                "email": user_data.get("work_email", ""),
+                # Odoo manda False (no ausente) en los campos de texto vacíos:
+                # `or ""` lo normaliza; el default de .get() no alcanza.
+                "name": user_data.get("name") or "",
+                "email": user_data.get("work_email") or "",
                 "cost_per_hour": open_record.cost_per_hour if open_record else None,
                 "date_from": open_record.date_from if open_record else None,
                 "date_to": open_record.date_to if open_record else None,
