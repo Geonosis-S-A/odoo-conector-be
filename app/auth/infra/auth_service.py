@@ -23,13 +23,30 @@ load_dotenv()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def _load_jwt_secret() -> str:
+    """Clave de firma de los JWT.
+
+    En STAGING/PROD es obligatoria (viene de las variables de Railway) y la app
+    no arranca sin ella. Solo en local se usa una clave de desarrollo.
+    """
+    secret = os.getenv("JWT_SECRET_KEY")
+    if secret and secret != "default_secret_key":
+        return secret
+    if os.getenv("ENV", "LOCAL").upper() in ("STAGING", "PROD"):
+        raise RuntimeError(
+            "JWT_SECRET_KEY no está definida (o usa el valor por defecto) en "
+            "STAGING/PROD. Configurala en las variables del servicio."
+        )
+    return secret or "dev-only-insecure-secret"
+
+
 class Settings:
     # Database Settings (from .env)
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./app.db")
     DIRECT_URL: Optional[str] = None
 
     # JWT Settings
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "default_secret_key")
+    JWT_SECRET_KEY: str = _load_jwt_secret()
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15  # 15 minutes
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days
