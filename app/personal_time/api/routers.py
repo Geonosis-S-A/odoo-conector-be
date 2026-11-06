@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 from app.shared.infra.db.session import get_db
+from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import Roles, user_has_role
 import logging
 
 from app.personal_time.api.schemas import (
@@ -65,13 +67,26 @@ def get_sync_use_case(
 
 
 
+def require_approver(current_user: dict = Depends(get_current_user)) -> dict:
+    """Exige login y rol aprobador antes de resolver el resto de dependencias."""
+    if not user_has_role(current_user.get("roles"), Roles.approver):
+        raise HTTPException(
+            status_code=403, detail="No tienes permisos para ejecutar la sincronización"
+        )
+    return current_user
+
+
 @router.post("/sync", response_model=SyncRunResponse)
 async def sync_timeoff_requests(
+    # Va primero: FastAPI resuelve las dependencias en orden, así quien no tiene
+    # permiso es rechazado antes de abrir conexión con Odoo/Humand.
+    current_user: dict = Depends(require_approver),
     use_case: SyncNewTimeOffRequestsUseCase = Depends(get_sync_use_case),
     db: Session = Depends(get_db),
 ):
     """
     Ejecuta la sincronización completa de solicitudes de licencias desde Humand a Odoo.
+    Requiere usuario autenticado con rol aprobador.
     
     Este endpoint ejecuta dos procesos secuenciales:
     1. Sincronización de nuevas solicitudes (creadas desde la última ejecución exitosa)
@@ -87,7 +102,7 @@ async def sync_timeoff_requests(
     """
     # Inicializar repositorio de logs
     log_repo = SQLModelTimeOffSyncLogRepository(db)
-    
+
     # Obtener fecha de última ejecución exitosa
     last_successful_run = log_repo.get_last_successful_run()
     

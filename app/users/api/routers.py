@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.auth.infra.auth_service import JWTPayload
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import Roles, user_has_role
 from app.team.api.dependencies import get_team_access_service
 from app.team.application.team_access import TeamAccessService
 from app.users.application.use_cases.sync_single_user_changes import (
@@ -33,9 +35,16 @@ async def sync_user_changes(
     Si tiene usuario asociado: actualiza email, nombre y roles del usuario.
     Si no tiene usuario asociado: retorna mensaje informativo.
     Mantiene el estado de activación e is_superuser del usuario.
+    Permitido para el propio empleado o para un aprobador.
     """
 
-    
+    if employee_id != current_user["user_id"] and not user_has_role(
+        current_user.get("roles"), Roles.approver
+    ):
+        msg = "No tienes permisos para sincronizar a otro empleado"
+        # El front lee `message`; se envía junto con `detail` (estándar FastAPI).
+        return JSONResponse(status_code=403, content={"message": msg, "detail": msg})
+
     # Inicializar dependencias
     odoo_client = get_odoo_connection()
     employee_gateway = OdooEmployeeGateway(odoo_client)
