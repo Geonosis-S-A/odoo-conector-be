@@ -4,6 +4,9 @@ Usa la API https://api.argentinadatos.com/v1/feriados/{year}
 con caché en Redis (24 horas).
 """
 import json
+import os
+from datetime import datetime
+
 import requests
 from typing import Any
 
@@ -19,10 +22,46 @@ def _get_cache_key(year: int) -> str:
     return f"{CACHE_KEY_PREFIX}:{year}"
 
 
+def get_feriados_extra(year: int) -> list[dict[str, Any]]:
+    """
+    Feriados adicionales (ej: locales de CABA) definidos en la variable de
+    entorno FERIADOS_EXTRA, con formato:
+        "2026-11-10=Día de la Tradición;2026-12-08=Inmaculada Concepción"
+    El nombre es opcional. Las entradas mal formadas se ignoran.
+    """
+    raw = os.getenv("FERIADOS_EXTRA", "")
+    extras = []
+    for item in raw.split(";"):
+        fecha, _, nombre = item.strip().partition("=")
+        fecha = fecha.strip()
+        try:
+            parsed = datetime.strptime(fecha, "%Y-%m-%d")
+        except ValueError:
+            continue
+        if parsed.year != year:
+            continue
+        extras.append({
+            "fecha": fecha,
+            "tipo": "extra",
+            "nombre": nombre.strip() or "Feriado",
+        })
+    return extras
+
+
+def _merge_extras(feriados: list[dict[str, Any]], year: int) -> list[dict[str, Any]]:
+    """Suma los feriados extra a los de la API (los extra pisan por fecha)."""
+    extras = get_feriados_extra(year)
+    if not extras:
+        return feriados
+    fechas_extra = {e["fecha"] for e in extras}
+    return [f for f in feriados if f.get("fecha") not in fechas_extra] + extras
+
+
 def get_feriados_by_year(year: int) -> list[dict[str, Any]]:
     """
-    Obtiene los feriados de Argentina para un año.
+    Obtiene los feriados de Argentina para un año, más los de FERIADOS_EXTRA.
     Usa cache en Redis si está disponible; si no, consulta la API.
+    Los extra no se cachean, y se aplican aunque la API falle.
 
     Args:
         year: Año a consultar (ej: 2025)
@@ -30,6 +69,17 @@ def get_feriados_by_year(year: int) -> list[dict[str, Any]]:
     Returns:
         Lista de dicts con {fecha, tipo, nombre}
     """
+    try:
+        return _merge_extras(_get_feriados_api(year), year)
+    except RuntimeError:
+        extras = get_feriados_extra(year)
+        if extras:
+            return extras
+        raise
+
+
+def _get_feriados_api(year: int) -> list[dict[str, Any]]:
+    """Feriados de la API (con caché en Redis)."""
     redis_client = get_redis_client()
     cache_key = _get_cache_key(year)
 
