@@ -13,14 +13,12 @@ from app.task.api.routers import router as task_router
 from app.auth.api.routes import router as auth_router
 from app.email.api.routes import router as email_router
 from app.dashboard.api.routers import router as dashboard_router
-from app.personal_time.api.routers import router as personal_time_router
 from app.employee_price.api.routers import router as employee_price_router
 from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
 from app.saved_prompts.api.routers import router as saved_prompts_router
 from app.timesheet_templates.api.routers import router as timesheet_templates_router
 from app.team.api.routes import router as team_router
-from app.personal_time.jobs.sync_scheduler import start_scheduler, stop_scheduler
 from app.feriados.api.routers import router as feriados_router
 import logging
 
@@ -57,13 +55,7 @@ async def lifespan(app):
 
         SQLModel.metadata.create_all(bind=engine)
     
-    # Iniciar el scheduler de jobs programados
-    start_scheduler()
-
     yield  # acá arranca la app
-
-    # Detener el scheduler al cerrar la aplicación
-    stop_scheduler()
 
 
 app = FastAPI(
@@ -141,7 +133,6 @@ app.include_router(task_router, prefix=API_PREFIX + "/tasks")
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(email_router, prefix=API_PREFIX)
 app.include_router(dashboard_router, prefix=API_PREFIX)
-app.include_router(personal_time_router, prefix=API_PREFIX)
 app.include_router(employee_price_router, prefix=API_PREFIX)
 app.include_router(accounting_router, prefix=API_PREFIX)
 app.include_router(agent_router, prefix=API_PREFIX)
