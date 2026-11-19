@@ -24,6 +24,7 @@ class TimesheetLineGateway(ABC):
         team: Optional[bool] = None,
         user_id: Optional[int] = None,
         team_members_ids: Optional[list[int]] = None,
+        project_wide: bool = False,
     ) -> list[DetailedTimesheetLine]: ...
 
     @abstractmethod
@@ -46,13 +47,29 @@ class TimesheetLineGateway(ABC):
     ) -> list[DetailedTimesheetLine]: ...
 
     @abstractmethod
-    def validate(self, timesheet_line_ids: list[int]) -> bool: ...
+    def validate(self, timesheet_line_ids: list[int], approved_by_employee_id: int) -> bool: ...
 
 
     @abstractmethod
     def get_team_users(
         self, user_id: int, employee_id: int
     ) -> list[Dict[str, Any]]: ...
+
+    @abstractmethod
+    def get_department_users(self, employee_id: int) -> list[Dict[str, Any]]:
+        """Empleados activos del mismo departamento (``hr.employee.department_id``)
+        que ``employee_id``, sin incluirlo. Lista vacía si no tiene departamento.
+        Mismo shape que ``get_team_users``: ``{"id","name","work_email"}``."""
+        ...
+
+    @abstractmethod
+    def get_pending_lines_minimal(
+        self, project_ids: list[int]
+    ) -> list[Dict[str, Any]]:
+        """``employee_id``/``project_id``/``date`` de cada línea pendiente
+        (``validated=False``) de esos empleados en esos proyectos. Sólo esos
+        campos, para contar pendientes por proyecto sin traer la línea completa."""
+        ...
 
     @abstractmethod
     def get_by_task_or_project(

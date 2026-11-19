@@ -1,3 +1,5 @@
+from typing import Optional
+
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.application.excepctions.exceptions import (
     TimesheetNotFoundError,
@@ -8,6 +10,7 @@ from app.timesheet_line.application.excepctions.exceptions import (
 from app.email.infra.email_service import CommonResendEmailService
 from app.users.domain.repositories import EmployeeGateway
 from app.timesheet_line.domain.repositories import TimesheetLineNotificationRepository
+from app.team.application.team_access import TeamAccessService
 
 
 class ValidateTimesheetUseCase:
@@ -17,55 +20,87 @@ class ValidateTimesheetUseCase:
         email_service: CommonResendEmailService,
         employee_gateway: EmployeeGateway,
         notification_repository: TimesheetLineNotificationRepository,
+        team_access: Optional[TeamAccessService] = None,
     ):
         self.timesheet_gateway = timesheet_gateway
         self.email_service = email_service
         self.employee_gateway = employee_gateway
         self.notification_repository = notification_repository
+        self.team_access = team_access
 
-    async def execute(self, timesheet_ids: list[int], approver_mail: str) -> bool:
-        """Ejecuta el caso de uso para validar líneas de timesheet.
-
-        Args:
-            timesheet_ids: Lista de IDs de las líneas de timesheet a validar
-
-        Returns:
-            bool: True si la validación fue exitosa
-
-        Raises:
-            TimesheetNotFoundError: Si no se encuentran las líneas
-            TimesheetValidateError: Si hay un error al validar
-        """
+    async def execute(
+        self,
+        timesheet_ids: list[int],
+        approver_mail: str,
+        validator_employee_id: Optional[int] = None,
+    ) -> bool:
         # Verificar que las líneas existen
         existing_timesheets = self.timesheet_gateway.get_by_ids(timesheet_ids)
         if not existing_timesheets or len(existing_timesheets) != len(timesheet_ids):
             raise TimesheetNotFoundError(timesheet_ids)
 
+        # Cada línea se valida según el gerente de SU proyecto (o el jefe por
+        # jerarquía si el proyecto no tiene gerente), incluyendo permisos
+        # 'validate' delegados. Nunca las propias horas. El rol approver no
+        # exime este chequeo.
+        if validator_employee_id is not None and self.team_access:
+            authority = self.team_access.lines_authority(
+                validator_employee_id,
+                [(t.employee_id, t.project.id) for t in existing_timesheets],
+            )
+            outside = sorted(
+                t.id
+                for t in existing_timesheets
+                if not authority.get((t.employee_id, t.project.id), False)
+            )
+            if outside:
+                raise TimesheetValidateError(
+                    timesheet_ids,
+                    f"No tienes permiso para validar estas líneas (no gerenciás su proyecto): {outside}",
+                )
+
+        # PM y gerente pueden aprobar las mismas horas: si otro ya validó
+        # alguna línea (p.ej. lista vieja abierta), se omite sin error, sin
+        # pisar `x_validated_by` y sin reenviar el mail de aprobación.
+        timesheet_ids = [t.id for t in existing_timesheets if not t.validated]
+        if not timesheet_ids:
+            return True
+
+        # Verificar que el approver existe antes de validar
+        approver =self.employee_gateway.get_by_email(approver_mail)
+        if approver is None:
+            raise ApproverNotFoundError(approver_mail)
+
+        # Quien realmente ejecuta la validación (usuario Geo autenticado); si no
+        # llega, se cae al approver resuelto por email.
+        approved_by_id = validator_employee_id or approver.id
+
         # Validar en Odoo
         try:
-            success = self.timesheet_gateway.validate(timesheet_ids)
+            success = self.timesheet_gateway.validate(timesheet_ids, approved_by_id)
             if not success:
                 raise TimesheetValidateError(timesheet_ids, "La validación falló")
         except TimesheetDomainError:
-            # Re-lanzar excepciones del dominio sin modificar
             raise
         except Exception as e:
             raise TimesheetValidateError(timesheet_ids, str(e))
 
-        # Verificar que el approver existe
-        approver = self.employee_gateway.get_by_email(approver_mail)
-        if approver is None:
-            raise ApproverNotFoundError(approver_mail)
-
-        # Obtener las líneas de timesheet
+        # Obtener líneas con estado actualizado post-validación
         timesheet_lines = self.timesheet_gateway.get_by_ids(timesheet_ids)
         if not timesheet_lines:
             raise TimesheetNotFoundError(timesheet_ids)
 
         # Agrupar timesheets por empleado para enviar los emails
         employees_bucket = {}
+        # Una sola consulta para todos los empleados (antes, una por línea).
+        employees_by_id = {
+            e.id: e
+            for e in self.employee_gateway.get_by_ids(
+                list({t.employee_id for t in timesheet_lines})
+            )
+        }
         for timesheet_line in timesheet_lines:
-            employee = self.employee_gateway.get_by_id(timesheet_line.employee_id)
+            employee = employees_by_id.get(timesheet_line.employee_id)
             if employee is None:
                 continue
             if employee.email not in employees_bucket:

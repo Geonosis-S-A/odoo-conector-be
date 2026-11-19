@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 from sqlmodel import Session
 from app.shared.infra.db.config import (
     settings,
@@ -15,6 +16,15 @@ def create_engine_with_url(database_url: str):
 
 # Motor para la base de datos de desarrollo/producción
 engine = create_engine_with_url(settings.DATABASE_URL)
+
+
+# SessionLocal para crear sesiones manuales (usado en jobs/scripts)
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+    class_=Session,
+)
 
 
 # Dependencia para obtener la sesión de la base de datos usando SQLModel

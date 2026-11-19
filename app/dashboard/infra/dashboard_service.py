@@ -191,7 +191,8 @@ class OdooDashboardDataService(DashboardDataService):
         """Calcula totales de horas y costos por empleado con nombres obtenidos de Odoo.
 
         Incluye todos los empleados del equipo, mostrando 0 horas para aquellos
-        que no registraron tiempo en el período seleccionado.
+        que no registraron tiempo en el período seleccionado, y también a
+        quienes cargaron horas en proyectos del solicitante sin ser de su equipo.
         """
         # Inicializar todos los empleados del equipo con 0 horas y 0 costo
         employee_totals = {}
@@ -201,17 +202,19 @@ class OdooDashboardDataService(DashboardDataService):
             employee_totals[employee_id] = 0.0
             employee_costs[employee_id] = 0.0
 
-        # Agrupar horas y costos por empleado (solo para los que tienen registros)
+        # Agrupar horas y costos por empleado, sumando a quienes aparecen solo
+        # por los proyectos que gerencia o de los que es PM
         for record in timesheet_data:
             employee_id = record.employee_id
-            if employee_id in employee_totals:
-                employee_totals[employee_id] += record.hours
+            employee_totals.setdefault(employee_id, 0.0)
+            employee_costs.setdefault(employee_id, 0.0)
+            employee_totals[employee_id] += record.hours
 
-                # Agregar costo si está disponible
-                if timesheet_cost_map and record.id in timesheet_cost_map:
-                    cost = timesheet_cost_map[record.id]
-                    if cost is not None:
-                        employee_costs[employee_id] += cost
+            # Agregar costo si está disponible
+            if timesheet_cost_map and record.id in timesheet_cost_map:
+                cost = timesheet_cost_map[record.id]
+                if cost is not None:
+                    employee_costs[employee_id] += cost
 
         # Obtener nombres de empleados desde Odoo
         employee_names = self.get_employee_names(list(employee_totals.keys()))
