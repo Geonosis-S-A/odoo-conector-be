@@ -16,7 +16,7 @@ from app.users.domain.repositories import EmployeeGateway
 def mock_assignment_gateway():
     gw = Mock(spec=ProjectAssignmentGateway)
     gw.get_employee_assigned_projects.return_value = []
-    gw.get_managed_projects.return_value = []
+    gw.get_led_projects.return_value = []
     return gw
 
 
@@ -87,7 +87,7 @@ class TestGetProjects:
         mock_assignment_gateway.get_employee_assigned_projects.return_value = [
             Project(id=1, name="Alpha"),
         ]
-        mock_assignment_gateway.get_managed_projects.return_value = [
+        mock_assignment_gateway.get_led_projects.return_value = [
             Project(id=1, name="Alpha"),
             Project(id=3, name="Gamma"),
         ]
@@ -96,7 +96,7 @@ class TestGetProjects:
 
         assert response.status_code == 200
         assert sorted(p["id"] for p in response.json()) == [1, 3]
-        mock_assignment_gateway.get_managed_projects.assert_called_once_with(100)
+        mock_assignment_gateway.get_led_projects.assert_called_once_with(100)
 
     def test_user_without_assignments_sees_empty_list(self, test_client):
         _override_current_user(test_client, roles=[1])
@@ -132,7 +132,7 @@ class TestGetProjects:
 
         assert response.status_code == 200
         assert [p["id"] for p in response.json()] == [1]
-        mock_assignment_gateway.get_managed_projects.assert_not_called()
+        mock_assignment_gateway.get_led_projects.assert_not_called()
 
     def test_response_format(self, mock_assignment_gateway, test_client):
         _override_current_user(test_client, roles=[1])

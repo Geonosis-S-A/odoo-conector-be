@@ -44,7 +44,7 @@ class _FakeAssignments:
     def is_employee_assigned(self, employee_id, project_id, on_date):
         return self.assigned
 
-    def get_project_manager_user_ids(self, project_ids):
+    def get_project_approvers(self, project_ids):
         return {}
 
     def get_project_name(self, project_id):

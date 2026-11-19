@@ -27,7 +27,8 @@ class CargarHorasUseCase:
 
     def _can_load_hours(self, req: CargarHorasRequest) -> bool:
         """Asignación vigente al proyecto en la fecha de la línea, o ser el
-        gerente del proyecto (mismo criterio que ``GET /projects/``)."""
+        gerente o el Project Manager del proyecto (mismo criterio que
+        ``GET /projects/``)."""
         if self.project_assignment_gateway.is_employee_assigned(
             req.employee_id, req.project_id, req.date
         ):
@@ -37,10 +38,10 @@ class CargarHorasUseCase:
         user_id = self.employee_gateway.get_user_id_by_employee_id(req.employee_id)
         if user_id is None:
             return False
-        managers = self.project_assignment_gateway.get_project_manager_user_ids(
+        approvers = self.project_assignment_gateway.get_project_approvers(
             [req.project_id]
         )
-        return managers.get(req.project_id) == user_id
+        return any(uid == user_id for uid, _ in approvers.get(req.project_id, []))
 
     def execute(
         self, requests: list[CargarHorasRequest]
@@ -50,7 +51,7 @@ class CargarHorasUseCase:
 
         Sólo se puede cargar horas a proyectos a los que el empleado está
         asignado (``project.assignment`` vigente en la fecha de la línea) o
-        que gerencia. Se valida todo el lote antes de crear nada.
+        que gerencia o es su Project Manager. Se valida todo el lote antes de crear nada.
 
         Args:
             requests: Lista de peticiones para crear líneas de timesheet
