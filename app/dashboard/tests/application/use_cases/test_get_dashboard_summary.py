@@ -38,6 +38,13 @@ class TestGetDashboardSummaryUseCase:
         return Mock()
 
     @pytest.fixture
+    def mock_project_assignment_gateway(self):
+        """Mock del gateway de asignaciones a proyecto (por defecto, no es PM puro)."""
+        gateway = Mock()
+        gateway.is_project_manager_only.return_value = False
+        return gateway
+
+    @pytest.fixture
     def mock_employee_price_repository(self):
         """Mock del repositorio de precios de empleados."""
         return Mock()
@@ -50,6 +57,7 @@ class TestGetDashboardSummaryUseCase:
         mock_task_gateway,
         mock_timesheet_gateway,
         mock_employee_price_repository,
+        mock_project_assignment_gateway,
     ):
         """Instancia del caso de uso con mocks."""
         return GetDashboardSummaryUseCase(
@@ -58,6 +66,7 @@ class TestGetDashboardSummaryUseCase:
             mock_task_gateway,
             mock_timesheet_gateway,
             mock_employee_price_repository,
+            mock_project_assignment_gateway,
         )
 
     @pytest.fixture
@@ -109,6 +118,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -183,6 +193,8 @@ class TestGetDashboardSummaryUseCase:
         assert result.hierarchical_summary is None  # Mockeado como None
 
         # Verificar llamadas a los mocks
+        # Equipo = jerarquía de Odoo (sin fechas); las horas de los proyectos
+        # gerenciados las suma la consulta de líneas vía `user_id`.
         mock_timesheet_gateway.get_team_users.assert_called_once_with(
             user_id, employee_id
         )
@@ -233,6 +245,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
     ):
@@ -296,6 +309,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
     ):
@@ -391,6 +405,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -458,6 +473,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -515,6 +531,7 @@ class TestGetDashboardSummaryUseCase:
         use_case,
         mock_dashboard_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_task_gateway,
         mock_employee_price_repository,
         mock_timesheet_data,
@@ -564,3 +581,82 @@ class TestGetDashboardSummaryUseCase:
         assert mock_dashboard_gateway.calculate_project_without_task_totals.called
         # Verificar que se procesó la estructura jerárquica
         assert mock_dashboard_gateway.calculate_hierarchical_summary.called
+
+    def _stub_empty_metrics(
+        self, mock_dashboard_gateway, mock_task_gateway, mock_employee_price_repository
+    ):
+        mock_dashboard_gateway.get_timesheet_summary.return_value = []
+        mock_employee_price_repository.get_by_user_ids.return_value = []
+        mock_dashboard_gateway.calculate_hours_kpi.return_value = KPI(
+            total=0.0, average_per_user=0.0, unit="hours"
+        )
+        mock_dashboard_gateway.calculate_entries_kpi.return_value = KPI(
+            total=0.0, average_per_user=0.0, unit="entries"
+        )
+        mock_dashboard_gateway.calculate_daily_average_kpi.return_value = KPI(
+            total=0.0, average_per_user=0.0, unit="hours/day"
+        )
+        mock_dashboard_gateway.calculate_project_totals.return_value = []
+        mock_dashboard_gateway.calculate_task_totals.return_value = []
+        mock_dashboard_gateway.calculate_employee_totals.return_value = []
+        mock_dashboard_gateway.calculate_project_without_task_totals.return_value = []
+        mock_task_gateway.get_tasks_info_with_parents.return_value = {}
+
+    def test_execute_pm_puro_no_suma_jerarquia(
+        self,
+        use_case,
+        mock_dashboard_gateway,
+        mock_timesheet_gateway,
+        mock_project_assignment_gateway,
+        mock_task_gateway,
+        mock_employee_price_repository,
+    ):
+        """Un PM puro solo ve sus proyectos: no consulta ni suma su jerarquía."""
+        user_id = 123
+        date_from = date(2024, 1, 1)
+        date_to = date(2024, 1, 31)
+        mock_project_assignment_gateway.is_project_manager_only.return_value = True
+        mock_timesheet_gateway.get_team_users.return_value = [{"id": 1}, {"id": 2}]
+        self._stub_empty_metrics(
+            mock_dashboard_gateway, mock_task_gateway, mock_employee_price_repository
+        )
+
+        use_case.execute(user_id, 1, date_from, date_to)
+
+        mock_project_assignment_gateway.is_project_manager_only.assert_called_once_with(
+            user_id
+        )
+        mock_timesheet_gateway.get_team_users.assert_not_called()
+        mock_dashboard_gateway.get_timesheet_summary.assert_called_once_with(
+            [],
+            date_from,
+            date_to,
+            use_case.task_gateway,
+            use_case.timesheet_line_gateway,
+            user_id,
+        )
+
+    def test_execute_delivery_suma_jerarquia(
+        self,
+        use_case,
+        mock_dashboard_gateway,
+        mock_timesheet_gateway,
+        mock_project_assignment_gateway,
+        mock_task_gateway,
+        mock_employee_price_repository,
+    ):
+        """Quien gerencia proyectos (delivery) sigue sumando su jerarquía."""
+        user_id = 123
+        date_from = date(2024, 1, 1)
+        date_to = date(2024, 1, 31)
+        mock_project_assignment_gateway.is_project_manager_only.return_value = False
+        mock_timesheet_gateway.get_team_users.return_value = [{"id": 1}, {"id": 2}]
+        self._stub_empty_metrics(
+            mock_dashboard_gateway, mock_task_gateway, mock_employee_price_repository
+        )
+
+        use_case.execute(user_id, 1, date_from, date_to)
+
+        mock_timesheet_gateway.get_team_users.assert_called_once_with(user_id, 1)
+        args = mock_dashboard_gateway.get_timesheet_summary.call_args[0]
+        assert args[0] == [1, 2]

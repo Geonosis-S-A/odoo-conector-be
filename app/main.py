@@ -18,11 +18,13 @@ from app.accounting.api.routers import router as accounting_router
 from agent.api.routers import router as agent_router
 from app.saved_prompts.api.routers import router as saved_prompts_router
 from app.timesheet_templates.api.routers import router as timesheet_templates_router
+from app.team.api.routes import router as team_router
 from app.feriados.api.routers import router as feriados_router
 import logging
 
 
-ENV = os.getenv("ENV", "LOCAL")  # Por defecto, local
+ENV = os.getenv("ENV", "LOCAL").upper()  # Por defecto, local
+IS_PROD = ENV == "PROD"
 API_PREFIX = "/api/v1"
 
 
@@ -52,6 +54,7 @@ async def lifespan(app):
         from app.shared.infra.db.session import engine
 
         SQLModel.metadata.create_all(bind=engine)
+    
     yield  # acá arranca la app
 
 
@@ -60,18 +63,14 @@ app = FastAPI(
     description="API para conectar con Odoo",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs"
-    if ENV != "production"
-    else None,  # Deshabilitamos Swagger en producción
-    redoc_url="/redoc"
-    if ENV != "production"
-    else None,  # Deshabilitamos ReDoc en producción
+    docs_url=None if IS_PROD else "/docs",
+    redoc_url=None if IS_PROD else "/redoc",
+    openapi_url=None if IS_PROD else "/openapi.json",
 )
 
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Error inesperado: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": "Ocurrió un error inesperado. Intenta más tarde."},
@@ -103,6 +102,9 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Sin esto el navegador solo recuerda el preflight 5 s y casi cada llamada
+    # paga un OPTIONS previo (~una ida y vuelta de red). Chrome limita a 2 h.
+    max_age=7200,
 )
 
 
@@ -136,6 +138,7 @@ app.include_router(accounting_router, prefix=API_PREFIX)
 app.include_router(agent_router, prefix=API_PREFIX)
 app.include_router(saved_prompts_router, prefix=API_PREFIX)
 app.include_router(timesheet_templates_router, prefix=API_PREFIX)
+app.include_router(team_router, prefix=API_PREFIX)
 app.include_router(feriados_router, prefix=API_PREFIX)
 
 

@@ -5,10 +5,8 @@ from sqlmodel import Session
 from app.auth.api.schemas import (
     ChangePasswordRequest,
     ChangePasswordResponse,
-    CreateUserRequest,
     LoginRequest,
     RefreshResponse,
-    RegisterResponse,
     TokenResponse,
 )
 from app.auth.application.dto.password_recovery import (
@@ -29,7 +27,6 @@ from app.auth.application.use_cases.exceptions.exceptions import (
 from app.auth.application.use_cases.login import LoginUseCase
 from app.auth.application.use_cases.logout import LogoutUseCase
 from app.auth.application.use_cases.refresh import RefreshUseCase
-from app.auth.application.use_cases.register import RegisterUseCase
 from app.auth.application.use_cases.change_password import ChangePasswordUseCase
 from app.auth.application.use_cases.password_recovery import PasswordRecoveryUseCase
 from app.auth.application.use_cases.request_otp_for_register import (
@@ -132,19 +129,13 @@ async def login(
     }
 
 
-@router.post("/register", response_model=RegisterResponse)
-def register_user(user: CreateUserRequest, db: Session = Depends(get_db)):
-    user_repository = SQLModelUserRepository(db)
-    register_user_case = RegisterUseCase(user_repository)
-    # Todo manejar excepciones acá. El endpoint eesta en desuso por ahora
-    registered_user = register_user_case.execute(user.email, user.password)
-    return RegisterResponse(
-        id=registered_user.id,
-        email=registered_user.email,
-        full_name=registered_user.full_name,
-        is_active=registered_user.is_active,
-        is_superuser=registered_user.is_superuser,
-    )
+# NOTA DE SEGURIDAD (VT-01, pentest 2026-04):
+# El endpoint POST /auth/register fue eliminado porque no validaba OTP y permitía
+# tomar el control de cualquier cuenta (CVSS 9.8 — Account Takeover).
+# El flujo de registro vigente es:
+#   1) POST /auth/register/request-otp  (crea usuario inactivo + envía OTP)
+#   2) POST /auth/password-recovery/verify  (valida OTP)
+#   3) POST /auth/password-recovery/reset   (re-valida OTP, setea password y activa cuenta)
 
 
 @router.post("/refresh", response_model=RefreshResponse)

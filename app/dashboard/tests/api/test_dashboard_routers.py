@@ -11,6 +11,7 @@ from app.dashboard.api.routers import (
     get_employee_gateway,
     get_task_gateway,
     get_timesheet_gateway,
+    get_project_assignment_gateway,
     get_notification_repository,
 )
 from app.dashboard.domain.models import (
@@ -137,6 +138,11 @@ class TestDashboardRouters:
         return Mock()
 
     @pytest.fixture
+    def mock_project_assignment_gateway(self):
+        """Mock del gateway de asignaciones a proyecto."""
+        return Mock()
+
+    @pytest.fixture
     def mock_use_case(self):
         """Mock del caso de uso."""
         return Mock()
@@ -151,6 +157,7 @@ class TestDashboardRouters:
         mock_employee_gateway,
         mock_task_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
         mock_use_case,
     ):
         """Test exitoso del endpoint get_dashboard_summary con usuario admin."""
@@ -168,6 +175,9 @@ class TestDashboardRouters:
         app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
         app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
         app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+        app.dependency_overrides[get_project_assignment_gateway] = (
+            lambda: mock_project_assignment_gateway
+        )
 
         with patch(
             "app.dashboard.api.routers.GetDashboardSummaryUseCase",
@@ -211,6 +221,7 @@ class TestDashboardRouters:
         mock_employee_gateway,
         mock_task_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
     ):
         """Test que verifica que usuarios regulares no pueden acceder al dashboard general."""
         # Arrange
@@ -225,6 +236,9 @@ class TestDashboardRouters:
         app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
         app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
         app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+        app.dependency_overrides[get_project_assignment_gateway] = (
+            lambda: mock_project_assignment_gateway
+        )
 
         # Act
         response = client.get(
@@ -248,6 +262,7 @@ class TestDashboardRouters:
         mock_employee_gateway,
         mock_task_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
     ):
         """Test que verifica error cuando date_from es posterior a date_to."""
         # Arrange
@@ -262,6 +277,9 @@ class TestDashboardRouters:
         app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
         app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
         app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+        app.dependency_overrides[get_project_assignment_gateway] = (
+            lambda: mock_project_assignment_gateway
+        )
 
         # Act
         response = client.get(
@@ -288,6 +306,7 @@ class TestDashboardRouters:
         mock_employee_gateway,
         mock_task_gateway,
         mock_timesheet_gateway,
+        mock_project_assignment_gateway,
     ):
         """Test que verifica error cuando no se encuentra el usuario."""
         # Arrange
@@ -306,6 +325,9 @@ class TestDashboardRouters:
         app.dependency_overrides[get_employee_gateway] = lambda: mock_employee_gateway
         app.dependency_overrides[get_task_gateway] = lambda: mock_task_gateway
         app.dependency_overrides[get_timesheet_gateway] = lambda: mock_timesheet_gateway
+        app.dependency_overrides[get_project_assignment_gateway] = (
+            lambda: mock_project_assignment_gateway
+        )
 
         # Act
         response = client.get(

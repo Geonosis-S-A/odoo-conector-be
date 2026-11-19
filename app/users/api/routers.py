@@ -1,14 +1,17 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.auth.infra.auth_service import JWTPayload
 from app.shared.infra.db.session import get_db
 from app.shared.infra.external.odoo.odoo_client import get_odoo_connection
 from app.shared.security.dependencies import get_current_user
+from app.shared.security.roles import Roles, user_has_role
+from app.team.api.dependencies import get_team_access_service
+from app.team.application.team_access import TeamAccessService
 from app.users.application.use_cases.sync_single_user_changes import (
     SyncSingleUserChangesUseCase,
 )
-from app.users.application.use_cases.get_all_employees import GetAllEmployeesUseCase
 from app.users.infra.db.repositories import SQLModelUserRepository
 from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.users.api.schemas import (
@@ -32,9 +35,16 @@ async def sync_user_changes(
     Si tiene usuario asociado: actualiza email, nombre y roles del usuario.
     Si no tiene usuario asociado: retorna mensaje informativo.
     Mantiene el estado de activación e is_superuser del usuario.
+    Permitido para el propio empleado o para un aprobador.
     """
 
-    
+    if employee_id != current_user["user_id"] and not user_has_role(
+        current_user.get("roles"), Roles.approver
+    ):
+        msg = "No tienes permisos para sincronizar a otro empleado"
+        # El front lee `message`; se envía junto con `detail` (estándar FastAPI).
+        return JSONResponse(status_code=403, content={"message": msg, "detail": msg})
+
     # Inicializar dependencias
     odoo_client = get_odoo_connection()
     employee_gateway = OdooEmployeeGateway(odoo_client)
@@ -61,32 +71,27 @@ async def sync_user_changes(
 
 
 @router.get("/employees", response_model=EmployeesListResponse)
-async def get_all_employees(
+def get_all_employees(
     current_user: JWTPayload = Depends(get_current_user),
+    team_access: TeamAccessService = Depends(get_team_access_service),
 ):
     """
-    Obtiene todos los empleados registrados en Odoo.
-    Retorna una lista completa de empleados con ID, email y nombre completo.
+    Obtiene los empleados visibles para el usuario autenticado: su equipo
+    (jerarquía Odoo ∪ proyectos que gerencia, más su departamento si es
+    gerente de proyectos) y los equipos ajenos donde tenga un permiso de
+    vista/validación delegado.
     """
 
-    # Inicializar dependencias
-    odoo_client = get_odoo_connection()
-    employee_gateway = OdooEmployeeGateway(odoo_client)
+    members = team_access.visible_team_members(current_user["user_id"])
 
-    # Crear y ejecutar caso de uso
-    use_case = GetAllEmployeesUseCase(employee_gateway=employee_gateway)
-
-    # Ejecutar obtención de empleados
-    employees = use_case.execute()
-
-    # Convertir Employee del dominio a EmployeeResponse del schema
+    # Convertir TeamMemberInfo a EmployeeResponse del schema
     employees_response = [
         EmployeeResponse(
-            id=employee.id,
-            email=employee.email,
-            full_name=employee.full_name,
+            id=member.employee_odoo_id,
+            email=member.email or "",
+            full_name=member.name or "",
         )
-        for employee in employees
+        for member in members
     ]
 
     return EmployeesListResponse(

@@ -14,7 +14,6 @@ class DatabaseSettings:
         DATABASE_URL = "sqlite:///./app.db"
     else:
         DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
-    print(f"DATABASE_URL: {DATABASE_URL}")
 
     # URL Para migraciones
     MIGRATION_DATABASE_URL = os.getenv(

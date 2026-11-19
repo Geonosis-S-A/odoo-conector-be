@@ -1,5 +1,5 @@
 from dataclasses import replace
-from typing import List
+from typing import Any, Dict, List, Optional
 from datetime import date
 
 from app.timesheet_line.api.schemas import TimesheetLineNotificationResponse
@@ -20,7 +20,9 @@ from app.timesheet_line.application.excepctions.exceptions import (
     InvalidEmployeeIdError,
     EmployeeNotExistsError,
     EmployeeNotHasUserError,
+    ProjectNotManagedError,
 )
+from app.team.application.team_access import TeamAccessService
 
 
 class ListTimesheetLinesUseCase:
@@ -30,6 +32,7 @@ class ListTimesheetLinesUseCase:
         employee_gateway: EmployeeGateway,
         notification_repository: TimesheetLineNotificationRepository,
         task_gateway: TaskGateway | None = None,
+        team_access: Optional[TeamAccessService] = None,
     ) -> None:
         self.timesheet_line_gateway = timesheet_line_gateway
         self.employee_gateway = employee_gateway
@@ -37,6 +40,7 @@ class ListTimesheetLinesUseCase:
             notification_repository
         )
         self.task_gateway = task_gateway
+        self.team_access = team_access
 
     def execute(
         self,
@@ -60,13 +64,28 @@ class ListTimesheetLinesUseCase:
 
         user_id = None
         ids = None
+        project_wide = False
         if id is not None and team and employee_id is None:
-            user_id = self.employee_gateway.get_user_id_by_employee_id(id)
-            if user_id is None:
+            if self.team_access is None:
                 raise EmployeeNotHasUserError(id)
-            if id is not None:
-                users = self.timesheet_line_gateway.get_team_users(user_id, id)
-                ids = [user["id"] for user in users]
+            if project_id is not None:
+                # Validación "por proyecto": quien gerencia ESE proyecto o lo
+                # cubre porque su líder le delegó la aprobación (vigente hoy).
+                # Listado de solo lectura: puede usar la caché de autoridad.
+                if not self.team_access.can_access_project(
+                    id, project_id, cached=True
+                ):
+                    raise ProjectNotManagedError(project_id)
+                # El alcance lo da el proyecto: todas las líneas de ESE
+                # proyecto, también las de quien cargó sin (o antes de tener)
+                # asignación. No se resuelve el equipo del líder.
+                project_wide = True
+            else:
+                # Vista plana de equipo = jerarquía ∪ proyectos gerenciados
+                # + permisos locales.
+                ids = sorted(
+                    self.team_access.visible_employee_ids(id, date_from, date_to)
+                )
 
 
         # Validación de rango de fechas
@@ -75,9 +94,40 @@ class ListTimesheetLinesUseCase:
 
         
 
+        extra = {"project_wide": True} if project_wide else {}
         timesheets = self.timesheet_line_gateway.all(
             employee_id, date_from, date_to, project_id, validated, team, user_id, ids,
+            **extra,
         )
+        if project_wide:
+            # Sin auto-aprobación: las horas del propio líder no van en su
+            # vista de validación (antes quedaban afuera al resolver el equipo).
+            timesheets = [t for t in timesheets if t.employee_id != id]
+
+        # Marcar por línea si el usuario puede validarla/borrarla (para los
+        # botones del front). Se decide por el gerente del proyecto de cada
+        # línea, no por la relación con el empleado: ver a alguien (jerarquía)
+        # no implica poder aprobar sus horas en proyectos de otro líder. El
+        # rol approver no habilita actuar fuera de ese alcance.
+        if (
+            team
+            and timesheets
+            and self.team_access is not None
+            and id is not None
+        ):
+            authority = self.team_access.lines_authority(
+                id,
+                [(line.employee_id, line.project.id) for line in timesheets],
+                cached=True,
+            )
+            approver_names = self.team_access.project_approver_names(
+                [line.project.id for line in timesheets], cached=True
+            )
+            for line in timesheets:
+                allowed = authority.get((line.employee_id, line.project.id), False)
+                line.can_validate = allowed and not line.validated
+                line.can_delete = allowed
+                line.approver_names = approver_names.get(line.project.id, [])
 
         if self.task_gateway and timesheets:
             task_ids = [t.task.id for t in timesheets if t.task is not None]
@@ -92,14 +142,22 @@ class ListTimesheetLinesUseCase:
                     if full_name:
                         line.task = replace(line.task, name=full_name)
 
-        employees = self.employee_gateway.all()
-        employees_dict = {employee.id: employee for employee in employees}
-
         # Una sola query batch para todas las notificaciones (reemplaza el loop N+1)
         notifications = self.notification_repository.get_by_timesheet_ids(
             [t.id for t in timesheets]
         )
         notifications_map = {n.timesheet_line_id: n for n in notifications}
+
+        # Sólo resolvemos los empleados de las notificaciones encontradas
+        # (antes se traía la empresa entera con employee_gateway.all(),
+        # paginado, aunque no hubiera ninguna notificación que mostrar).
+        employees_dict: Dict[int, Any] = {}
+        if notifications:
+            approver_ids = {n.approver_id for n in notifications}
+            employees_dict = {
+                employee.id: employee
+                for employee in self.employee_gateway.get_by_ids(list(approver_ids))
+            }
 
         for timesheet in timesheets:
             notification = notifications_map.get(timesheet.id)

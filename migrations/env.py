@@ -11,9 +11,14 @@ from app.auth.infra.db.models import (
     RefreshTokenModel,
     OTPModel,
 )  # Hay que importar los modelos que se van a usar para que los detecte, en env.py
+from app.personal_time.infra.db.models import (
+    TimeOffSyncMappingModel,
+    TimeOffSyncLogModel,
+)
 from app.employee_price.infra.db.models import EmployeePriceModel
 from app.saved_prompts.infra.db.models import SavedPromptModel
 from app.timesheet_templates.infra.db.models import TimesheetTemplateModel
+from app.team.infra.db.models import TeamMemberPermissionModel
 from app.shared.infra.db.config import settings
 
 # this is the Alembic Config object, which provides
@@ -25,8 +30,6 @@ config = context.config
 migration_url = settings.MIGRATION_DATABASE_URL
 if not migration_url:
     raise ValueError("No se encontró la URL para las migraciones")
-
-print(f"URL de migración: {migration_url}")
 
 config.set_main_option("sqlalchemy.url", migration_url)
 
