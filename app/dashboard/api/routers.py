@@ -1,6 +1,7 @@
 from datetime import date
 import io
 import os
+import re
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
 from fastapi.responses import StreamingResponse
@@ -424,7 +425,13 @@ async def export_timesheets(
     )
 
 
-ALLOWED_KPI_EMAILS = os.getenv("ALLOWED_KPI_EMAILS", "")
+def _parse_allowed_emails(raw: str) -> set[str]:
+    """Emails permitidos desde la variable de entorno (separados por coma,
+    punto y coma o espacios), en minúsculas. Comparación por igualdad exacta."""
+    return {e.strip().lower() for e in re.split(r"[,;\s]+", raw or "") if e.strip()}
+
+
+ALLOWED_KPI_EMAILS = _parse_allowed_emails(os.getenv("ALLOWED_KPI_EMAILS", ""))
 
 
 @router.get("/excel-data", response_model=ExcelDataResponse)
@@ -433,7 +440,7 @@ async def get_excel_data(
     current_user: JWTPayload = Depends(get_current_user),
 ):
     """Obtiene datos de las hojas Proyectos, Horas y Headcount del Excel en SharePoint."""
-    if current_user["user_email"] not in ALLOWED_KPI_EMAILS:
+    if current_user["user_email"].strip().lower() not in ALLOWED_KPI_EMAILS:
         raise HTTPException(status_code=403, detail="No autorizado")
     try:
         use_case = GetExcelDataUseCase(client)
