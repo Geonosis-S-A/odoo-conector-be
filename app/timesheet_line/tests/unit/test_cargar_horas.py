@@ -176,8 +176,8 @@ class TestCargarHorasUseCase:
         self, mock_gateway, mock_project_assignment_gateway
     ):
         mock_project_assignment_gateway.is_employee_assigned.return_value = False
-        mock_project_assignment_gateway.get_project_manager_user_ids.return_value = {
-            99: 100
+        mock_project_assignment_gateway.get_project_approvers.return_value = {
+            99: [(100, "Gerente")]
         }
         employee_gateway = Mock(spec=EmployeeGateway)
         employee_gateway.get_user_id_by_employee_id.return_value = 100
@@ -191,12 +191,30 @@ class TestCargarHorasUseCase:
 
         assert len(result) == 1
 
+    def test_execute_allows_project_manager_field_without_assignment(
+        self, mock_gateway, mock_project_assignment_gateway
+    ):
+        # El PM (x_project_manager_id) viene como segundo aprobador del proyecto.
+        mock_project_assignment_gateway.is_employee_assigned.return_value = False
+        mock_project_assignment_gateway.get_project_approvers.return_value = {
+            99: [(200, "Gerente"), (100, "PM")]
+        }
+        employee_gateway = Mock(spec=EmployeeGateway)
+        employee_gateway.get_user_id_by_employee_id.return_value = 100
+        mock_gateway.create.return_value = [123]
+        mock_gateway.get_by_ids.return_value = [Mock()]
+        use_case = CargarHorasUseCase(
+            mock_gateway, mock_project_assignment_gateway, employee_gateway
+        )
+
+        assert len(use_case.execute([self._request()])) == 1
+
     def test_execute_rejects_when_other_user_manages_project(
         self, mock_gateway, mock_project_assignment_gateway
     ):
         mock_project_assignment_gateway.is_employee_assigned.return_value = False
-        mock_project_assignment_gateway.get_project_manager_user_ids.return_value = {
-            99: 200
+        mock_project_assignment_gateway.get_project_approvers.return_value = {
+            99: [(200, "Otro")]
         }
         employee_gateway = Mock(spec=EmployeeGateway)
         employee_gateway.get_user_id_by_employee_id.return_value = 100

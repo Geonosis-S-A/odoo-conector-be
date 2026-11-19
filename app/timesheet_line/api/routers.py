@@ -151,8 +151,10 @@ async def create_timesheet_line(
     """
     Crea nuevas líneas de timesheet.
 
-    Exige que el empleado esté asignado al proyecto (``project.assignment``
-    vigente en la fecha) o lo gerencie; si no, 403.
+    Sólo se cargan horas a nombre propio: el ``employee_id`` de cada línea debe
+    ser el del usuario autenticado; si no, 403. Además exige que el empleado
+    esté asignado al proyecto (``project.assignment`` vigente en la fecha) o lo
+    gerencie / sea su Project Manager; si no, 403.
 
     Args:
         request: Lista de datos de las líneas de timesheet a crear
@@ -161,6 +163,11 @@ async def create_timesheet_line(
     Returns:
         list[DetailedTimesheetLineResponse]: Lista de líneas de timesheet creadas con detalles
     """
+    if any(line.employee_id != current_user["user_id"] for line in request):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo podés cargar horas a tu propio nombre.",
+        )
     try:
         use_case = CargarHorasUseCase(
             gateway, project_assignment_gateway, employee_gateway

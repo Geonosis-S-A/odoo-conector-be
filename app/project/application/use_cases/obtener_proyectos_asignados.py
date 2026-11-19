@@ -6,7 +6,8 @@ from app.project.domain.models import Project
 
 class ObtenerProyectosAsignadosUseCase:
     """Proyectos que un empleado puede ver para cargar horas: a los que está
-    asignado (``project.assignment`` vigente) más los que gerencia."""
+    asignado (``project.assignment`` vigente) más los que gerencia o de los que
+    es Project Manager (vigentes)."""
 
     def __init__(self, project_assignment_gateway: ProjectAssignmentGateway):
         self.project_assignment_gateway = project_assignment_gateway
@@ -15,9 +16,9 @@ class ObtenerProyectosAsignadosUseCase:
         assigned = self.project_assignment_gateway.get_employee_assigned_projects(
             employee_id
         )
-        managed = (
-            self.project_assignment_gateway.get_managed_projects(user_id)
+        led = (
+            self.project_assignment_gateway.get_led_projects(user_id)
             if user_id
             else []
         )
-        return list({p.id: p for p in assigned + managed}.values())
+        return list({p.id: p for p in assigned + led}.values())
