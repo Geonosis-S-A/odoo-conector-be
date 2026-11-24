@@ -76,7 +76,7 @@ def _task(id_, name, parent=None, parent_name=None):
     )
 
 
-class TestExportTiempoPersonal:
+class TestExportGestionInterna:
     """Las licencias cargadas como horas deben verse en el Excel con su tipo."""
 
     def _run(self, lines, tasks):
@@ -97,25 +97,25 @@ class TestExportTiempoPersonal:
     def _line(self, id_, task_id, validated=False):
         return {**LINE, "id": id_, "task_id": task_id, "validated": validated}
 
-    def test_subtarea_de_tiempo_personal_informa_el_tipo(self):
+    def test_subtarea_de_gestion_interna_informa_el_tipo(self):
         tasks = {
-            10: _task(10, "Tiempo personal"),
-            11: _task(11, "Enfermedad", 10, "Tiempo personal"),
+            10: _task(10, "Gestión interna"),
+            11: _task(11, "Licencia por enfermedad", 10, "Gestión interna"),
         }
-        df = self._run([self._line(1, [11, "Enfermedad"])], tasks)
-        assert df.iloc[0]["tipo_licencia"] == "Enfermedad"
-        assert df.iloc[0]["tarea"] == "Tiempo personal"
-        assert df.iloc[0]["subtarea_1"] == "Enfermedad"
+        df = self._run([self._line(1, [11, "Licencia por enfermedad"])], tasks)
+        assert df.iloc[0]["tipo_licencia"] == "Licencia por enfermedad"
+        assert df.iloc[0]["tarea"] == "Gestión interna"
+        assert df.iloc[0]["subtarea_1"] == "Licencia por enfermedad"
 
-    def test_carga_directa_en_tiempo_personal(self):
-        tasks = {10: _task(10, "Tiempo personal")}
-        df = self._run([self._line(1, [10, "Tiempo personal"])], tasks)
-        assert df.iloc[0]["tipo_licencia"] == "Tiempo personal"
+    def test_carga_directa_en_gestion_interna(self):
+        tasks = {10: _task(10, "Gestión interna")}
+        df = self._run([self._line(1, [10, "Gestión interna"])], tasks)
+        assert df.iloc[0]["tipo_licencia"] == "Gestión interna"
 
     def test_nombre_en_otra_capitalizacion(self):
         tasks = {
-            10: _task(10, "TIEMPO PERSONAL "),
-            11: _task(11, "Días de estudio", 10, "TIEMPO PERSONAL "),
+            10: _task(10, "GESTION INTERNA "),
+            11: _task(11, "Días de estudio", 10, "GESTION INTERNA "),
         }
         df = self._run([self._line(1, [11, "Días de estudio"])], tasks)
         assert df.iloc[0]["tipo_licencia"] == "Días de estudio"
@@ -128,12 +128,20 @@ class TestExportTiempoPersonal:
         assert list(df["tipo_licencia"]) == ["", ""]
 
     def test_columna_validada_indica_aprobacion(self):
-        tasks = {10: _task(10, "Tiempo personal")}
+        tasks = {10: _task(10, "Gestión interna")}
         df = self._run(
             [
-                self._line(1, [10, "Tiempo personal"], validated=True),
-                self._line(2, [10, "Tiempo personal"], validated=False),
+                self._line(1, [10, "Gestión interna"], validated=True),
+                self._line(2, [10, "Gestión interna"], validated=False),
             ],
             tasks,
         )
         assert sorted(df["validada"]) == ["No", "Sí"]
+
+    def test_nombre_sin_tilde(self):
+        tasks = {
+            10: _task(10, "Gestion interna"),
+            11: _task(11, "Sin Asignación", 10, "Gestion interna"),
+        }
+        df = self._run([self._line(1, [11, "Sin Asignación"])], tasks)
+        assert df.iloc[0]["tipo_licencia"] == "Sin Asignación"

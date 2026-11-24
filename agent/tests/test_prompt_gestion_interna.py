@@ -3,7 +3,7 @@ from langchain_core.prompts import PromptTemplate
 
 
 def test_prompt_indica_usar_subtarea_de_tiempo_personal():
-    assert "Tiempo personal" in TIMESHEET_AGENT_SYSTEM_PROMPT
+    assert "Gestión interna" in TIMESHEET_AGENT_SYSTEM_PROMPT
     assert "subtarea" in TIMESHEET_AGENT_SYSTEM_PROMPT
 
 

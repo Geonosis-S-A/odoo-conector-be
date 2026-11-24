@@ -1,5 +1,6 @@
 """Caso de uso para exportar timesheets como excel."""
 
+import unicodedata
 from datetime import date
 from typing import Dict, List, Optional
 from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
@@ -13,7 +14,13 @@ from app.dashboard.application.price_utils import build_price_index, get_cost_fo
 import pandas as pd
 
 
-PERSONAL_TIME_TASK_NAME = "tiempo personal"
+PERSONAL_TIME_TASK_NAME = "gestion interna"
+
+
+def _normalize(name: str) -> str:
+    """Minúsculas, sin tildes ni espacios sobrantes."""
+    decomposed = unicodedata.normalize("NFKD", name or "")
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).strip().lower()
 
 
 class ExportTimesheetsByTeamUseCase:
@@ -60,9 +67,9 @@ class ExportTimesheetsByTeamUseCase:
     ) -> str:
         """Tipo de licencia de una línea.
 
-        Si la tarea cuelga de "Tiempo personal", devuelve la subtarea (enfermedad,
-        estudio, etc.); si se cargó directo en "Tiempo personal", devuelve
-        "Tiempo personal". Si no es tiempo personal, devuelve "".
+        Si la tarea cuelga de "Gestión interna", devuelve la subtarea (enfermedad,
+        estudio, etc.); si se cargó directo en "Gestión interna", devuelve
+        "Gestión interna". Si no es gestión interna, devuelve "".
         """
         if not isinstance(task_id_field, list) or not task_id_field:
             return ""
@@ -72,7 +79,7 @@ class ExportTimesheetsByTeamUseCase:
         else:
             hierarchy = [task_id_field[1]] if len(task_id_field) > 1 else []
         for idx, name in enumerate(hierarchy):
-            if (name or "").strip().lower() == PERSONAL_TIME_TASK_NAME:
+            if _normalize(name) == PERSONAL_TIME_TASK_NAME:
                 if idx + 1 < len(hierarchy):
                     return hierarchy[idx + 1]
                 return name

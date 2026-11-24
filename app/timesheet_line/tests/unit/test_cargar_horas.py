@@ -344,8 +344,8 @@ class TestCargarHorasUseCase:
         assert result[1].name == "Test Task 2"
 
 
-class TestCargarHorasTiempoPersonal:
-    """Tiempo personal es una tarea más: rige la misma regla de acceso al proyecto."""
+class TestCargarHorasGestionInterna:
+    """Gestión interna es una tarea más: rige la misma regla de acceso al proyecto."""
 
     def _use_case(self, assigned):
         gw = Mock(spec=TimesheetLineGateway)
@@ -368,11 +368,11 @@ class TestCargarHorasTiempoPersonal:
                 project_id=152,
                 hours=8.0,
                 date=date(2024, 1, 10),
-                task_id=11,  # subtarea "Enfermedad" de "Tiempo personal"
+                task_id=11,  # subtarea "Licencia por enfermedad" de "Gestión interna"
             )
         ]
 
-    def test_empleado_asignado_carga_en_subtarea_de_tiempo_personal(self):
+    def test_empleado_asignado_carga_en_subtarea_de_gestion_interna(self):
         use_case, gw = self._use_case(assigned=True)
         use_case.execute(self._req())
         assert gw.create.call_args[0][0][0].task_id == 11
