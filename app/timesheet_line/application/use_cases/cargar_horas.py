@@ -1,5 +1,6 @@
 # Es un ejemplo, podría tener otro nombre etc
 
+from datetime import date
 from typing import List, Optional
 from app.project.domain.gateway import ProjectAssignmentGateway
 from app.timesheet_line.api.schemas import CargarHorasRequest
@@ -7,10 +8,12 @@ from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLin
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.application.excepctions.exceptions import (
     EmployeeNotAssignedToProjectError,
+    DailyHoursLimitExceededError,
     InvalidHoursError,
     TimesheetCreationError,
     TimesheetNotFoundError,
 )
+from app.timesheet_line.domain.limits import MAX_HOURS_PER_DAY
 from app.users.domain.repositories import EmployeeGateway
 
 
@@ -43,6 +46,26 @@ class CargarHorasUseCase:
         )
         return any(uid == user_id for uid, _ in approvers.get(req.project_id, []))
 
+    def _validate_daily_limit(self, requests: list[CargarHorasRequest]) -> None:
+        """Ninguna persona puede superar MAX_HOURS_PER_DAY en un día, contando lo
+        ya cargado más todo el lote que se está creando."""
+        requested: dict[tuple[int, date], float] = {}
+        for req in requests:
+            key = (req.employee_id, req.date)
+            requested[key] = requested.get(key, 0.0) + req.hours
+
+        for (employee_id, day), new_hours in requested.items():
+            existing = sum(
+                line.hours
+                for line in self.timesheet_line_gateway.all(
+                    employee_id=employee_id, date_from=day, date_to=day
+                )
+            )
+            if existing + new_hours > MAX_HOURS_PER_DAY:
+                raise DailyHoursLimitExceededError(
+                    day, existing, new_hours, MAX_HOURS_PER_DAY
+                )
+
     def execute(
         self, requests: list[CargarHorasRequest]
     ) -> list[DetailedTimesheetLine]:
@@ -61,6 +84,7 @@ class CargarHorasUseCase:
 
         Raises:
             InvalidHoursError: Cuando las horas son negativas
+            DailyHoursLimitExceededError: Si se supera el máximo de horas por día
             EmployeeNotAssignedToProjectError: Sin asignación ni gerencia del proyecto
             TimesheetCreationError: Para errores de creación
             TimesheetNotFoundError: Cuando no se pueden obtener las líneas creadas
@@ -96,6 +120,8 @@ class CargarHorasUseCase:
                 task_id=req.task_id,
             )
             timesheet_lines.append(timesheet_line)
+
+        self._validate_daily_limit(requests)
 
         # Crear todas las líneas en batch
         line_ids = self.timesheet_line_gateway.create(timesheet_lines)

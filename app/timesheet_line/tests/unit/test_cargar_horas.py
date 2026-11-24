@@ -7,6 +7,7 @@ from app.timesheet_line.api.schemas import CargarHorasRequest
 from app.timesheet_line.application.use_cases.cargar_horas import CargarHorasUseCase
 from app.timesheet_line.domain.repositories import TimesheetLineGateway
 from app.timesheet_line.application.excepctions.exceptions import (
+    DailyHoursLimitExceededError,
     EmployeeNotAssignedToProjectError,
     InvalidHoursError,
     TimesheetCreationError,
@@ -17,7 +18,9 @@ from app.users.domain.repositories import EmployeeGateway
 class TestCargarHorasUseCase:
     @pytest.fixture
     def mock_gateway(self):
-        return Mock(spec=TimesheetLineGateway)
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = []  # sin horas previas en el día
+        return gw
 
     @pytest.fixture
     def mock_project_assignment_gateway(self):
@@ -342,3 +345,62 @@ class TestCargarHorasUseCase:
         assert result[1].id == 456
         assert result[0].name == "Test Task 1"
         assert result[1].name == "Test Task 2"
+
+
+class TestTopeDeHorasPorDia:
+    """Nadie puede tener más de 24 h cargadas en un mismo día."""
+
+    DAY = date(2024, 1, 10)
+
+    def _use_case(self, existing_hours=()):
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.all.return_value = [Mock(hours=h) for h in existing_hours]
+        gw.create.return_value = [1]
+        gw.get_by_ids.return_value = [Mock()]
+        assignment = Mock(spec=ProjectAssignmentGateway)
+        assignment.is_employee_assigned.return_value = True
+        return CargarHorasUseCase(gw, assignment), gw
+
+    def _req(self, hours, day=None, project_id=1, employee_id=1):
+        return CargarHorasRequest(
+            name=None,
+            employee_id=employee_id,
+            project_id=project_id,
+            hours=hours,
+            date=day or self.DAY,
+        )
+
+    def test_24_horas_en_un_dia_vacio_se_permiten(self):
+        use_case, gw = self._use_case()
+        use_case.execute([self._req(24)])
+        gw.create.assert_called_once()
+
+    def test_mas_de_24_en_una_sola_linea_se_rechaza(self):
+        use_case, gw = self._use_case()
+        with pytest.raises(DailyHoursLimitExceededError):
+            use_case.execute([self._req(24.5)])
+        gw.create.assert_not_called()
+
+    def test_se_cuentan_las_horas_ya_cargadas_en_otros_proyectos(self):
+        use_case, gw = self._use_case(existing_hours=[8, 8])
+        with pytest.raises(DailyHoursLimitExceededError) as exc:
+            use_case.execute([self._req(9)])
+        assert exc.value.existing == 16
+        assert "24" in exc.value.message
+        gw.create.assert_not_called()
+
+    def test_justo_en_el_tope_con_horas_previas_se_permite(self):
+        use_case, gw = self._use_case(existing_hours=[8, 8])
+        use_case.execute([self._req(8)])
+        gw.create.assert_called_once()
+
+    def test_el_lote_suma_las_lineas_del_mismo_dia(self):
+        use_case, gw = self._use_case()
+        with pytest.raises(DailyHoursLimitExceededError):
+            use_case.execute([self._req(12, project_id=1), self._req(13, project_id=2)])
+        gw.create.assert_not_called()
+
+    def test_el_lote_en_dias_distintos_no_se_suma(self):
+        use_case, gw = self._use_case()
+        use_case.execute([self._req(20), self._req(20, day=date(2024, 1, 11))])
+        gw.create.assert_called_once()
