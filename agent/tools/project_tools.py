@@ -25,6 +25,7 @@ from app.project.infra.external.odoo_project_assignment_gateway import (
 )
 from app.timesheet_line.application.excepctions.exceptions import (
     EmployeeNotAssignedToProjectError,
+    DailyHoursLimitExceededError,
     InvalidHoursError,
     TimesheetCreationError,
     TimesheetNotFoundError,
@@ -738,6 +739,16 @@ def create_timesheet_entries(
     except InvalidHoursError as e:
         return json.dumps(
             {"success": False, "error": "Horas inválidas", "message": str(e)},
+            ensure_ascii=False,
+        )
+
+    except DailyHoursLimitExceededError as e:
+        return json.dumps(
+            {
+                "success": False,
+                "error": "Máximo de horas por día superado",
+                "message": str(e),
+            },
             ensure_ascii=False,
         )
 

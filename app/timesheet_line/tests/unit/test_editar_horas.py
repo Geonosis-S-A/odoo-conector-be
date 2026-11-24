@@ -6,6 +6,7 @@ from app.timesheet_line.api.schemas import EditTimesheetRequest
 from app.timesheet_line.domain.models import DetailedTimesheetLine, TimesheetLine
 from app.project.domain.models import Project
 from app.timesheet_line.application.excepctions.exceptions import (
+    DailyHoursLimitExceededError,
     InvalidHoursError,
     TimesheetNotFoundError,
     TimesheetEditError,
@@ -16,7 +17,9 @@ class TestEditTimesheetUseCase:
     @pytest.fixture
     def mock_gateway(self):
         """Fixture que proporciona un gateway mockeado."""
-        return Mock()
+        gw = Mock()
+        gw.all.return_value = []  # sin otras horas cargadas ese día
+        return gw
 
     @pytest.fixture
     def use_case(self, mock_gateway):
@@ -209,3 +212,38 @@ class TestEditTimesheetUseCase:
 
         mock_gateway.get_by_id.assert_called_once_with(1)
         mock_gateway.update.assert_called_once()
+
+
+class TestTopeDeHorasPorDiaEnEdicion:
+    """Al editar tampoco se puede superar el máximo de 24 h por día."""
+
+    def _setup(self, otras_horas):
+        gw = Mock()
+        gw.get_by_id.return_value = Mock()
+        gw.update.return_value = True
+        # La línea editada (id=1) también viene en el día: no debe contarse.
+        gw.all.return_value = [Mock(id=1, hours=8.0)] + [
+            Mock(id=100 + i, hours=h) for i, h in enumerate(otras_horas)
+        ]
+        return EditTimesheetUseCase(gw), gw
+
+    def _req(self, hours):
+        return EditTimesheetRequest(
+            id=1,
+            name="x",
+            employee_id=1,
+            project_id=1,
+            hours=hours,
+            date=date(2024, 3, 20),
+            validated=False,
+        )
+
+    def test_no_cuenta_la_propia_linea(self):
+        use_case, gw = self._setup(otras_horas=[16])
+        assert use_case.execute(self._req(8.0)) is True  # 16 + 8 = 24
+
+    def test_supera_el_tope_con_otras_lineas(self):
+        use_case, gw = self._setup(otras_horas=[16])
+        with pytest.raises(DailyHoursLimitExceededError):
+            use_case.execute(self._req(9.0))
+        gw.update.assert_not_called()

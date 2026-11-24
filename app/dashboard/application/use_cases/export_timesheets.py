@@ -1,5 +1,6 @@
 """Caso de uso para exportar timesheets como excel."""
 
+import unicodedata
 from datetime import date
 from typing import Dict, List, Optional
 from app.auth.application.use_cases.exceptions.exceptions import UserNotFound
@@ -11,6 +12,15 @@ from app.task.domain.models import TaskWithParentInfo
 from app.employee_price.domain.repositories import EmployeePriceRepository
 from app.dashboard.application.price_utils import build_price_index, get_cost_for_date
 import pandas as pd
+
+
+PERSONAL_TIME_TASK_NAME = "gestion interna"
+
+
+def _normalize(name: str) -> str:
+    """Minúsculas, sin tildes ni espacios sobrantes."""
+    decomposed = unicodedata.normalize("NFKD", name or "")
+    return "".join(c for c in decomposed if not unicodedata.combining(c)).strip().lower()
 
 
 class ExportTimesheetsByTeamUseCase:
@@ -51,6 +61,29 @@ class ExportTimesheetsByTeamUseCase:
 
         # Invertir para obtener de arriba hacia abajo (padre -> hijo -> nieto)
         return list(reversed(chain))
+
+    def _leave_type(
+        self, task_id_field, tasks_info: Dict[int, TaskWithParentInfo]
+    ) -> str:
+        """Tipo de licencia de una línea.
+
+        Si la tarea cuelga de "Gestión interna", devuelve la subtarea (enfermedad,
+        estudio, etc.); si se cargó directo en "Gestión interna", devuelve
+        "Gestión interna". Si no es gestión interna, devuelve "".
+        """
+        if not isinstance(task_id_field, list) or not task_id_field:
+            return ""
+        task_info = tasks_info.get(task_id_field[0])
+        if task_info:
+            hierarchy = self._build_task_hierarchy(task_info, tasks_info)
+        else:
+            hierarchy = [task_id_field[1]] if len(task_id_field) > 1 else []
+        for idx, name in enumerate(hierarchy):
+            if _normalize(name) == PERSONAL_TIME_TASK_NAME:
+                if idx + 1 < len(hierarchy):
+                    return hierarchy[idx + 1]
+                return name
+        return ""
 
     def _get_max_hierarchy_depth(
         self, tasks_info: Dict[int, TaskWithParentInfo]
@@ -194,13 +227,20 @@ class ExportTimesheetsByTeamUseCase:
                 lambda x: x[1] if isinstance(x, list) else "-"
             )
 
+        df["tipo_licencia"] = df["task_id"].apply(
+            lambda x: self._leave_type(x, tasks_info)
+        )
+        df["validada"] = df["validated"].apply(lambda x: "Sí" if x else "No")
+
         df["name"] = df["name"].apply(lambda x: "-" if x == "/" else x)
 
         # Extraer mes y año de la fecha
         df["mes"] = df["date"].apply(lambda x: pd.to_datetime(x).month)
         df["año"] = df["date"].apply(lambda x: pd.to_datetime(x).year)
 
-        df = df.drop(columns=["employee_id", "project_id", "task_id", "id"])
+        df = df.drop(
+            columns=["employee_id", "project_id", "task_id", "id"], errors="ignore"
+        )
         df = df.rename(
             columns={
                 "date": "fecha",
@@ -229,7 +269,7 @@ class ExportTimesheetsByTeamUseCase:
             df["costo_por_hora_en_dolares"] = 0
 
         # Agregar columnas finales
-        base_columns.extend(["descripcion", "fecha de carga"])
+        base_columns.extend(["descripcion", "fecha de carga", "tipo_licencia", "validada"])
 
         reorder_columns = base_columns
         df = df.sort_values(by="empleado")
