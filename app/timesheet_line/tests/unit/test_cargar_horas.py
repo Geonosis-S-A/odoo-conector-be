@@ -342,3 +342,43 @@ class TestCargarHorasUseCase:
         assert result[1].id == 456
         assert result[0].name == "Test Task 1"
         assert result[1].name == "Test Task 2"
+
+
+class TestCargarHorasTiempoPersonal:
+    """Tiempo personal es una tarea más: rige la misma regla de acceso al proyecto."""
+
+    def _use_case(self, assigned):
+        gw = Mock(spec=TimesheetLineGateway)
+        gw.create.return_value = [5]
+        gw.get_by_ids.return_value = [Mock()]
+        assignment = Mock(spec=ProjectAssignmentGateway)
+        assignment.is_employee_assigned.return_value = assigned
+        assignment.get_project_name.return_value = "Proyecto"
+        assignment.get_assignment_start_date.return_value = None
+        employee = Mock(spec=EmployeeGateway)
+        employee.get_user_id_by_employee_id.return_value = 99
+        assignment.get_project_approvers.return_value = {}
+        return CargarHorasUseCase(gw, assignment, employee), gw
+
+    def _req(self):
+        return [
+            CargarHorasRequest(
+                name=None,
+                employee_id=1,
+                project_id=152,
+                hours=8.0,
+                date=date(2024, 1, 10),
+                task_id=11,  # subtarea "Enfermedad" de "Tiempo personal"
+            )
+        ]
+
+    def test_empleado_asignado_carga_en_subtarea_de_tiempo_personal(self):
+        use_case, gw = self._use_case(assigned=True)
+        use_case.execute(self._req())
+        assert gw.create.call_args[0][0][0].task_id == 11
+
+    def test_empleado_sin_asignacion_no_carga(self):
+        use_case, gw = self._use_case(assigned=False)
+        with pytest.raises(EmployeeNotAssignedToProjectError):
+            use_case.execute(self._req())
+        gw.create.assert_not_called()

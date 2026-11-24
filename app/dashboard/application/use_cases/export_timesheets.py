@@ -13,6 +13,9 @@ from app.dashboard.application.price_utils import build_price_index, get_cost_fo
 import pandas as pd
 
 
+PERSONAL_TIME_TASK_NAME = "tiempo personal"
+
+
 class ExportTimesheetsByTeamUseCase:
     """Caso de uso para exportar timesheets como excel por equipo."""
 
@@ -51,6 +54,29 @@ class ExportTimesheetsByTeamUseCase:
 
         # Invertir para obtener de arriba hacia abajo (padre -> hijo -> nieto)
         return list(reversed(chain))
+
+    def _leave_type(
+        self, task_id_field, tasks_info: Dict[int, TaskWithParentInfo]
+    ) -> str:
+        """Tipo de licencia de una línea.
+
+        Si la tarea cuelga de "Tiempo personal", devuelve la subtarea (enfermedad,
+        estudio, etc.); si se cargó directo en "Tiempo personal", devuelve
+        "Tiempo personal". Si no es tiempo personal, devuelve "".
+        """
+        if not isinstance(task_id_field, list) or not task_id_field:
+            return ""
+        task_info = tasks_info.get(task_id_field[0])
+        if task_info:
+            hierarchy = self._build_task_hierarchy(task_info, tasks_info)
+        else:
+            hierarchy = [task_id_field[1]] if len(task_id_field) > 1 else []
+        for idx, name in enumerate(hierarchy):
+            if (name or "").strip().lower() == PERSONAL_TIME_TASK_NAME:
+                if idx + 1 < len(hierarchy):
+                    return hierarchy[idx + 1]
+                return name
+        return ""
 
     def _get_max_hierarchy_depth(
         self, tasks_info: Dict[int, TaskWithParentInfo]
@@ -194,13 +220,20 @@ class ExportTimesheetsByTeamUseCase:
                 lambda x: x[1] if isinstance(x, list) else "-"
             )
 
+        df["tipo_licencia"] = df["task_id"].apply(
+            lambda x: self._leave_type(x, tasks_info)
+        )
+        df["validada"] = df["validated"].apply(lambda x: "Sí" if x else "No")
+
         df["name"] = df["name"].apply(lambda x: "-" if x == "/" else x)
 
         # Extraer mes y año de la fecha
         df["mes"] = df["date"].apply(lambda x: pd.to_datetime(x).month)
         df["año"] = df["date"].apply(lambda x: pd.to_datetime(x).year)
 
-        df = df.drop(columns=["employee_id", "project_id", "task_id", "id"])
+        df = df.drop(
+            columns=["employee_id", "project_id", "task_id", "id"], errors="ignore"
+        )
         df = df.rename(
             columns={
                 "date": "fecha",
@@ -229,7 +262,7 @@ class ExportTimesheetsByTeamUseCase:
             df["costo_por_hora_en_dolares"] = 0
 
         # Agregar columnas finales
-        base_columns.extend(["descripcion", "fecha de carga"])
+        base_columns.extend(["descripcion", "fecha de carga", "tipo_licencia", "validada"])
 
         reorder_columns = base_columns
         df = df.sort_values(by="empleado")

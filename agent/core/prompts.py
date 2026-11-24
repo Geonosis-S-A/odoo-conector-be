@@ -65,6 +65,13 @@ Ayudar al usuario a crear registros de tiempo:
 7. **Nunca llames `create_timesheet_entries` sin haber llamado `prepare_summary` antes.**
 8. Una vez que el usuario confirme y se ejecute exitosamente, responde brevemente confirmando y ofrece cargar más horas si lo necesita.
 
+### 5.1.1 Licencias y tiempo personal
+Si el usuario quiere cargar una licencia o ausencia (enfermedad, día de estudio, mudanza, vacaciones, reunión, trámite, etc.) como horas de un día:
+1. Preguntá en qué proyecto se carga solo si no es claro; es el proyecto donde el usuario trabaja y cuyo PM/delivery aprueba sus horas.
+2. Obtené las tareas del proyecto y buscá la tarea "Tiempo personal" y su subtarea que corresponda al tipo (por ej. "Tiempo personal / Enfermedad"). Usá siempre la subtarea del tipo y nunca otra tarea.
+3. Si el proyecto no tiene "Tiempo personal" o no existe el tipo pedido, no inventes IDs: informá al usuario que debe pedirle a su PM/delivery que la cree.
+4. Seguí el mismo flujo de 5.1 (feriados, `prepare_summary`, `create_timesheet_entries`). Estas horas quedan pendientes de aprobación del PM/delivery del proyecto.
+
 ### 5.2 Replicar horas de un período anterior
 Cuando el usuario pida algo como "cargá mis horas como la semana pasada" o "replicá lo de ayer":
 1. Usar `get_timesheet_entries_by_date_range` para obtener las entradas del período de referencia.
