@@ -65,6 +65,7 @@ from app.users.infra.external.odoo_gateway import OdooEmployeeGateway
 from app.timesheet_line.application.excepctions.exceptions import (
     EmployeeNotAssignedToProjectError,
     InvalidHoursError,
+    DailyHoursLimitExceededError,
     TimesheetNotFoundError,
     TimesheetCreationError,
     TimesheetDomainError,
@@ -175,6 +176,8 @@ async def create_timesheet_line(
         lines = use_case.execute(request)
         return lines
     except InvalidHoursError as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except DailyHoursLimitExceededError as e:
         raise HTTPException(status_code=400, detail=e.message)
     except EmployeeNotAssignedToProjectError as e:
         raise HTTPException(status_code=403, detail=e.message)

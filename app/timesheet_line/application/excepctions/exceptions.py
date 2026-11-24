@@ -20,6 +20,22 @@ class InvalidHoursError(TimesheetDomainError):
         super().__init__(message)
 
 
+class DailyHoursLimitExceededError(TimesheetDomainError):
+    """Error cuando un empleado supera el máximo de horas cargadas en un día."""
+
+    def __init__(self, day: date, existing: float, requested: float, limit: float):
+        self.day = day
+        self.existing = existing
+        self.requested = requested
+        self.limit = limit
+        message = (
+            f"El máximo de horas por día es {limit:g}. "
+            f"El {day.strftime('%d/%m/%Y')} ya tenés {existing:g} h cargadas "
+            f"y querés agregar {requested:g} h."
+        )
+        super().__init__(message)
+
+
 class TimesheetNotFoundError(TimesheetDomainError):
     """Error cuando no se encuentra una línea de timesheet."""
 
